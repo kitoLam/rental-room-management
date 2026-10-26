@@ -1,0 +1,214 @@
+import { z } from 'zod'
+
+export const roleSchema = z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN'])
+export type Role = z.infer<typeof roleSchema>
+export const userSchema = z.object({
+  id: z.guid(),
+  email: z.string().email(),
+  fullName: z.string(),
+  roles: z.array(roleSchema),
+  phone: z.string().nullable(),
+  dateOfBirth: z.string().nullable(),
+  gender: z.string().nullable(),
+  status: z.enum(['INVITED', 'PENDING_VERIFICATION', 'ACTIVE', 'LOCKED', 'DISABLED']),
+})
+export type User = z.infer<typeof userSchema>
+export const sessionSchema = z.object({
+  accessToken: z.string(),
+  expiresIn: z.number(),
+  user: userSchema,
+})
+export type Session = z.infer<typeof sessionSchema>
+export const modeSchema = z.enum(['ROOM', 'SLOT'])
+export type RentalMode = z.infer<typeof modeSchema>
+export const roomSchema = z.object({
+  id: z.guid(),
+  code: z.string(),
+  title: z.string(),
+  branchId: z.guid(),
+  branchName: z.string(),
+  address: z.string(),
+  areaKey: z.string(),
+  price: z.number().nonnegative(),
+  sizeM2: z.number().nullable(),
+  capacity: z.number(),
+  availableSlots: z.number().nullable(),
+  rentalMode: modeSchema,
+  roomTypeId: z.guid(),
+  roomTypeName: z.string(),
+  status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
+  operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
+  imageUrl: z.string(),
+  imageAlt: z.string(),
+  images: z.array(z.string()),
+  floor: z.number().nullable(),
+  description: z.string(),
+  amenities: z.array(z.string()),
+  services: z.array(z.object({ name: z.string(), price: z.number(), unit: z.string() })),
+})
+export type Room = z.infer<typeof roomSchema>
+export const policySchema = z.object({
+  id: z.guid(),
+  branchId: z.guid(),
+  version: z.number(),
+  effectiveFrom: z.string(),
+  bookingHoldAmount: z.number(),
+  paymentWindowMinutes: z.number(),
+  temporaryHoldMinutes: z.number(),
+  confirmedHoldMinutes: z.number(),
+  cancellationTerms: z.string(),
+  appointmentPolicy: z.object({
+    openingHour: z.number(),
+    closingHour: z.number(),
+    maxDurationMinutes: z.number(),
+    cancellationHours: z.number(),
+  }),
+})
+export type BranchPolicy = z.infer<typeof policySchema>
+export const branchSchema = z.object({
+  id: z.guid(),
+  name: z.string(),
+  address: z.string(),
+  description: z.string(),
+  images: z.array(z.string()),
+  publicPhone: z.string().nullable(),
+  publicEmail: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  rules: z.array(z.string()),
+})
+export type Branch = z.infer<typeof branchSchema>
+export const availabilitySchema = z.object({
+  roomId: z.guid(),
+  startDate: z.string(),
+  endDate: z.string(),
+  available: z.boolean(),
+  reason: z.string().nullable(),
+  slots: z.array(z.object({ id: z.guid(), label: z.string(), available: z.boolean() })),
+})
+export type Availability = z.infer<typeof availabilitySchema>
+export const appointmentStatuses = [
+  'PENDING',
+  'CONFIRMED',
+  'COMPLETED',
+  'REJECTED',
+  'CANCELLED',
+] as const
+export const bookingStatuses = [
+  'REQUESTED',
+  'AWAITING_PAYMENT',
+  'CONFIRMED',
+  'CONVERTED',
+  'EXPIRED',
+  'CANCELLED',
+  'REJECTED',
+] as const
+export const timelineSchema = z.array(
+  z.object({ status: z.string(), at: z.string(), note: z.string() }),
+)
+export const appointmentSchema = z.object({
+  id: z.guid(),
+  requesterUserId: z.guid(),
+  roomId: z.guid(),
+  roomTitle: z.string(),
+  branchName: z.string(),
+  startAt: z.string(),
+  endAt: z.string(),
+  note: z.string(),
+  status: z.enum(appointmentStatuses),
+  assignedManager: z.string().nullable(),
+  policySnapshot: policySchema,
+  createdAt: z.string(),
+  timeline: timelineSchema,
+})
+export type Appointment = z.infer<typeof appointmentSchema>
+export const bookingSchema = z.object({
+  id: z.guid(),
+  requesterUserId: z.guid(),
+  roomId: z.guid(),
+  roomTitle: z.string(),
+  branchId: z.guid(),
+  branchName: z.string(),
+  roomSlotId: z.guid().nullable(),
+  slotLabel: z.string().nullable(),
+  rentalMode: modeSchema,
+  startDate: z.string(),
+  endDate: z.string(),
+  holdAmount: z.number(),
+  paymentDueAt: z.string(),
+  temporaryHoldUntil: z.string(),
+  confirmedHoldUntil: z.string().nullable(),
+  status: z.enum(bookingStatuses),
+  policySnapshot: policySchema,
+  paymentEnvironment: z.enum(['SANDBOX', 'PRODUCTION']),
+  createdAt: z.string(),
+  timeline: timelineSchema,
+  contractId: z.guid().nullable(),
+})
+export type Booking = z.infer<typeof bookingSchema>
+export const paymentSchema = z.object({
+  id: z.guid(),
+  bookingId: z.guid(),
+  amount: z.number(),
+  reference: z.string(),
+  status: z.enum(['PENDING', 'VERIFIED', 'FAILED', 'REVIEW']),
+  environment: z.enum(['SANDBOX', 'PRODUCTION']),
+  createdAt: z.string(),
+  verifiedAt: z.string().nullable(),
+  qrUrl: z.string().nullable(),
+  instructions: z.string(),
+})
+export type Payment = z.infer<typeof paymentSchema>
+export const notificationSchema = z.object({
+  id: z.guid(),
+  title: z.string(),
+  message: z.string(),
+  type: z.string(),
+  createdAt: z.string(),
+  read: z.boolean(),
+  referenceType: z.string().nullable(),
+  referenceId: z.guid().nullable(),
+  contractTenantId: z.guid().optional(),
+  branchId: z.guid().optional(),
+})
+export type Notification = z.infer<typeof notificationSchema>
+export const pageSchema = <T extends z.ZodType>(item: T) =>
+  z.object({
+    content: z.array(item),
+    number: z.number(),
+    size: z.number(),
+    totalElements: z.number(),
+    totalPages: z.number(),
+  })
+export type Page<T> = {
+  content: T[]
+  number: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+export type RoomFilters = {
+  q: string
+  area: string
+  minPrice?: number
+  maxPrice?: number
+  mode: 'ALL' | RentalMode
+  roomTypeId: string
+  minCapacity?: number
+  availableOnly: boolean
+  sort: string
+  page: number
+  branchId?: string
+}
+export type AppointmentInput = { roomId: string; startAt: string; endAt: string; note: string }
+export type BookingInput = {
+  roomId: string
+  roomSlotId?: string
+  rentalMode: RentalMode
+  startDate: string
+  endDate: string
+  policyId: string
+  policyVersion: number
+  acknowledged: boolean
+}
+export type PaymentScenario = 'success' | 'failure' | 'pending' | 'late'

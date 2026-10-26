@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: rental-room-management
+  config:
+    # Load secrets from be/.env (gitignored); real env vars still take precedence.
+    # Second path covers running from the parent folder (IDE opened at repo root).
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:be/.env[.properties]
+  mongodb:
+    uri: ${MONGODB_URI}
+    database: ${MONGODB_DATABASE:rental_room_management}
+  data:
+    mongodb:
+      auto-index-creation: true
+    web:
+      pageable:
+        # ?page=1 is the first page, matching PagedResponse.number
+        one-indexed-parameters: true
+        default-page-size: 20
+        max-page-size: 100
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha

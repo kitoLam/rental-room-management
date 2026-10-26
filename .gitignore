@@ -1,0 +1,53 @@
+# ===== Secrets / environment =====
+# Never commit real credentials. Commit .env.example instead.
+**/.env
+**/.env.*
+!**/.env.example
+
+# ===== Backend (be/) – Java / Maven =====
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+HELP.md
+
+# ===== Frontend (fe/) – Node =====
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/.nuxt/
+**/coverage/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== IDE =====
+.idea/
+**/.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+!.vscode/extensions.json
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated
+.springBeans
+.sts4-cache
+/nbproject/private/
+/nbbuild/
+/nbdist/
+/.nb-gradle/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
