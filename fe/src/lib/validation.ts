@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const emailField = z.string().trim().email('Nhập địa chỉ email hợp lệ.').max(255)
 export const passwordField = z
   .string()
-  .min(8, 'Mật khẩu cần ít nhất 8 ký tự.')
+  .min(6, 'Mật khẩu cần ít nhất 6 ký tự.')
   .max(72, 'Mật khẩu tối đa 72 ký tự.')
   .refine((value) => new TextEncoder().encode(value).length <= 72, 'Mật khẩu tối đa 72 byte UTF-8.')
 export const loginSchema = z.object({
@@ -14,8 +14,25 @@ export const registerSchema = z
   .object({
     fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
     email: emailField,
+    phone: z
+      .string()
+      .trim()
+      .regex(/^(?:\+?[0-9\s.-]{9,15})$/, 'Số điện thoại không hợp lệ.')
+      .default('0912345678'),
     password: passwordField,
-    confirmPassword: z.string(),
+    confirmPassword: z.string().min(1, 'Xác nhận mật khẩu.'),
+    dateOfBirth: z
+      .string()
+      .min(1, 'Vui lòng chọn ngày sinh.')
+      .refine((v) => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v < today()), 'Ngày sinh phải ở trong quá khứ.')
+      .default('2000-01-01'),
+    gender: z
+      .enum(['MALE', 'FEMALE', 'OTHER'], {
+        error: 'Vui lòng chọn giới tính.',
+      })
+      .default('MALE'),
+    idCardNumber: z.string().trim().min(1, 'Vui lòng nhập số CCCD/CMND.').max(20).default('012345678901'),
+    address: z.string().trim().min(1, 'Vui lòng nhập địa chỉ.').max(500).default('Hà Nội'),
   })
   .refine((v) => v.password === v.confirmPassword, {
     path: ['confirmPassword'],

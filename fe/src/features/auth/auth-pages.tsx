@@ -28,6 +28,7 @@ function Heading({ title, children }: { title: string; children: ReactNode }) {
     </header>
   )
 }
+
 function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const [visible, setVisible] = useState(false)
   return (
@@ -45,6 +46,7 @@ function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
     </div>
   )
 }
+
 function DemoMailbox({ email, feature }: { email: string; feature: 'auth' | 'recovery' }) {
   const [params] = useSearchParams()
   const mailbox = useQuery({
@@ -61,7 +63,7 @@ function DemoMailbox({ email, feature }: { email: string; feature: 'auth' | 'rec
         Bản mô phỏng không gửi email thật. Mở liên kết bên dưới để tiếp tục thử luồng.
       </p>
       {mailbox.isPending ? (
-        <p className="mt-3 text-sm">Đang tải thư…</p>
+        <p className="mt-3 text-sm">Đang tải thư.</p>
       ) : mailbox.error ? (
         <InlineError error={mailbox.error} />
       ) : mailbox.data ? (
@@ -78,10 +80,11 @@ function DemoMailbox({ email, feature }: { email: string; feature: 'auth' | 'rec
     </div>
   )
 }
+
 export function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const redirect = safeRedirect(params.get('redirect'))
+  const redirect = safeRedirect(params.get('redirect'), '/')
   const user = useSession((s) => s.user)
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -99,8 +102,13 @@ export function LoginPage() {
   return (
     <>
       <Heading title="Chào bạn trở lại.">
-        Tiếp tục tìm phòng, theo dõi lịch hẹn và yêu cầu giữ chỗ.
+        Tiếp tục tìm phòng, theo dõi lịch hẹn và quản lý hợp đồng thuê phòng.
       </Heading>
+      {params.get('registered') === '1' && (
+        <div className="mb-5">
+          <Notice tone="success">Đăng ký tài khoản thành công! Vui lòng đăng nhập để tiếp tục.</Notice>
+        </div>
+      )}
       {params.get('reset') === 'success' && (
         <div className="mb-5">
           <Notice tone="success">Đã đổi mật khẩu. Hãy đăng nhập bằng mật khẩu mới.</Notice>
@@ -151,7 +159,7 @@ export function LoginPage() {
       {provider('auth') === 'mock' && (
         <div className="mt-8 rounded-lg bg-background p-4 text-xs leading-6 text-muted-foreground">
           <p className="font-bold text-foreground">Tài khoản trải nghiệm</p>
-          <p>an@tropro.demo · TroPro@123</p>
+          <p>an@tropro.demo – TroPro@123</p>
           <button
             className="mt-2 min-h-11 font-bold text-primary underline"
             type="button"
@@ -172,65 +180,147 @@ export function LoginPage() {
           >
             Điền tài khoản Tenant demo
           </button>
-          <button className="ml-4 min-h-11 font-bold text-primary underline" type="button" onClick={()=>{form.setValue('email','manager@tropro.demo');form.setValue('password','TroPro@123')}}>Điền tài khoản Manager demo</button>
-          <button className="ml-4 min-h-11 font-bold text-primary underline" type="button" onClick={()=>{form.setValue('email','owner@tropro.demo');form.setValue('password','TroPro@123')}}>Điền tài khoản Owner demo</button>
-          <button className="ml-4 min-h-11 font-bold text-primary underline" type="button" onClick={()=>{form.setValue('email','admin@tropro.demo');form.setValue('password','TroPro@123')}}>Điền tài khoản Admin demo</button>
         </div>
       )}
     </>
   )
 }
+
 export function RegisterPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const redirect = safeRedirect(params.get('redirect'))
-  const form = useForm<z.infer<typeof registerSchema>>({
+  const form = useForm<z.input<typeof registerSchema>, any, z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+      dateOfBirth: '',
+      gender: 'MALE',
+      idCardNumber: '',
+      address: '',
+    },
   })
   const register = useMutation({
     mutationFn: authService.register,
-    onSuccess: (_, input) =>
-      navigate(`/verify-email?${new URLSearchParams({ email: input.email, redirect })}`, {
-        replace: true,
-      }),
+    onSuccess: () => {
+      navigate('/login?registered=1', { replace: true })
+    },
   })
+
   return (
     <>
-      <Heading title="Bắt đầu hành trình tìm phòng.">
-        Một tài khoản để đặt lịch xem, giữ chỗ và theo dõi mọi cập nhật.
+      <Heading title="Đăng ký tài khoản người thuê.">
+        Tạo tài khoản để tìm phòng, đặt lịch hẹn và theo dõi hợp đồng thuê phòng.
       </Heading>
       <form
-        className="grid gap-5"
+        className="grid gap-4"
         noValidate
-        onSubmit={form.handleSubmit(({ fullName, email, password }) =>
-          register.mutate({ fullName, email, password }),
-        )}
+        onSubmit={form.handleSubmit((values) => {
+          register.mutate({
+            fullName: values.fullName.trim(),
+            email: values.email.trim(),
+            phone: values.phone.replace(/[\s.-]/g, ''),
+            password: values.password,
+            dateOfBirth: values.dateOfBirth,
+            gender: values.gender,
+            idCardNumber: values.idCardNumber.trim(),
+            address: values.address.trim(),
+          })
+        })}
       >
         <Field label="Họ và tên" id="register-name" error={form.formState.errors.fullName?.message}>
           <input
             id="register-name"
             className="input"
             autoComplete="name"
+            placeholder="Nguyễn Văn A"
             {...form.register('fullName')}
             aria-invalid={!!form.formState.errors.fullName}
           />
         </Field>
-        <Field label="Email" id="register-email" error={form.formState.errors.email?.message}>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email" id="register-email" error={form.formState.errors.email?.message}>
+            <input
+              id="register-email"
+              className="input"
+              type="email"
+              autoComplete="email"
+              placeholder="nguyenvana@gmail.com"
+              {...form.register('email')}
+              aria-invalid={!!form.formState.errors.email}
+            />
+          </Field>
+          <Field label="Số điện thoại" id="register-phone" error={form.formState.errors.phone?.message}>
+            <input
+              id="register-phone"
+              className="input"
+              type="tel"
+              autoComplete="tel"
+              placeholder="0912345678"
+              {...form.register('phone')}
+              aria-invalid={!!form.formState.errors.phone}
+            />
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Ngày sinh" id="register-dob" error={form.formState.errors.dateOfBirth?.message}>
+            <input
+              id="register-dob"
+              className="input"
+              type="date"
+              {...form.register('dateOfBirth')}
+              aria-invalid={!!form.formState.errors.dateOfBirth}
+            />
+          </Field>
+          <Field label="Giới tính" id="register-gender" error={form.formState.errors.gender?.message}>
+            <select
+              id="register-gender"
+              className="input"
+              {...form.register('gender')}
+              aria-invalid={!!form.formState.errors.gender}
+            >
+              <option value="MALE">Nam</option>
+              <option value="FEMALE">Nữ</option>
+              <option value="OTHER">Khác</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field
+          label="Số CCCD / CMND"
+          id="register-id-card"
+          error={form.formState.errors.idCardNumber?.message}
+        >
           <input
-            id="register-email"
+            id="register-id-card"
             className="input"
-            type="email"
-            autoComplete="email"
-            {...form.register('email')}
-            aria-invalid={!!form.formState.errors.email}
+            placeholder="012345678901"
+            {...form.register('idCardNumber')}
+            aria-invalid={!!form.formState.errors.idCardNumber}
           />
         </Field>
+
+        <Field label="Địa chỉ" id="register-address" error={form.formState.errors.address?.message}>
+          <input
+            id="register-address"
+            className="input"
+            placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/TP"
+            {...form.register('address')}
+            aria-invalid={!!form.formState.errors.address}
+          />
+        </Field>
+
         <Field
           label="Mật khẩu"
           id="register-password"
           error={form.formState.errors.password?.message}
-          hint="Ít nhất 8 ký tự, tối đa 72 byte."
+          hint="Ít nhất 6 ký tự."
         >
           <PasswordInput
             id="register-password"
@@ -239,6 +329,7 @@ export function RegisterPage() {
             aria-invalid={!!form.formState.errors.password}
           />
         </Field>
+
         <Field
           label="Nhập lại mật khẩu"
           id="register-confirm"
@@ -251,12 +342,14 @@ export function RegisterPage() {
             aria-invalid={!!form.formState.errors.confirmPassword}
           />
         </Field>
+
         <InlineError error={register.error} />
-        <Button type="submit" loading={register.isPending}>
+        <Button type="submit" loading={register.isPending} className="mt-2 w-full">
           Tạo tài khoản
           <ArrowRight />
         </Button>
       </form>
+
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Đã có tài khoản?{' '}
         <Link
@@ -266,15 +359,10 @@ export function RegisterPage() {
           Đăng nhập
         </Link>
       </p>
-      <Link
-        to="/owner-onboarding"
-        className="mt-6 block text-center text-xs text-muted-foreground underline"
-      >
-        Bạn là chủ trọ? Tìm hiểu cách tham gia TroPro
-      </Link>
     </>
   )
 }
+
 export function VerifyEmailPage() {
   const [params, setParams] = useSearchParams()
   const [finishedToken, setFinishedToken] = useState('')
@@ -336,6 +424,7 @@ export function VerifyEmailPage() {
     </>
   )
 }
+
 export function ForgotPasswordPage() {
   const form = useForm<{ email: string }>({
     resolver: zodResolver(z.object({ email: emailField })),
@@ -392,6 +481,7 @@ export function ForgotPasswordPage() {
     </>
   )
 }
+
 export function ResetPasswordPage() {
   const [params] = useSearchParams()
   const token = params.get('token') || ''

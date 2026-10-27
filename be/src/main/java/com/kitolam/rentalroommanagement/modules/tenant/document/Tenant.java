@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.tenant.document;
 
 import com.kitolam.rentalroommanagement.common.base.BaseDocument;
+import com.kitolam.rentalroommanagement.modules.auth.enums.Role;
 import com.kitolam.rentalroommanagement.modules.tenant.enums.Gender;
 import com.kitolam.rentalroommanagement.modules.tenant.enums.TenantStatus;
 import lombok.Getter;
@@ -39,4 +40,6 @@ public class Tenant extends BaseDocument {
     private String avatarUrl;
 
     private TenantStatus status = TenantStatus.ACTIVE;
+
+    private Role role = Role.TENANT;
 }

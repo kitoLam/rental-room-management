@@ -17,16 +17,32 @@ import {
 } from '@/interfaces/domain'
 import { authRequest, request, write, ApiError } from './http'
 import { provider } from './config'
+import { useSession } from '@/features/auth/session-store'
 
 const nullable = z.null().or(z.undefined())
 export const authService = {
   login: async (input: { email: string; password: string }) =>
-    authRequest('/api/auth/login', input),
-  register: (input: { fullName: string; email: string; password: string }) =>
-    request('auth', '/api/auth/register', nullable, write('POST', input), false),
+    authRequest('/api/v1/auth/login', input),
+  register: (input: {
+    fullName: string
+    email: string
+    phone: string
+    password: string
+    dateOfBirth: string
+    gender: string
+    idCardNumber: string
+    address: string
+  }) => request('auth', '/api/v1/auth/register', z.unknown(), write('POST', input), false),
   verify: (token: string) =>
     request('auth', '/api/auth/verify-email', nullable, write('POST', { token }), false),
-  logout: () => request('auth', '/api/auth/logout', nullable, write('POST')),
+  logout: (token?: string | null) =>
+    request(
+      'auth',
+      '/api/v1/auth/logout',
+      nullable,
+      write('POST', { token: token || useSession.getState().accessToken }),
+      false,
+    ),
   forgot: (email: string) =>
     request('recovery', '/api/auth/forgot-password', nullable, write('POST', { email }), false),
   reset: (token: string, password: string) =>

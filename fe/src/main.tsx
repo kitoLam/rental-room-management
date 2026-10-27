@@ -1,11 +1,11 @@
-import { StrictMode } from 'react'
+﻿import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router/dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { router } from './router'
 import { queryClient } from './services/query-client'
 import { recoverSession } from './services/http'
-import { useSession } from './features/auth/session-store'
+import { useSession, readStoredToken } from './features/auth/session-store'
 import './index.css'
 async function start() {
   // Unregister the old demo worker so a previous installation cannot serve mock responses.
@@ -23,9 +23,15 @@ async function start() {
       return
     }
   }
-  void recoverSession().catch(() => {
-    if (!useSession.getState().accessToken) useSession.getState().clear()
-  })
+  // Restore session from stored JWT (no HttpOnly refresh cookie)
+  const storedToken = readStoredToken()
+  if (storedToken) {
+    void recoverSession().catch(() => {
+      useSession.getState().clear()
+    })
+  } else {
+    useSession.getState().setReady()
+  }
   const root = document.getElementById('root')
   if (!root) throw new Error('Không tìm thấy phần tử #root.')
   createRoot(root).render(

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 const id = '20000000-0000-4000-8000-000000000001'
@@ -38,8 +38,8 @@ describe('verified real API contracts', () => {
     const fetcher = vi.fn().mockResolvedValue(json(null, 202))
     vi.stubGlobal('fetch', fetcher)
     const { authService } = await import('./guest-user')
-    await expect(authService.register({ fullName: 'Nguyễn An', email: 'an@example.com', password: 'Test@1234' })).resolves.toBeNull()
-    expect(fetcher.mock.calls[0][0]).toBe('/api/auth/register')
+    await expect(authService.register({ fullName: 'Nguyen An', email: 'an@example.com', phone: '0912345678', password: 'Test@1234', dateOfBirth: '2000-01-01', gender: 'MALE', idCardNumber: '012345678901', address: 'Ha Noi' })).resolves.toBeNull()
+    expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/register')
     expect(fetcher.mock.calls[0][1].method).toBe('POST')
     expect(fetcher.mock.calls[0][1].credentials).toBe('include')
   })

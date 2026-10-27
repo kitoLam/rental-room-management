@@ -1,4 +1,4 @@
-import type { Feature } from './config'
+﻿import type { Feature } from './config'
 
 /** Only contracts verified against the current backend are enabled for real requests.
  * See docs/frontend/real-api-integration-audit.md for pending contracts and decisions.
@@ -10,7 +10,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
 
   if (feature === 'auth' && verb === 'POST' &&
-      matches('/api/auth/(login|register|verify-email|refresh|logout)')) return null
+      matches('/api(/v1)?/auth/(login|register|verify-email|refresh|logout|introspect)')) return null
 
   if (feature === 'catalog' && verb === 'GET' &&
       matches(`/api/v1/public/rooms(/${id})?`)) return null

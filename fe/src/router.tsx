@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router'
+﻿import { createBrowserRouter, Navigate } from 'react-router'
 import { HomePage } from '@/features/home/home-page'
 import { PublicLayout } from '@/layouts/public-layout'
 import { AuthLayout } from '@/layouts/auth-layout'
@@ -10,12 +10,34 @@ import { AdminLayout } from '@/layouts/admin-layout'
 import { RouteGuard } from '@/features/auth/route-guard'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { RouteErrorPage } from '@/pages/route-error-page'
+import { useSession } from '@/features/auth/session-store'
+import { Container } from '@/components/common/container'
+import { Skeleton } from '@/components/ui/skeleton'
+
+function HomeRoute() {
+  const { user, ready } = useSession()
+  if (!ready) {
+    return (
+      <Container className="py-12">
+        <Skeleton className="h-48" />
+        <p className="sr-only" role="status">
+          Đang khôi phục phiên đăng nhập
+        </p>
+      </Container>
+    )
+  }
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+  return <HomePage />
+}
+
 export const router = createBrowserRouter([
   {
     element: <PublicLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <HomePage /> },
+      { index: true, element: <HomeRoute /> },
       {
         path: 'rooms',
         lazy: async () => ({
