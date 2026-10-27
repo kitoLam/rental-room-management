@@ -59,11 +59,11 @@ public class AuthServiceImpl implements AuthService {
     public MessageResponse signup(SignupRequest request) {
         var existingEmail = users.findByEmailAndIsDeletedFalse(request.email()).orElse(null);
         if (existingEmail != null && existingEmail.isEmailVerified()) {
-            throw new ConflictException("Email đã được sử dụng");
+            throw new ConflictException("Email này đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.");
         }
         var existingPhone = users.findByPhoneAndIsDeletedFalse(request.phone()).orElse(null);
         if (existingPhone != null && (existingEmail == null || !existingPhone.getId().equals(existingEmail.getId()))) {
-            throw new ConflictException("Số điện thoại đã được sử dụng");
+            throw new ConflictException("Số điện thoại này đã được sử dụng. Vui lòng chọn số khác.");
         }
         var now = clock.instant();
         User user = existingEmail != null ? existingEmail : new User();
@@ -126,17 +126,23 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public TokenResponse login(LoginRequest request) {
         var user = users.findByEmailAndIsDeletedFalse(request.email()).orElse(null);
+        if (user == null) {
+            throw new UnauthorizedException("Tài khoản không tồn tại. Vui lòng kiểm tra lại email hoặc đăng ký mới.");
+        }
         String supplied = request.password();
         // BCrypt has a 72-byte input limit, including multibyte Unicode passwords.
         boolean tooLong = supplied.getBytes(StandardCharsets.UTF_8).length > 72;
-        boolean matches = passwords.matches(tooLong ? "" : supplied,
-                user == null ? dummyPasswordHash : user.getPasswordHash());
-        if (user == null || tooLong || !matches) throw new UnauthorizedException(INVALID_CREDENTIALS);
+        boolean matches = passwords.matches(tooLong ? "" : supplied, user.getPasswordHash());
+        if (tooLong || !matches) {
+            throw new UnauthorizedException("Mật khẩu không chính xác. Vui lòng kiểm tra lại mật khẩu.");
+        }
         // Only disclose verification status after the password has been checked.
         if (!user.isEmailVerified()) {
-            throw new ForbiddenException("Email chưa được xác thực. Hãy kiểm tra email hoặc gửi lại qua /auth/resend-verification");
+            throw new ForbiddenException("Tài khoản chưa xác thực email. Vui lòng kiểm tra hộp thư để kích hoạt tài khoản.");
         }
-        if (!user.isEnabled()) throw new ForbiddenException("Tài khoản đã bị vô hiệu hóa");
+        if (!user.isEnabled()) {
+            throw new ForbiddenException("Tài khoản đã bị vô hiệu hóa hoặc tạm khóa.");
+        }
         return issueTokens(user);
     }
 

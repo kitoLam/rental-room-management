@@ -52,7 +52,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateKeyException.class)
     public ResponseEntity<ApiError> duplicate(DuplicateKeyException ex) {
-        return error(409, "Dữ liệu đã tồn tại (email hoặc số điện thoại đã được sử dụng)");
+        String msg = ex.getMessage();
+        if (msg != null && msg.contains("phone")) {
+            return error(409, "Số điện thoại này đã được sử dụng. Vui lòng chọn số khác.");
+        }
+        if (msg != null && msg.contains("email")) {
+            return error(409, "Email này đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.");
+        }
+        return error(409, "Thông tin tài khoản (email hoặc số điện thoại) đã tồn tại.");
     }
 
     @ExceptionHandler({TransientDataAccessException.class, TransactionException.class, DataIntegrityViolationException.class})

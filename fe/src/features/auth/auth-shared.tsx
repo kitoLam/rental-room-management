@@ -9,10 +9,16 @@ import { Link, useSearchParams } from 'react-router'
 
 export function Heading({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <header className="mb-8">
-      <p className="mb-3 text-xs font-bold tracking-[0.15em] text-primary">CHÀO MỪNG ĐẾN TROPRO</p>
-      <h1 className="text-page-title font-bold">{title}</h1>
-      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{children}</p>
+    <header className="mb-8 sm:mb-10">
+      <p className="mb-3 text-sm sm:text-base font-bold tracking-[0.18em] text-primary uppercase">
+        CHÀO MỪNG ĐẾN TROPRO
+      </p>
+      <h1 className="text-3xl sm:text-4xl lg:text-page-title font-extrabold tracking-tight text-balance text-foreground">
+        {title}
+      </h1>
+      <p className="mt-3 text-base sm:text-lg leading-relaxed text-muted-foreground">
+        {children}
+      </p>
     </header>
   )
 }
@@ -20,15 +26,15 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const [visible, setVisible] = useState(false)
   return (
     <div className="relative">
-      <input {...props} className="input pr-12" type={visible ? 'text' : 'password'} />
+      <input {...props} className="input min-h-12 text-base px-4 py-3 pr-12" type={visible ? 'text' : 'password'} />
       <button
         type="button"
         aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
         aria-pressed={visible}
-        className="absolute top-0 right-0 flex size-11 items-center justify-center text-muted-foreground"
+        className="absolute top-0 right-0 flex size-12 items-center justify-center text-muted-foreground hover:text-foreground"
         onClick={() => setVisible(!visible)}
       >
-        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        {visible ? <EyeOff size={20} /> : <Eye size={20} />}
       </button>
     </div>
   )

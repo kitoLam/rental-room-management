@@ -40,14 +40,14 @@ export function LoginPage() {
         </div>
       )}
       <form
-        className="grid gap-5"
+        className="grid gap-6"
         onSubmit={form.handleSubmit((value) => login.mutate(value))}
         noValidate
       >
         <Field label="Email" id="login-email" error={form.formState.errors.email?.message}>
           <input
             id="login-email"
-            className="input"
+            className="input min-h-12 text-base px-4 py-3"
             type="email"
             autoComplete="email"
             placeholder="ban@example.com"
@@ -63,16 +63,16 @@ export function LoginPage() {
             {...form.register('password')}
           />
         </Field>
-        <Link to="/forgot-password" className="justify-self-end text-sm text-primary underline">
+        <Link to="/forgot-password" className="justify-self-end text-sm font-medium text-primary underline">
           Quên mật khẩu?
         </Link>
         <InlineError error={login.error} />
-        <Button type="submit" loading={login.isPending} className="w-full">
+        <Button type="submit" size="lg" loading={login.isPending} className="w-full min-h-12 text-base font-bold">
           Đăng nhập
-          <ArrowRight />
+          <ArrowRight size={18} />
         </Button>
       </form>
-      <p className="mt-7 text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-base text-muted-foreground">
         Chưa có tài khoản?{' '}
         <Link
           className="font-bold text-primary underline"

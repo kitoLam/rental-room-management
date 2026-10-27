@@ -37,15 +37,16 @@ export function RegisterPage() {
         Một tài khoản để đặt lịch xem, giữ chỗ và theo dõi mọi cập nhật.
       </Heading>
       <form
-        className="grid gap-5"
+        className="grid gap-6"
         noValidate
         onSubmit={form.handleSubmit((input) => register.mutate(input))}
       >
         <Field label="Họ và tên" id="register-name" error={form.formState.errors.fullName?.message}>
           <input
             id="register-name"
-            className="input"
+            className="input min-h-12 text-base px-4 py-3"
             autoComplete="name"
+            placeholder="Nguyễn Văn A"
             {...form.register('fullName')}
             aria-invalid={!!form.formState.errors.fullName}
           />
@@ -53,9 +54,10 @@ export function RegisterPage() {
         <Field label="Email" id="register-email" error={form.formState.errors.email?.message}>
           <input
             id="register-email"
-            className="input"
+            className="input min-h-12 text-base px-4 py-3"
             type="email"
             autoComplete="email"
+            placeholder="ban@example.com"
             {...form.register('email')}
             aria-invalid={!!form.formState.errors.email}
           />
@@ -67,9 +69,10 @@ export function RegisterPage() {
         >
           <input
             id="register-phone"
-            className="input"
+            className="input min-h-12 text-base px-4 py-3"
             type="tel"
             autoComplete="tel"
+            placeholder="0912345678"
             {...form.register('phone')}
             aria-invalid={!!form.formState.errors.phone}
           />
@@ -100,10 +103,11 @@ export function RegisterPage() {
           />
         </Field>
         <div>
-          <label className="flex min-h-11 items-center gap-3 text-sm" htmlFor="register-terms">
+          <label className="flex min-h-11 items-center gap-3 text-base cursor-pointer" htmlFor="register-terms">
             <input
               id="register-terms"
               type="checkbox"
+              className="size-5 rounded border-border text-primary focus:ring-primary cursor-pointer"
               {...form.register('termsAccepted')}
               aria-invalid={!!form.formState.errors.termsAccepted}
               aria-describedby={
@@ -113,18 +117,18 @@ export function RegisterPage() {
             Tôi đồng ý với điều khoản sử dụng.
           </label>
           {form.formState.errors.termsAccepted && (
-            <p id="register-terms-error" role="alert" className="text-sm text-danger">
+            <p id="register-terms-error" role="alert" className="text-sm text-danger mt-1">
               {form.formState.errors.termsAccepted.message}
             </p>
           )}
         </div>
         <InlineError error={register.error} />
-        <Button type="submit" loading={register.isPending}>
+        <Button type="submit" size="lg" loading={register.isPending} className="w-full min-h-12 text-base font-bold">
           Tạo tài khoản
-          <ArrowRight />
+          <ArrowRight size={18} />
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-base text-muted-foreground">
         Đã có tài khoản?{' '}
         <Link
           to={`/login?redirect=${encodeURIComponent(redirect)}`}

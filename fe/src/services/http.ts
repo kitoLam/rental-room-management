@@ -91,7 +91,7 @@ export async function request<T>(
   } finally {
     clearTimeout(timer)
   }
-  if (response.status === 401 && retry && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/')) {
     if (useSession.getState().accessToken !== token)
       throw new ApiError('Phiên của yêu cầu đã thay đổi.', 401)
     try {
@@ -111,21 +111,23 @@ export async function request<T>(
   if (!parsed.success) throw new ApiError('Phản hồi máy chủ không đúng định dạng.', response.status)
   const body = parsed.data
   if (!response.ok || (body && body.code && body.code !== 0)) {
-    const message = body?.message || ''
+    const rawMessage =
+      body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : ''
+    const message = messages[rawMessage] || rawMessage
     throw new ApiError(
       response.status >= 500
-        ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại.'
-        : errorMessages[body?.code || 0] ||
-            messages[message] ||
-            (provider(feature) === 'mock'
-              ? message
-              : response.status === 401
-                ? 'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.'
-                : response.status === 403
-                  ? 'Bạn chưa có quyền thực hiện thao tác này.'
-                  : response.status === 409
-                    ? 'Dữ liệu đã thay đổi hoặc bị trùng. Vui lòng kiểm tra lại.'
-                    : message || 'Không thể thực hiện yêu cầu.'),
+        ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+        : message ||
+          errorMessages[body?.code || 0] ||
+          (response.status === 401
+            ? 'Email hoặc mật khẩu không chính xác.'
+            : response.status === 403
+              ? 'Tài khoản chưa được kích hoạt hoặc không có quyền.'
+              : response.status === 409
+                ? 'Thông tin đăng ký (email hoặc số điện thoại) đã tồn tại.'
+                : 'Không thể thực hiện yêu cầu.'),
       response.status,
       body?.code,
     )
