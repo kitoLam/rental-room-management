@@ -565,6 +565,12 @@ describe('Admin read-only directories, activity and reset', () => {
   it('dashboard totals use shared users, account states and Branches', () => {
     const s = a.summary(admin)
     expect(s.totalUsers).toBe(e.db.state.users.length)
+    expect(s.totalBranches).toBe(e.state.branches.length)
+    expect(s.totalRooms).toBe(e.inventory.state.rooms.length)
+    expect(s.publishedRooms).toBe(e.inventory.state.rooms.filter((r) => r.isPublic).length)
+    const published = e.inventory.state.rooms.find((r) => r.isPublic)!
+    published.isPublic = false
+    expect(a.summary(admin).publishedRooms).toBe(s.publishedRooms - 1)
     expect(s.accounts.reduce((n, c) => n + c.count, 0)).toBe(s.totalUsers)
     expect(s.branches.reduce((n, c) => n + c.count, 0)).toBe(e.state.branches.length)
     expect(adminSummarySchema.safeParse(s).success).toBe(true)

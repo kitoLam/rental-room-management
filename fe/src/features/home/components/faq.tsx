@@ -20,7 +20,7 @@ const questions = [
 export function Faq() {
   return (
     <section id="faq" className="scroll-mt-24 border-t border-border py-16 sm:py-20">
-      <Container className="grid gap-9 lg:grid-cols-[1fr_1.6fr]">
+      <Container wide className="grid gap-9 lg:grid-cols-[1fr_1.6fr]">
         <div>
           <p className="mb-3 text-xs font-bold tracking-[0.14em] text-primary">
             TRƯỚC KHI BẠN BẮT ĐẦU

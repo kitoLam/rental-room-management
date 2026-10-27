@@ -25,13 +25,16 @@ import {
 import { StatusBadge } from '@/components/common/status-badge'
 import { catalogService } from '@/services/guest-user'
 import { provider } from '@/services/config'
-import { addDays, dateRangeSchema, uuid } from '@/lib/validation'
+import { addDays, dateRangeSchema } from '@/lib/validation'
+import { databaseIdSchema } from '@/interfaces/domain'
 import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
+import { RoomCostEstimator } from './components/room-cost-estimator'
 
 export default function RoomDetailPage() {
   const { roomId = '' } = useParams()
+  const validRoomId = databaseIdSchema.safeParse(roomId).success
   const [params] = useSearchParams()
   const [gallery, setGallery] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
@@ -41,15 +44,15 @@ export default function RoomDetailPage() {
   const room = useQuery({
     queryKey: ['rooms', roomId],
     queryFn: () => catalogService.room(roomId),
-    enabled: uuid(roomId),
+    enabled: validRoomId,
   })
   const range = dateRangeSchema.safeParse({ startDate, endDate })
   const available = useQuery({
     queryKey: ['availability', roomId, startDate, endDate],
     queryFn: () => catalogService.availability(roomId, startDate, endDate),
-    enabled: uuid(roomId) && range.success && provider('catalog') === 'mock',
+    enabled: validRoomId && range.success && provider('catalog') === 'mock',
   })
-  if (!uuid(roomId))
+  if (!validRoomId)
     return (
       <Page title="Không tìm thấy phòng" back="/rooms">
         <Notice>Liên kết phòng không hợp lệ. Hãy chọn lại từ danh sách.</Notice>
@@ -65,6 +68,7 @@ export default function RoomDetailPage() {
   const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ startDate, endDate, ...(slot ? { slot } : {}) })}`
   return (
     <Page
+      wide
       title={r?.title || 'Thông tin phòng'}
       eyebrow={r?.branchName}
       back="/rooms"
@@ -73,64 +77,74 @@ export default function RoomDetailPage() {
       <QueryState pending={room.isPending} error={room.error} retry={room.refetch}>
         {r && (
           <>
-            <div className="relative mb-9 grid aspect-[4/3] gap-3 overflow-hidden rounded-2xl sm:aspect-[2.3/1] sm:grid-cols-[2fr_1fr]">
+            <div
+              className={`relative mb-8 grid h-[300px] gap-3 overflow-hidden rounded-2xl bg-primary-soft sm:h-[420px] xl:h-[520px] ${r.images.length > 1 ? 'sm:grid-cols-[2fr_1fr]' : ''}`}
+            >
               <button
                 aria-label="Mở thư viện ảnh"
                 onClick={() => {
                   setActiveImage(0)
                   setGallery(true)
                 }}
-                className="min-h-0 overflow-hidden"
+                className="group min-h-0 min-w-0 overflow-hidden focus-visible:outline-4 focus-visible:-outline-offset-4 focus-visible:outline-primary"
               >
                 <img
                   src={r.images[0] || heroMedia.poster}
                   onError={(e) => {
                     e.currentTarget.src = heroMedia.poster
                   }}
-                  alt={r.imageAlt}
-                  className="size-full object-cover"
+                  alt={
+                    r.images.length
+                      ? r.imageAlt
+                      : 'Ảnh minh họa không gian sống, không phải ảnh thực tế của phòng'
+                  }
+                  className="size-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-[1.02]"
                 />
               </button>
-              <div className="hidden min-h-0 grid-rows-2 gap-3 sm:grid">
-                {r.images.slice(1, 3).map((src, i) => (
-                  <button
-                    key={src}
-                    aria-label={`Xem ảnh ${i + 2}`}
-                    className="overflow-hidden"
-                    onClick={() => {
-                      setActiveImage(i + 1)
-                      setGallery(true)
-                    }}
-                  >
-                    <img
-                      src={src}
-                      onError={(e) => {
-                        e.currentTarget.src = heroMedia.poster
+              {r.images.length > 1 && (
+                <div
+                  className={`hidden min-h-0 gap-3 sm:grid ${r.images.length > 2 ? 'grid-rows-2' : 'grid-rows-1'}`}
+                >
+                  {r.images.slice(1, 3).map((src, i) => (
+                    <button
+                      key={src}
+                      aria-label={`Xem ảnh ${i + 2}`}
+                      className="overflow-hidden"
+                      onClick={() => {
+                        setActiveImage(i + 1)
+                        setGallery(true)
                       }}
-                      alt={`${r.title}, góc nhìn ${i + 2}`}
-                      className="size-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
+                    >
+                      <img
+                        src={src}
+                        onError={(e) => {
+                          e.currentTarget.src = heroMedia.poster
+                        }}
+                        alt={`${r.title}, góc nhìn ${i + 2}`}
+                        className="size-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
               <Button
                 variant="inverse"
-                className="absolute right-4 bottom-4"
+                className="absolute right-5 bottom-5 shadow-lg"
                 onClick={() => setGallery(true)}
               >
                 <Images />
                 {r.images.length ? `${r.images.length} ảnh` : 'Ảnh minh họa'}
               </Button>
             </div>
-            <div className="grid items-start gap-9 pb-24 lg:grid-cols-[minmax(0,1fr)_360px] lg:pb-0">
+            <div className="mb-8 flex flex-wrap gap-3">
+              <StatusBadge tone={badge!.tone}>{badge!.label}</StatusBadge>
+              <StatusBadge tone="neutral">
+                {r.rentalMode === 'ROOM' ? 'Nguyên phòng' : 'Theo chỗ / ở ghép'}
+              </StatusBadge>
+            </div>
+            <div className="grid items-start gap-8 pb-24 lg:grid-cols-[minmax(0,1fr)_380px] lg:pb-0 xl:gap-10 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-8">
-                <div className="flex flex-wrap gap-3">
-                  <StatusBadge tone={badge!.tone}>{badge!.label}</StatusBadge>
-                  <StatusBadge tone="neutral">
-                    {r.rentalMode === 'ROOM' ? 'Nguyên phòng' : 'Theo chỗ / ở ghép'}
-                  </StatusBadge>
-                </div>
-                <dl className="grid grid-cols-2 gap-5 border-y border-border py-6 sm:grid-cols-4">
+                <dl className="grid grid-cols-2 gap-5 rounded-2xl border border-border/70 bg-surface p-6 sm:grid-cols-4 sm:p-8">
                   {[
                     [Ruler, 'Diện tích', r.sizeM2 === null ? 'Chưa cập nhật' : `${r.sizeM2} m²`],
                     [Users, 'Sức chứa', `${r.capacity} người`],
@@ -140,27 +154,30 @@ export default function RoomDetailPage() {
                     const I = Icon as typeof Ruler
                     return (
                       <div key={String(label)}>
-                        <dt className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                          <I size={16} />
+                        <dt className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+                          <I size={18} className="shrink-0 text-primary" />
                           {String(label)}
                         </dt>
-                        <dd className="text-sm font-bold">{String(value)}</dd>
+                        <dd className="break-words text-base font-bold">{String(value)}</dd>
                       </div>
                     )
                   })}
                 </dl>
-                <section>
+                <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-3 text-xl font-bold">Một chút về không gian</h2>
-                  <p className="max-w-prose whitespace-pre-line text-sm leading-7 text-muted-foreground">
+                  <p className="max-w-prose whitespace-pre-line text-base leading-8 text-muted-foreground">
                     {r.description || 'Chi nhánh chưa cập nhật mô tả phòng.'}
                   </p>
                 </section>
-                <section>
+                <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-4 text-xl font-bold">Tiện nghi</h2>
                   {r.amenities.length ? (
                     <ul className="grid gap-4 sm:grid-cols-2">
                       {r.amenities.map((item) => (
-                        <li key={item} className="flex items-center gap-3 text-sm">
+                        <li
+                          key={item}
+                          className="flex items-center gap-3 rounded-xl bg-background p-4 text-sm"
+                        >
                           <Check className="size-4 text-primary" />
                           {item}
                         </li>
@@ -172,7 +189,7 @@ export default function RoomDetailPage() {
                     </p>
                   )}
                 </section>
-                <section>
+                <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-4 text-xl font-bold">Dịch vụ tham khảo</h2>
                   {r.services.length ? (
                     <dl className="divide-y divide-border">
@@ -194,6 +211,7 @@ export default function RoomDetailPage() {
                     </p>
                   )}
                 </section>
+                <RoomCostEstimator key={r.id} room={r} />
                 <Panel>
                   <p className="mb-2 text-xs text-muted-foreground">CHI NHÁNH</p>
                   <h2 className="font-bold">{r.branchName}</h2>
@@ -210,9 +228,11 @@ export default function RoomDetailPage() {
                 </Panel>
               </div>
               <aside className="space-y-5 lg:sticky lg:top-24">
-                <Panel>
-                  <p className="text-xs text-muted-foreground">GIÁ THAM KHẢO</p>
-                  <p className="mt-2 text-xl font-bold text-primary">
+                <Panel className="rounded-2xl border-t-4 border-primary shadow-lg shadow-primary/5 ring-border/70 sm:p-8">
+                  <p className="text-xs font-bold tracking-wider text-muted-foreground">
+                    GIÁ THAM KHẢO
+                  </p>
+                  <p className="mt-3 flex flex-wrap items-baseline gap-x-1 text-[2rem] leading-tight font-bold tracking-tight text-primary">
                     {formatVnd(r.price)}
                     <span className="text-sm font-normal text-muted-foreground">
                       {getPriceUnit(r)}
@@ -222,7 +242,7 @@ export default function RoomDetailPage() {
                     Giá thuê chính thức được thỏa thuận khi lập hợp đồng. Khoản giữ chỗ được thông
                     báo riêng.
                   </p>
-                  <div className="mt-6 grid grid-cols-2 gap-3">
+                  <div className="mt-6 grid min-w-0 grid-cols-2 gap-3 border-t border-border pt-6">
                     <Field id="detail-start" label="Ngày bắt đầu">
                       <input
                         className="input"
@@ -282,7 +302,7 @@ export default function RoomDetailPage() {
                   )}
                   <div className="my-4 text-xs text-muted-foreground" role="status">
                     {provider('catalog') === 'real'
-                      ? 'API chưa cung cấp lịch trống theo ngày. Chưa thể tạo yêu cầu giữ chỗ từ dữ liệu này.'
+                      ? 'Lịch trống theo ngày chưa được cập nhật. Tính năng giữ chỗ hiện chưa khả dụng.'
                       : available.isFetching
                         ? 'Đang kiểm tra lịch trống…'
                         : available.error

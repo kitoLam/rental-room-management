@@ -28,10 +28,13 @@ describe('verified real API contracts', () => {
     expect(hasMocks).toBe(false)
   })
 
-  it('rejects a mock application configuration outside tests', async () => {
+  it('supports a fully offline mock application outside tests', async () => {
     vi.stubEnv('MODE', 'production')
     vi.stubEnv('VITE_API_MODE', 'mock')
-    await expect(import('./config')).rejects.toThrow(/kiểm thử/)
+    const { provider, hasMocks } = await import('./config')
+    expect(provider('auth')).toBe('mock')
+    expect(provider('catalog')).toBe('mock')
+    expect(hasMocks).toBe(true)
   })
 
   it('accepts registration HTTP 202 without creating a login session', async () => {
@@ -81,7 +84,7 @@ describe('verified real API contracts', () => {
     ['tenant', '/api/tenant/tenancies', 'GET'],
     ['recovery', '/api/auth/forgot-password', 'POST'],
     ['admin', '/api/admin/owner-verifications', 'GET'],
-    ['utilities', '/api/contract-services/register', 'POST'],
+    ['utilities', '/api/meter-charges', 'POST'],
     ['notifications', '/api/notifications/send', 'POST'],
   ] as const)('blocks pending %s contract %s without sending or mocking success', async (feature, path, method) => {
     const fetcher = vi.fn()

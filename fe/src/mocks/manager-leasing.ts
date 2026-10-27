@@ -359,7 +359,7 @@ export function leasingAction(
     return b
   }
   if (resource === 'tenants') {
-    const data = z.object({ contractId: z.guid() }).parse(input),
+    const data = z.object({ contractId: z.string().uuid() }).parse(input),
       c = e.contract(branchId, data.contractId)
     if (action === 'representative') {
       const t = e.tenancy(branchId, id || '')

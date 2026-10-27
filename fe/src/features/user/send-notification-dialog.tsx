@@ -172,11 +172,7 @@ export function SendNotificationDialog({
             <label className="block text-xs font-bold mb-1 text-foreground">
               Loại thông báo <span className="text-danger">*</span>
             </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="input w-full"
-            >
+            <select value={type} onChange={(e) => setType(e.target.value)} className="input w-full">
               <option value="ANNOUNCEMENT">Thông báo chung</option>
               <option value="TENANT_SERVICE">Dịch vụ & Tiện ích</option>
               <option value="UTILITY_BILL">Chỉ số điện nước</option>

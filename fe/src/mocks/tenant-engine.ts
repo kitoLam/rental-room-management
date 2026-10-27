@@ -34,7 +34,7 @@ export class TenantEngine {
     this.save()
   }
   own(userId: string, tenancyId: string) {
-    if (!z.guid().safeParse(tenancyId).success)
+    if (!z.string().uuid().safeParse(tenancyId).success)
       throw new MockError('Mã quan hệ thuê chưa hợp lệ.', 422)
     const t = this.state.tenancies.find((t) => t.id === tenancyId && t.userId === userId)
     if (!t) throw new MockError('Không tìm thấy quan hệ thuê được phép truy cập.', 404)

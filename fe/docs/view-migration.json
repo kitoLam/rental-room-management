@@ -1,0 +1,482 @@
+[
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminDashboard",
+    "to": "src\\features\\admin\\admin-dashboard-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminRoles",
+    "to": "src\\features\\admin\\admin-roles-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminOwners",
+    "to": "src\\features\\admin\\admin-owners-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminBranches",
+    "to": "src\\features\\admin\\admin-branches-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminActivity",
+    "to": "src\\features\\admin\\admin-activity-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\platform-pages.tsx",
+    "view": "AdminAuditDetail",
+    "to": "src\\features\\admin\\admin-audit-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\user-pages.tsx",
+    "view": "AdminUsers",
+    "to": "src\\features\\admin\\admin-users-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\user-pages.tsx",
+    "view": "AdminUserDetail",
+    "to": "src\\features\\admin\\admin-user-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\user-pages.tsx",
+    "view": "AdminUserCreate",
+    "to": "src\\features\\admin\\admin-user-create-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\verification-pages.tsx",
+    "view": "AdminVerificationQueue",
+    "to": "src\\features\\admin\\admin-verification-queue-page.tsx"
+  },
+  {
+    "from": "src\\features\\admin\\verification-pages.tsx",
+    "view": "AdminVerificationDetail",
+    "to": "src\\features\\admin\\admin-verification-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\auth\\auth-pages.tsx",
+    "view": "LoginPage",
+    "to": "src\\features\\auth\\login-page.tsx"
+  },
+  {
+    "from": "src\\features\\auth\\auth-pages.tsx",
+    "view": "RegisterPage",
+    "to": "src\\features\\auth\\register-page.tsx"
+  },
+  {
+    "from": "src\\features\\auth\\auth-pages.tsx",
+    "view": "VerifyEmailPage",
+    "to": "src\\features\\auth\\verify-email-page.tsx"
+  },
+  {
+    "from": "src\\features\\auth\\auth-pages.tsx",
+    "view": "ForgotPasswordPage",
+    "to": "src\\features\\auth\\forgot-password-page.tsx"
+  },
+  {
+    "from": "src\\features\\auth\\auth-pages.tsx",
+    "view": "ResetPasswordPage",
+    "to": "src\\features\\auth\\reset-password-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\activity-pages.tsx",
+    "view": "ActivityRow",
+    "to": "src\\features\\leasing\\activity-row.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\activity-pages.tsx",
+    "view": "AppointmentsPage",
+    "to": "src\\features\\leasing\\appointments-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\activity-pages.tsx",
+    "view": "BookingsPage",
+    "to": "src\\features\\leasing\\bookings-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\activity-pages.tsx",
+    "view": "AppointmentDetailPage",
+    "to": "src\\features\\leasing\\appointment-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\activity-pages.tsx",
+    "view": "BookingDetailPage",
+    "to": "src\\features\\leasing\\booking-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\create-pages.tsx",
+    "view": "CreateAppointmentPage",
+    "to": "src\\features\\leasing\\create-appointment-page.tsx"
+  },
+  {
+    "from": "src\\features\\leasing\\create-pages.tsx",
+    "view": "CreateBookingPage",
+    "to": "src\\features\\leasing\\create-booking-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\catalog-pages.tsx",
+    "view": "ManagerRoomTypes",
+    "to": "src\\features\\manager\\manager-room-types-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\catalog-pages.tsx",
+    "view": "ManagerServices",
+    "to": "src\\features\\manager\\manager-services-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\catalog-pages.tsx",
+    "view": "ManagerRoomServices",
+    "to": "src\\features\\manager\\manager-room-services-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\catalog-pages.tsx",
+    "view": "ManagerFurnitures",
+    "to": "src\\features\\manager\\manager-furnitures-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\catalog-pages.tsx",
+    "view": "ManagerFurnitureDetail",
+    "to": "src\\features\\manager\\manager-furniture-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\dashboard-page.tsx",
+    "view": "ManagerDashboard",
+    "to": "src\\features\\manager\\manager-dashboard-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\dashboard-page.tsx",
+    "view": "ManagerReports",
+    "to": "src\\features\\manager\\manager-reports-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerInvoices",
+    "to": "src\\features\\manager\\manager-invoices-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerInvoiceDetail",
+    "to": "src\\features\\manager\\manager-invoice-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerInvoiceEditor",
+    "to": "src\\features\\manager\\manager-invoice-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerPayments",
+    "to": "src\\features\\manager\\manager-payments-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerPaymentDetail",
+    "to": "src\\features\\manager\\manager-payment-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerDebts",
+    "to": "src\\features\\manager\\manager-debts-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\finance-pages.tsx",
+    "view": "ManagerZaloSettings",
+    "to": "src\\features\\manager\\manager-zalo-settings-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerAppointments",
+    "to": "src\\features\\manager\\manager-appointments-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerAppointmentDetail",
+    "to": "src\\features\\manager\\manager-appointment-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerBookings",
+    "to": "src\\features\\manager\\manager-bookings-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerBookingDetail",
+    "to": "src\\features\\manager\\manager-booking-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerContracts",
+    "to": "src\\features\\manager\\manager-contracts-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerContractEditor",
+    "to": "src\\features\\manager\\manager-contract-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerContractDetail",
+    "to": "src\\features\\manager\\manager-contract-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\leasing-pages.tsx",
+    "view": "ManagerContractTenants",
+    "to": "src\\features\\manager\\manager-contract-tenants-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "EvidenceInput",
+    "to": "src\\features\\manager\\evidence-input.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerServiceRequests",
+    "to": "src\\features\\manager\\manager-service-requests-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerUtilities",
+    "to": "src\\features\\manager\\manager-utilities-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerUtilityEditor",
+    "to": "src\\features\\manager\\manager-utility-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerUtilityDetail",
+    "to": "src\\features\\manager\\manager-utility-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerAllocations",
+    "to": "src\\features\\manager\\manager-allocations-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerMaintenance",
+    "to": "src\\features\\manager\\manager-maintenance-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\operations-pages.tsx",
+    "view": "ManagerMaintenanceDetail",
+    "to": "src\\features\\manager\\manager-maintenance-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerRooms",
+    "to": "src\\features\\manager\\manager-rooms-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerRoomEditor",
+    "to": "src\\features\\manager\\manager-room-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerRoomDetail",
+    "to": "src\\features\\manager\\manager-room-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerSlots",
+    "to": "src\\features\\manager\\manager-slots-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerTenants",
+    "to": "src\\features\\manager\\manager-tenants-page.tsx"
+  },
+  {
+    "from": "src\\features\\manager\\property-pages.tsx",
+    "view": "ManagerTenancyDetail",
+    "to": "src\\features\\manager\\manager-tenancy-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\branch-pages.tsx",
+    "view": "OwnerBranches",
+    "to": "src\\features\\owner\\owner-branches-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\branch-pages.tsx",
+    "view": "OwnerBranchDetail",
+    "to": "src\\features\\owner\\owner-branch-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\branch-pages.tsx",
+    "view": "OwnerBranchEditor",
+    "to": "src\\features\\owner\\owner-branch-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\branch-pages.tsx",
+    "view": "OwnerPolicies",
+    "to": "src\\features\\owner\\owner-policies-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\branch-pages.tsx",
+    "view": "OwnerQrSettings",
+    "to": "src\\features\\owner\\owner-qr-settings-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerOverview",
+    "to": "src\\features\\owner\\owner-overview.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerDashboard",
+    "to": "src\\features\\owner\\owner-dashboard-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerFinance",
+    "to": "src\\features\\owner\\owner-finance-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerReports",
+    "to": "src\\features\\owner\\owner-reports-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerPayments",
+    "to": "src\\features\\owner\\owner-payments-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerApprovals",
+    "to": "src\\features\\owner\\owner-approvals-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\finance-pages.tsx",
+    "view": "OwnerActivityPage",
+    "to": "src\\features\\owner\\owner-activity-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\manager-pages.tsx",
+    "view": "OwnerManagers",
+    "to": "src\\features\\owner\\owner-managers-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\manager-pages.tsx",
+    "view": "OwnerInvite",
+    "to": "src\\features\\owner\\owner-invite-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\manager-pages.tsx",
+    "view": "OwnerManagerDetail",
+    "to": "src\\features\\owner\\owner-manager-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\manager-pages.tsx",
+    "view": "OwnerAssignments",
+    "to": "src\\features\\owner\\owner-assignments-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\onboarding-pages.tsx",
+    "view": "OwnerVerificationPage",
+    "to": "src\\features\\owner\\owner-verification-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\onboarding-pages.tsx",
+    "view": "OwnerOnboarding",
+    "to": "src\\features\\owner\\owner-onboarding-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\onboarding-pages.tsx",
+    "view": "ManagerInvitationsPage",
+    "to": "src\\features\\owner\\manager-invitations-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\property-pages.tsx",
+    "view": "OwnerProperties",
+    "to": "src\\features\\owner\\owner-properties-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\property-pages.tsx",
+    "view": "OwnerPropertyEditor",
+    "to": "src\\features\\owner\\owner-property-editor-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\property-pages.tsx",
+    "view": "OwnerPropertyDetail",
+    "to": "src\\features\\owner\\owner-property-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\owner\\property-pages.tsx",
+    "view": "OwnerRoomRegistration",
+    "to": "src\\features\\owner\\owner-room-registration-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\billing-pages.tsx",
+    "view": "InvoicesPage",
+    "to": "src\\features\\tenant\\invoices-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\billing-pages.tsx",
+    "view": "InvoiceDetailPage",
+    "to": "src\\features\\tenant\\invoice-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\billing-pages.tsx",
+    "view": "PaymentsPage",
+    "to": "src\\features\\tenant\\payments-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\living-pages.tsx",
+    "view": "TenantDashboard",
+    "to": "src\\features\\tenant\\tenant-dashboard-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\living-pages.tsx",
+    "view": "MyRoomPage",
+    "to": "src\\features\\tenant\\my-room-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\living-pages.tsx",
+    "view": "ContractsPage",
+    "to": "src\\features\\tenant\\contracts-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\living-pages.tsx",
+    "view": "ContractDetailPage",
+    "to": "src\\features\\tenant\\contract-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\living-pages.tsx",
+    "view": "MyTermsPage",
+    "to": "src\\features\\tenant\\my-terms-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\maintenance-pages.tsx",
+    "view": "MaintenancePage",
+    "to": "src\\features\\tenant\\maintenance-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\maintenance-pages.tsx",
+    "view": "CreateMaintenancePage",
+    "to": "src\\features\\tenant\\create-maintenance-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\maintenance-pages.tsx",
+    "view": "MaintenanceDetailPage",
+    "to": "src\\features\\tenant\\maintenance-detail-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\service-pages.tsx",
+    "view": "ServicesPage",
+    "to": "src\\features\\tenant\\services-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\service-pages.tsx",
+    "view": "UtilitiesPage",
+    "to": "src\\features\\tenant\\utilities-page.tsx"
+  },
+  {
+    "from": "src\\features\\tenant\\service-pages.tsx",
+    "view": "AllocationsPage",
+    "to": "src\\features\\tenant\\allocations-page.tsx"
+  }
+]

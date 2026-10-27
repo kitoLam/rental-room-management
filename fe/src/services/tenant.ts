@@ -15,7 +15,6 @@ import {
 import { provider } from './config'
 import { utilitiesService } from './utilities'
 import type {
-  ContractServiceRegistrationInput,
   CreateCostAllocationProposalInput,
 } from '@/interfaces/utilities'
 
@@ -42,12 +41,62 @@ export const tenantApi = {
       tenantPaymentSchema,
       write('POST', value),
     ),
-  services: (id: string) => request('tenant', path(id, 'services'), z.array(serviceSchema)),
+  services: async (id: string, tenancyContext?: { roomId?: string; contractId?: string }) => {
+    if (provider('utilities') === 'real') {
+      const roomId = tenancyContext?.roomId
+      const contractId = tenancyContext?.contractId
+      if (!roomId || !contractId) {
+        return []
+      }
+      const roomServices = await utilitiesService.roomServices.listByRoom(roomId)
+      const contractServices = await utilitiesService.contractServices.listByContract(contractId)
+      const csByRoomServiceId = new Map(contractServices.map((cs) => [cs.roomServiceId, cs]))
+
+      return roomServices.map((rs) => {
+        const cs = csByRoomServiceId.get(rs.id)
+        return {
+          id: rs.id,
+          name: rs.serviceName,
+          mandatory: Boolean(rs.mandatory),
+          unit: rs.unit || 'tháng',
+          unitPrice: rs.unitPrice,
+          subscriptionId: cs ? cs.id : null,
+          status: cs ? cs.status : null,
+          startDate: cs ? cs.startDate : rs.startDate,
+          endDate: (cs ? cs.endDate : rs.endDate) ?? null,
+          note: cs?.reason || '',
+          history: cs?.processedAt
+            ? [
+                {
+                  status: cs.status,
+                  at: cs.processedAt,
+                  note: cs.reason || 'Đã xử lý',
+                },
+              ]
+            : [],
+        }
+      })
+    }
+    return request('tenant', path(id, 'services'), z.array(serviceSchema))
+  },
   registerService: async (id: string, value: unknown) => {
     if (provider('utilities') === 'real') {
-      const item = await utilitiesService.contractServices.register(
-        value as ContractServiceRegistrationInput,
-      )
+      const v = value as {
+        serviceId: string
+        startDate: string
+        endDate: string
+        note?: string
+        contractId: string
+        roomServiceId?: string
+      }
+      const item = await utilitiesService.contractServices.register({
+        contractId: v.contractId,
+        contractTenantId: id,
+        roomServiceId: v.roomServiceId || v.serviceId,
+        startDate: v.startDate,
+        endDate: v.endDate,
+        reason: v.note,
+      })
       return {
         id: item.id,
         name: item.serviceName,

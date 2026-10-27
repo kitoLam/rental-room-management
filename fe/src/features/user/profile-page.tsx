@@ -154,7 +154,12 @@ function ProfileForm({ user }: { user: User }) {
             Khôi phục / đặt lại mật khẩu
           </Link>
           <InlineError error={logout.error} />
-          <div className="mt-4 grid gap-3 text-sm font-bold text-primary"><Link to="/manager-invitations">Lời mời quản lý</Link><Link to={user.roles.includes('OWNER')?'/owner/dashboard':'/owner/onboarding'}>{user.roles.includes('OWNER')?'Không gian chủ trọ':'Đăng ký làm chủ trọ'}</Link></div>
+          <div className="mt-4 grid gap-3 text-sm font-bold text-primary">
+            <Link to="/manager-invitations">Lời mời quản lý</Link>
+            <Link to={user.roles.includes('OWNER') ? '/owner/dashboard' : '/owner/onboarding'}>
+              {user.roles.includes('OWNER') ? 'Không gian chủ trọ' : 'Đăng ký làm chủ trọ'}
+            </Link>
+          </div>
           <Button
             variant="outline"
             loading={logout.isPending}

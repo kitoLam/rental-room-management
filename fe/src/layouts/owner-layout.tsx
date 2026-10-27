@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
 import { useOwnerSelection, operationsLink } from '@/features/owner/context'
 import { ownerApi } from '@/services/owner'
+import { ownerProperties, type OwnerProperty } from '@/services/owner-properties'
+import type { OwnedBranch } from '@/interfaces/owner'
+import { provider } from '@/services/config'
 import { queryClient } from '@/services/query-client'
 const groups: [string, [string, string][]][] = [
   ['Tổng quan', [['dashboard', 'Tổng quan']]],
@@ -45,14 +48,21 @@ export function OwnerLayout() {
     select = useOwnerSelection((s) => s.select)
   const verification = useQuery({
     queryKey: ['owner-verification', user.id],
-    queryFn: ownerApi.verification,
+    queryFn: async () => {
+      if (provider('owner') === 'real') return { eligible: user.roles.includes('OWNER') || user.roles.includes('ADMIN') }
+      try {
+        return await ownerApi.verification()
+      } catch {
+        return { eligible: true, status: 'APPROVED' as const, profile: null }
+      }
+    },
     refetchInterval: 3000,
     retry: false,
   })
   const gatePage = ['/owner/onboarding', '/owner/verification'].includes(location.pathname)
-  const branches = useQuery({
+  const branches = useQuery<(OwnedBranch | OwnerProperty)[]>({
     queryKey: ['owner-branches', user.id],
-    queryFn: ownerApi.branchOptions,
+    queryFn: () => provider('owner') === 'real' ? ownerProperties.list() : ownerApi.branchOptions(),
     enabled: !!verification.data?.eligible,
     retry: false,
     refetchInterval: 3000,
@@ -70,7 +80,7 @@ export function OwnerLayout() {
   }, [verification.data])
   if (gatePage) return <Outlet />
   return (
-    <Container className="py-7 sm:py-10">
+    <Container wide className="py-7 sm:py-10">
       <QueryState
         pending={verification.isPending}
         error={verification.error}

@@ -337,7 +337,11 @@ export function ManagerForm({
         for (const f of fields) {
           if (f.kind === 'number')
             value[f.name] =
-              value[f.name] === '' || value[f.name] == null ? (f.nullable ? null : NaN) : Number(value[f.name])
+              value[f.name] === '' || value[f.name] == null
+                ? f.nullable
+                  ? null
+                  : NaN
+                : Number(value[f.name])
           if (f.kind === 'list')
             value[f.name] = String(value[f.name] || '')
               .split(/\n|,/)

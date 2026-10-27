@@ -426,7 +426,7 @@ export const handlers = [
       }
       if (path === '/api/notifications/mark-read' && method === 'PUT') {
         const input = z
-          .object({ notificationIds: z.array(z.guid()).min(1) })
+          .object({ notificationIds: z.array(z.string().uuid()).min(1) })
           .parse(await payload())
         const records = input.notificationIds.map((id) => {
           const n = db.state.notifications.find((v) => v.id === id)

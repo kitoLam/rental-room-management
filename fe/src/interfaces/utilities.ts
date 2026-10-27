@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const uuid = z.guid()
+const uuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID')
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const vnd = z.number().nonnegative()
 
@@ -48,18 +48,20 @@ export const updateServiceInputSchema = z.object({
 })
 export type UpdateServiceInput = z.infer<typeof updateServiceInputSchema>
 
-export const serviceCatalogResponseSchema = z.object({
-  id: uuid,
-  branchId: uuid,
-  code: z.string(),
-  name: z.string(),
-  unit: z.string(),
-  serviceType: serviceTypeEnum,
-  billingMethod: billingMethodEnum,
-  referencePrice: z.number(),
-  mandatory: z.boolean(),
-  active: z.boolean(),
-})
+export const serviceCatalogResponseSchema = z
+  .object({
+    id: z.string(),
+    branchId: z.string().optional(),
+    code: z.string(),
+    name: z.string(),
+    unit: z.string().optional().default('tháng'),
+    serviceType: serviceTypeEnum.optional().default('OTHER'),
+    billingMethod: billingMethodEnum.optional().default('FIXED'),
+    referencePrice: z.coerce.number().optional().default(0),
+    mandatory: z.coerce.boolean().optional().default(false),
+    active: z.coerce.boolean().optional().default(true),
+  })
+  .passthrough()
 export type ServiceCatalogItem = z.infer<typeof serviceCatalogResponseSchema>
 
 // ==========================================
@@ -87,18 +89,22 @@ export const updateRoomServiceInputSchema = z.object({
 })
 export type UpdateRoomServiceInput = z.infer<typeof updateRoomServiceInputSchema>
 
-export const roomServiceResponseSchema = z.object({
-  id: uuid,
-  roomId: uuid,
-  branchId: uuid.optional(),
-  serviceId: uuid,
-  serviceName: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  unitPrice: z.number(),
-  billingConfig: z.unknown().nullable().optional(),
-  status: roomServiceStatusEnum,
-})
+export const roomServiceResponseSchema = z
+  .object({
+    id: uuid,
+    roomId: uuid.optional(),
+    branchId: uuid.optional(),
+    serviceId: uuid.optional(),
+    serviceName: z.string().optional().default(''),
+    mandatory: z.coerce.boolean().optional().default(false),
+    unit: z.string().optional().default(''),
+    startDate: z.string().optional().default(''),
+    endDate: z.string().optional().default(''),
+    unitPrice: z.coerce.number().optional().default(0),
+    billingConfig: z.unknown().nullable().optional(),
+    status: roomServiceStatusEnum.optional().default('ACTIVE'),
+  })
+  .passthrough()
 export type RoomServiceItem = z.infer<typeof roomServiceResponseSchema>
 
 // ==========================================
@@ -133,20 +139,20 @@ export type ProcessContractServiceInput = z.infer<typeof processContractServiceI
 
 export const contractServiceResponseSchema = z.object({
   id: uuid,
-  contractId: uuid,
+  contractId: uuid.optional(),
   contractTenantId: uuid.nullable().optional(),
-  roomId: uuid,
-  roomServiceId: uuid,
-  serviceName: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  agreedUnitPrice: z.number(),
-  status: contractServiceStatusEnum,
+  roomId: uuid.nullable().optional(),
+  roomServiceId: uuid.optional(),
+  serviceName: z.string().optional().default(''),
+  startDate: z.string().optional().default(''),
+  endDate: z.string().nullable().optional(),
+  agreedUnitPrice: z.coerce.number().nullable().optional(),
+  status: contractServiceStatusEnum.optional().default('PENDING'),
   requestedBy: uuid.nullable().optional(),
   processedBy: uuid.nullable().optional(),
   processedAt: z.string().nullable().optional(),
   reason: z.string().nullable().optional(),
-})
+}).passthrough()
 export type ContractServiceItem = z.infer<typeof contractServiceResponseSchema>
 
 // ==========================================

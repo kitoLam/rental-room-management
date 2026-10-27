@@ -42,7 +42,7 @@ function FeatureList({ items, inverted }: { items: Feature[]; inverted?: boolean
 export function RolePaths() {
   return (
     <section aria-labelledby="roles-title" className="py-16 sm:py-20">
-      <Container>
+      <Container wide>
         <h2 id="roles-title" className="text-xl font-bold">
           Đã thuê hoặc đang cho thuê?
         </h2>

@@ -1,3 +1,4 @@
+import { localDate } from '@/lib/validation'
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { ManagerEngine } from './manager-engine'
 import { MockDatabase } from './database'
@@ -13,7 +14,7 @@ import { referenceLink } from '@/lib/activity'
 let e: ManagerEngine
 const b = id(10),
   shared = id(12),
-  today = () => new Date().toISOString().slice(0, 10)
+  today = () => localDate(new Date())
 const month = (offset = 1) => {
   const d = new Date()
   d.setUTCDate(1)

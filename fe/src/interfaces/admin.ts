@@ -9,7 +9,7 @@ export const accountStatusSchema = z.enum([
   'DISABLED',
 ])
 export const adminUserSchema = z.object({
-  id: z.guid(),
+  id: z.uuid(),
   fullName: z.string(),
   email: z.email().nullable(),
   phone: z.string().nullable(),
@@ -55,11 +55,11 @@ export const springUsersSchema = z.object({
   totalPages: z.number().int().nonnegative(),
 })
 export const auditSchema = z.object({
-  id: z.guid(),
-  actorUserId: z.guid().nullable(),
+  id: z.uuid(),
+  actorUserId: z.uuid().nullable(),
   actorName: z.string(),
   tableName: z.enum(['users', 'owner_managers', 'branches']),
-  entityId: z.guid(),
+  entityId: z.uuid(),
   action: z.string(),
   reason: z.string().nullable(),
   requestKey: z.string().nullable(),
@@ -85,15 +85,15 @@ export const reviewSchema = z.object({
 })
 export type AdminReview = z.infer<typeof reviewSchema>
 export const adminBranchSchema = z.object({
-  id: z.guid(),
+  id: z.uuid(),
   code: z.string(),
   name: z.string(),
   province: z.string(),
   address: z.string(),
   status: z.enum(['DRAFT', 'ACTIVE', 'INACTIVE']),
-  ownerId: z.guid(),
+  ownerId: z.uuid(),
   ownerName: z.string(),
-  managerId: z.guid().nullable(),
+  managerId: z.uuid().nullable(),
   managerName: z.string().nullable(),
   createdAt: z.string().nullable(),
 })
@@ -106,13 +106,16 @@ export const adminRoleSchema = z.object({
   userCount: z.number().int(),
 })
 export const adminSummarySchema = z.object({
+  totalRooms: z.number().int().nonnegative(),
+  publishedRooms: z.number().int().nonnegative(),
+  totalBranches: z.number().int().nonnegative(),
   totalUsers: z.number().int(),
   accounts: z.array(z.object({ status: accountStatusSchema, count: z.number().int() })),
   pendingOwners: z.number().int(),
   approvedOwners: z.number().int(),
   branches: z.array(z.object({ status: z.string(), count: z.number().int() })),
   recent: z.array(auditSchema),
-  issues: z.array(z.object({ id: z.guid(), name: z.string(), status: accountStatusSchema })),
+  issues: z.array(z.object({ id: z.uuid(), name: z.string(), status: accountStatusSchema })),
 })
 export type AdminState = {
   metadata: Record<string, { createdAt: string; version: number; contactVerified: boolean }>

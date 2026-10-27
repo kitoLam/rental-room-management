@@ -8,6 +8,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '[0-9a-fA-F-]{36}'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'owner' && (
+    (matches('/api/owner/properties') && ['GET', 'POST'].includes(verb)) ||
+    (matches(`/api/owner/properties/${id}`) && ['GET', 'PUT'].includes(verb)) ||
+    (matches(`/api/owner/properties/${id}/rooms`) && ['GET', 'POST'].includes(verb))
+  )) return null
 
   if (feature === 'auth' && verb === 'POST' &&
       matches('/api/auth/(login|register|verify-email|refresh|logout)')) return null
@@ -24,6 +29,30 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   if (feature === 'notifications') {
     if (verb === 'GET' && matches(`/api/notifications(/unread-count|/${id})?`)) return null
     if (verb === 'PUT' && matches('/api/notifications/(mark-read|mark-all-read)')) return null
+  }
+
+  if (feature === 'utilities') {
+    if (verb === 'GET' && (
+      matches(`/api/branches/${id}/services`) ||
+      matches(`/api/services/${id}`) ||
+      matches(`/api/rooms/${id}/services`) ||
+      matches(`/api/branches/${id}/room-services`) ||
+      matches(`/api/room-services/${id}`) ||
+      matches(`/api/contracts/${id}/services`) ||
+      matches('/api/contract-services')
+    )) return null
+    if (verb === 'POST' && (
+      matches(`/api/branches/${id}/services`) ||
+      matches(`/api/branches/${id}/room-services`) ||
+      matches('/api/contract-services/register')
+    )) return null
+    if (verb === 'DELETE' && matches(`/api/services/${id}`)) return null
+    if (verb === 'PUT' && (
+      matches(`/api/services/${id}`) ||
+      matches(`/api/room-services/${id}`) ||
+      matches(`/api/contract-services/${id}/cancel`) ||
+      matches(`/api/contract-services/${id}/process`)
+    )) return null
   }
 
   return 'Chức năng này hiện chưa khả dụng. Vui lòng thử lại khi có thông báo cập nhật.'

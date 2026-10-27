@@ -698,7 +698,7 @@ export class OwnerEngine {
           reference: z.string(),
           providerTransactionId: z.string().trim().min(5).max(100),
           evidence: z.array(z.string()).min(1).max(3),
-          idempotencyKey: z.guid(),
+          idempotencyKey: z.uuid(),
         })
         .strict()
         .parse(input),

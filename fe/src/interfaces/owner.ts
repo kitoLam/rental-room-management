@@ -25,7 +25,7 @@ export const branchInputSchema = z
     images: z.array(z.string()).max(3),
     isPublic: z.boolean(),
     status: z.enum(['DRAFT', 'ACTIVE', 'INACTIVE']),
-    managerId: z.guid().nullable(),
+    managerId: z.uuid().nullable(),
   })
   .strict()
   .refine((v) => (v.latitude === null) === (v.longitude === null), {
@@ -81,14 +81,14 @@ export const policyInputSchema = ownerPolicySchema
   })
 export type OwnerPolicy = z.infer<typeof ownerPolicySchema>
 export const verificationSchema = z.object({
-  userId: z.guid(),
+  userId: z.uuid(),
   status: z.enum(['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED']),
   fullName: z.string(),
   phone: z.string().nullable(),
   contactVerified: z.boolean(),
   submittedAt: z.string().nullable(),
   reviewedAt: z.string().nullable(),
-  reviewedBy: z.guid().nullable().optional(),
+  reviewedBy: z.uuid().nullable().optional(),
   reason: z.string().nullable(),
   document: z
     .object({ name: z.string(), mime: z.string(), size: z.number(), resourceId: z.string() })
@@ -101,32 +101,32 @@ export const invitationInputSchema = z
     fullName: text.max(255),
     email: z.email(),
     phone: z.string().regex(/^$|^\+?[0-9 ]{9,15}$/),
-    branchIds: z.array(z.guid()).max(30),
+    branchIds: z.array(z.uuid()).max(30),
     note: z.string().max(1000),
   })
   .strict()
 export const invitationSchema = invitationInputSchema.extend({
-  id: z.guid(),
-  ownerId: z.guid(),
+  id: z.uuid(),
+  ownerId: z.uuid(),
   status: z.enum(['INVITED', 'ACCEPTED', 'CANCELLED', 'EXPIRED']),
   createdAt: z.string(),
   expiresAt: z.string(),
-  acceptedBy: z.guid().nullable(),
+  acceptedBy: z.uuid().nullable(),
 })
 export type ManagerInvitation = z.infer<typeof invitationSchema>
 export const relationshipSchema = z.object({
-  id: z.guid(),
+  id: z.uuid(),
   user: userSchema,
   assignedAt: z.string(),
   branches: z.array(
-    z.object({ id: z.guid(), name: z.string(), assignedAt: z.string().nullable() }),
+    z.object({ id: z.uuid(), name: z.string(), assignedAt: z.string().nullable() }),
   ),
 })
 export type ManagerRelationship = z.infer<typeof relationshipSchema>
 export const activitySchema = z.object({
-  id: z.guid(),
-  ownerId: z.guid(),
-  branchId: z.guid().nullable(),
+  id: z.uuid(),
+  ownerId: z.uuid(),
+  branchId: z.uuid().nullable(),
   actorName: z.string(),
   type: z.string(),
   summary: z.string(),
@@ -136,19 +136,19 @@ export const activitySchema = z.object({
 export type OwnerActivity = z.infer<typeof activitySchema>
 export const proposalInputSchema = z
   .object({
-    invoiceId: z.guid(),
+    invoiceId: z.uuid(),
     proposedTotal: money,
     reason: z.string().trim().min(10).max(2000),
     evidence: z.array(z.string()).max(3),
   })
   .strict()
 export const proposalSchema = proposalInputSchema.extend({
-  id: z.guid(),
-  ownerId: z.guid(),
-  branchId: z.guid(),
-  contractTenantId: z.guid(),
+  id: z.uuid(),
+  ownerId: z.uuid(),
+  branchId: z.uuid(),
+  contractTenantId: z.uuid(),
   billingMonth: z.string(),
-  requesterId: z.guid(),
+  requesterId: z.uuid(),
   requesterName: z.string(),
   createdAt: z.string(),
   originalTotal: money,
@@ -160,7 +160,7 @@ export const proposalSchema = proposalInputSchema.extend({
 export type InvoiceAdjustmentProposal = z.infer<typeof proposalSchema>
 export const summaryRowSchema = managerSummarySchema.extend({
   slots: managerSummarySchema.shape.slots.extend({ unavailable: z.number().int().nonnegative() }),
-  id: z.guid(),
+  id: z.uuid(),
   roomCount: z.number().int().nonnegative(),
   name: z.string(),
   status: z.string(),
@@ -205,6 +205,8 @@ export type OwnerSummary = z.infer<typeof ownerSummarySchema>
 export const ownerPaymentSchema = managerPaymentSchema.extend({ branchName: z.string() })
 export type OwnerPayment = z.infer<typeof ownerPaymentSchema>
 export type BranchMetadata = Omit<BranchInput, 'name' | 'address' | 'managerId' | 'status'> & {
+  propertyType?: 'APARTMENT' | 'BOARDING_HOUSE' | 'HOUSE'
+  declaredRoomCount?: number
   qrPublicId: string | null
   qrUrl: string | null
   version: number

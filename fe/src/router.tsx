@@ -1,21 +1,25 @@
-import { createBrowserRouter, Navigate } from 'react-router'
+import { RouteGuard } from '@/features/auth/route-guard'
 import { HomePage } from '@/features/home/home-page'
-import { PublicLayout } from '@/layouts/public-layout'
+import { AdminLayout } from '@/layouts/admin-layout'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { UserLayout } from '@/layouts/user-layout'
-import { TenantLayout } from '@/layouts/tenant-layout'
 import { ManagerLayout } from '@/layouts/manager-layout'
 import { OwnerLayout } from '@/layouts/owner-layout'
-import { AdminLayout } from '@/layouts/admin-layout'
-import { RouteGuard } from '@/features/auth/route-guard'
+import { PublicLayout } from '@/layouts/public-layout'
+import { TenantLayout } from '@/layouts/tenant-layout'
+import { UserLayout } from '@/layouts/user-layout'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { RouteErrorPage } from '@/pages/route-error-page'
+import { createBrowserRouter, Navigate } from 'react-router'
 export const router = createBrowserRouter([
   {
     element: <PublicLayout />,
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
+      {
+        path: 'preview',
+        lazy: async () => ({ Component: (await import('@/pages/preview-page')).default }),
+      },
       {
         path: 'rooms',
         lazy: async () => ({
@@ -41,44 +45,223 @@ export const router = createBrowserRouter([
       {
         element: <RouteGuard />,
         children: [
-          {path:'admin',element:<AdminLayout/>,children:[
-            {index:true,element:<Navigate to="/admin/dashboard" replace/>},
-            {path:'dashboard',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminDashboard})},
-            {path:'users',lazy:async()=>({Component:(await import('@/features/admin/user-pages')).AdminUsers})},
-            {path:'users/new',lazy:async()=>({Component:(await import('@/features/admin/user-pages')).AdminUserCreate})},
-            {path:'users/:userId',lazy:async()=>({Component:(await import('@/features/admin/user-pages')).AdminUserDetail})},
-            {path:'roles',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminRoles})},
-            {path:'owner-verifications',lazy:async()=>({Component:(await import('@/features/admin/verification-pages')).AdminVerificationQueue})},
-            {path:'owner-verifications/:userId',lazy:async()=>({Component:(await import('@/features/admin/verification-pages')).AdminVerificationDetail})},
-            {path:'owners',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminOwners})},
-            {path:'branches',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminBranches})},
-            {path:'activity',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminActivity})},
-            {path:'activity/:eventId',lazy:async()=>({Component:(await import('@/features/admin/platform-pages')).AdminAuditDetail})},
-          ]},
           {
-            path: 'owner', element: <OwnerLayout />, children: [
-              { index: true, element: <Navigate to="/owner/dashboard" replace /> },
-              { path: 'onboarding', lazy: async()=>({ Component:(await import('@/features/owner/onboarding-pages')).OwnerOnboarding }) },
-              { path: 'verification', lazy: async()=>({ Component:(await import('@/features/owner/onboarding-pages')).OwnerVerificationPage }) },
-              { path: 'dashboard', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerDashboard }) },
-              { path: 'branches', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerBranches }) },
-              { path: 'branches/new', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerBranchEditor }) },
-              { path: 'branches/:branchId', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerBranchDetail }) },
-              { path: 'branches/:branchId/edit', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerBranchEditor }) },
-              { path: 'branches/:branchId/policies', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerPolicies }) },
-              { path: 'branches/:branchId/payments/settings', lazy: async()=>({ Component:(await import('@/features/owner/branch-pages')).OwnerQrSettings }) },
-              { path: 'managers', lazy: async()=>({ Component:(await import('@/features/owner/manager-pages')).OwnerManagers }) },
-              { path: 'managers/invite', lazy: async()=>({ Component:(await import('@/features/owner/manager-pages')).OwnerInvite }) },
-              { path: 'managers/:managerId', lazy: async()=>({ Component:(await import('@/features/owner/manager-pages')).OwnerManagerDetail }) },
-              { path: 'manager-assignments', lazy: async()=>({ Component:(await import('@/features/owner/manager-pages')).OwnerAssignments }) },
-              { path: 'finance', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerFinance }) },
-              { path: 'payments', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerPayments }) },
-              { path: 'approvals/invoices', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerApprovals }) },
-              { path: 'reports', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerReports }) },
-              { path: 'activity', lazy: async()=>({ Component:(await import('@/features/owner/finance-pages')).OwnerActivityPage }) },
+            path: 'admin',
+            element: <AdminLayout />,
+            children: [
+              { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+              {
+                path: 'dashboard',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-dashboard-page')).AdminDashboard,
+                }),
+              },
+              {
+                path: 'users',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-users-page')).AdminUsers,
+                }),
+              },
+              {
+                path: 'users/new',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-user-create-page'))
+                    .AdminUserCreate,
+                }),
+              },
+              {
+                path: 'users/:userId',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-user-detail-page'))
+                    .AdminUserDetail,
+                }),
+              },
+              {
+                path: 'roles',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-roles-page')).AdminRoles,
+                }),
+              },
+              {
+                path: 'owner-verifications',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-verification-queue-page'))
+                    .AdminVerificationQueue,
+                }),
+              },
+              {
+                path: 'owner-verifications/:userId',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-verification-detail-page'))
+                    .AdminVerificationDetail,
+                }),
+              },
+              {
+                path: 'owners',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-owners-page')).AdminOwners,
+                }),
+              },
+              {
+                path: 'branches',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-branches-page')).AdminBranches,
+                }),
+              },
+              {
+                path: 'activity',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-activity-page')).AdminActivity,
+                }),
+              },
+              {
+                path: 'activity/:eventId',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-audit-detail-page'))
+                    .AdminAuditDetail,
+                }),
+              },
             ],
           },
-          { path:'manager-invitations', lazy:async()=>({Component:(await import('@/features/owner/onboarding-pages')).ManagerInvitationsPage}) },
+          {
+            path: 'owner',
+            element: <OwnerLayout />,
+            children: [
+              { index: true, element: <Navigate to="/owner/dashboard" replace /> },
+              {
+                path: 'onboarding',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-onboarding-page'))
+                    .OwnerOnboarding,
+                }),
+              },
+              {
+                path: 'verification',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-verification-page'))
+                    .OwnerVerificationPage,
+                }),
+              },
+              {
+                path: 'dashboard',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-dashboard-page')).OwnerDashboard,
+                }),
+              },
+              {
+                path: 'branches',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-properties-page'))
+                    .OwnerProperties,
+                }),
+              },
+              {
+                path: 'branches/new',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-property-editor-page'))
+                    .OwnerPropertyEditor,
+                }),
+              },
+              {
+                path: 'branches/:branchId',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-property-detail-page'))
+                    .OwnerPropertyDetail,
+                }),
+              },
+              {
+                path: 'branches/:branchId/edit',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-property-editor-page'))
+                    .OwnerPropertyEditor,
+                }),
+              },
+              {
+                path: 'branches/:branchId/rooms/new',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-room-registration-page'))
+                    .OwnerRoomRegistration,
+                }),
+              },
+              {
+                path: 'branches/:branchId/policies',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-policies-page')).OwnerPolicies,
+                }),
+              },
+              {
+                path: 'branches/:branchId/payments/settings',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-qr-settings-page'))
+                    .OwnerQrSettings,
+                }),
+              },
+              {
+                path: 'managers',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-managers-page')).OwnerManagers,
+                }),
+              },
+              {
+                path: 'managers/invite',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-invite-page')).OwnerInvite,
+                }),
+              },
+              {
+                path: 'managers/:managerId',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-manager-detail-page'))
+                    .OwnerManagerDetail,
+                }),
+              },
+              {
+                path: 'manager-assignments',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-assignments-page'))
+                    .OwnerAssignments,
+                }),
+              },
+              {
+                path: 'finance',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-finance-page')).OwnerFinance,
+                }),
+              },
+              {
+                path: 'payments',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-payments-page')).OwnerPayments,
+                }),
+              },
+              {
+                path: 'approvals/invoices',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-approvals-page')).OwnerApprovals,
+                }),
+              },
+              {
+                path: 'reports',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-reports-page')).OwnerReports,
+                }),
+              },
+              {
+                path: 'activity',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-activity-page'))
+                    .OwnerActivityPage,
+                }),
+              },
+            ],
+          },
+          {
+            path: 'manager-invitations',
+            lazy: async () => ({
+              Component: (await import('@/features/owner/manager-invitations-page'))
+                .ManagerInvitationsPage,
+            }),
+          },
           {
             path: 'manager',
             element: <ManagerLayout />,
@@ -87,254 +270,271 @@ export const router = createBrowserRouter([
               {
                 path: 'dashboard',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/dashboard-page')).ManagerDashboard,
+                  Component: (await import('@/features/manager/manager-dashboard-page'))
+                    .ManagerDashboard,
                 }),
               },
               {
                 path: 'reports',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/dashboard-page')).ManagerReports,
+                  Component: (await import('@/features/manager/manager-reports-page'))
+                    .ManagerReports,
                 }),
               },
               {
                 path: 'rooms',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerRooms,
+                  Component: (await import('@/features/manager/manager-rooms-page')).ManagerRooms,
                 }),
               },
               {
                 path: 'rooms/new',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerRoomEditor,
+                  Component: (await import('@/features/manager/manager-room-editor-page'))
+                    .ManagerRoomEditor,
                 }),
               },
               {
                 path: 'rooms/:roomId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerRoomDetail,
+                  Component: (await import('@/features/manager/manager-room-detail-page'))
+                    .ManagerRoomDetail,
                 }),
               },
               {
                 path: 'rooms/:roomId/edit',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerRoomEditor,
+                  Component: (await import('@/features/manager/manager-room-editor-page'))
+                    .ManagerRoomEditor,
                 }),
               },
               {
                 path: 'rooms/:roomId/slots',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerSlots,
+                  Component: (await import('@/features/manager/manager-slots-page')).ManagerSlots,
                 }),
               },
               {
                 path: 'tenants',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages')).ManagerTenants,
+                  Component: (await import('@/features/manager/manager-tenants-page'))
+                    .ManagerTenants,
                 }),
               },
               {
                 path: 'tenancies/:contractTenantId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/property-pages'))
+                  Component: (await import('@/features/manager/manager-tenancy-detail-page'))
                     .ManagerTenancyDetail,
                 }),
               },
               {
                 path: 'room-types',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/catalog-pages')).ManagerRoomTypes,
+                  Component: (await import('@/features/manager/manager-room-types-page'))
+                    .ManagerRoomTypes,
                 }),
               },
               {
                 path: 'services',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/catalog-pages')).ManagerServices,
+                  Component: (await import('@/features/manager/manager-services-page'))
+                    .ManagerServices,
                 }),
               },
               {
                 path: 'room-services',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/catalog-pages')).ManagerRoomServices,
+                  Component: (await import('@/features/manager/manager-room-services-page'))
+                    .ManagerRoomServices,
                 }),
               },
               {
                 path: 'furnitures',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/catalog-pages')).ManagerFurnitures,
+                  Component: (await import('@/features/manager/manager-furnitures-page'))
+                    .ManagerFurnitures,
                 }),
               },
               {
                 path: 'furnitures/:furnitureId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/catalog-pages'))
+                  Component: (await import('@/features/manager/manager-furniture-detail-page'))
                     .ManagerFurnitureDetail,
                 }),
               },
               {
                 path: 'appointments',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages')).ManagerAppointments,
+                  Component: (await import('@/features/manager/manager-appointments-page'))
+                    .ManagerAppointments,
                 }),
               },
               {
                 path: 'appointments/:appointmentId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-appointment-detail-page'))
                     .ManagerAppointmentDetail,
                 }),
               },
               {
                 path: 'bookings',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages')).ManagerBookings,
+                  Component: (await import('@/features/manager/manager-bookings-page'))
+                    .ManagerBookings,
                 }),
               },
               {
                 path: 'bookings/:bookingId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-booking-detail-page'))
                     .ManagerBookingDetail,
                 }),
               },
               {
                 path: 'contracts',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages')).ManagerContracts,
+                  Component: (await import('@/features/manager/manager-contracts-page'))
+                    .ManagerContracts,
                 }),
               },
               {
                 path: 'contracts/new',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-contract-editor-page'))
                     .ManagerContractEditor,
                 }),
               },
               {
                 path: 'contracts/:contractId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-contract-detail-page'))
                     .ManagerContractDetail,
                 }),
               },
               {
                 path: 'contracts/:contractId/edit',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-contract-editor-page'))
                     .ManagerContractEditor,
                 }),
               },
               {
                 path: 'contracts/:contractId/tenants',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/leasing-pages'))
+                  Component: (await import('@/features/manager/manager-contract-tenants-page'))
                     .ManagerContractTenants,
                 }),
               },
               {
                 path: 'service-requests',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-service-requests-page'))
                     .ManagerServiceRequests,
                 }),
               },
               {
                 path: 'utility-charges',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages')).ManagerUtilities,
+                  Component: (await import('@/features/manager/manager-utilities-page'))
+                    .ManagerUtilities,
                 }),
               },
               {
                 path: 'utility-charges/new',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-utility-editor-page'))
                     .ManagerUtilityEditor,
                 }),
               },
               {
                 path: 'utility-charges/:chargeId/edit',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-utility-editor-page'))
                     .ManagerUtilityEditor,
                 }),
               },
               {
                 path: 'utility-charges/:chargeId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-utility-detail-page'))
                     .ManagerUtilityDetail,
                 }),
               },
               {
                 path: 'cost-allocations',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-allocations-page'))
                     .ManagerAllocations,
                 }),
               },
               {
                 path: 'maintenance',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-maintenance-page'))
                     .ManagerMaintenance,
                 }),
               },
               {
                 path: 'maintenance/:reportId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/operations-pages'))
+                  Component: (await import('@/features/manager/manager-maintenance-detail-page'))
                     .ManagerMaintenanceDetail,
                 }),
               },
               {
                 path: 'invoices',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages')).ManagerInvoices,
+                  Component: (await import('@/features/manager/manager-invoices-page'))
+                    .ManagerInvoices,
                 }),
               },
               {
                 path: 'invoices/new',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages'))
+                  Component: (await import('@/features/manager/manager-invoice-editor-page'))
                     .ManagerInvoiceEditor,
                 }),
               },
               {
                 path: 'invoices/:invoiceId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages'))
+                  Component: (await import('@/features/manager/manager-invoice-detail-page'))
                     .ManagerInvoiceDetail,
                 }),
               },
               {
                 path: 'invoices/:invoiceId/edit',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages'))
+                  Component: (await import('@/features/manager/manager-invoice-editor-page'))
                     .ManagerInvoiceEditor,
                 }),
               },
               {
                 path: 'payments',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages')).ManagerPayments,
+                  Component: (await import('@/features/manager/manager-payments-page'))
+                    .ManagerPayments,
                 }),
               },
               {
                 path: 'payments/:paymentId',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages'))
+                  Component: (await import('@/features/manager/manager-payment-detail-page'))
                     .ManagerPaymentDetail,
                 }),
               },
               {
                 path: 'debts',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages')).ManagerDebts,
+                  Component: (await import('@/features/manager/manager-debts-page')).ManagerDebts,
                 }),
               },
               {
                 path: 'settings/zalo',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/finance-pages')).ManagerZaloSettings,
+                  Component: (await import('@/features/manager/manager-zalo-settings-page'))
+                    .ManagerZaloSettings,
                 }),
               },
             ],
@@ -347,86 +547,89 @@ export const router = createBrowserRouter([
               {
                 path: 'dashboard',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/living-pages')).TenantDashboard,
+                  Component: (await import('@/features/tenant/tenant-dashboard-page'))
+                    .TenantDashboard,
                 }),
               },
               {
                 path: 'my-room',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/living-pages')).MyRoomPage,
+                  Component: (await import('@/features/tenant/my-room-page')).MyRoomPage,
                 }),
               },
               {
                 path: 'contracts',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/living-pages')).ContractsPage,
+                  Component: (await import('@/features/tenant/contracts-page')).ContractsPage,
                 }),
               },
               {
                 path: 'contracts/:contractId',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/living-pages')).ContractDetailPage,
+                  Component: (await import('@/features/tenant/contract-detail-page'))
+                    .ContractDetailPage,
                 }),
               },
               {
                 path: 'contracts/:contractId/my-terms',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/living-pages')).MyTermsPage,
+                  Component: (await import('@/features/tenant/my-terms-page')).MyTermsPage,
                 }),
               },
               {
                 path: 'invoices',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/billing-pages')).InvoicesPage,
+                  Component: (await import('@/features/tenant/invoices-page')).InvoicesPage,
                 }),
               },
               {
                 path: 'invoices/:invoiceId',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/billing-pages')).InvoiceDetailPage,
+                  Component: (await import('@/features/tenant/invoice-detail-page'))
+                    .InvoiceDetailPage,
                 }),
               },
               {
                 path: 'payments',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/billing-pages')).PaymentsPage,
+                  Component: (await import('@/features/tenant/payments-page')).PaymentsPage,
                 }),
               },
               {
                 path: 'services',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/service-pages')).ServicesPage,
+                  Component: (await import('@/features/tenant/services-page')).ServicesPage,
                 }),
               },
               {
                 path: 'utilities',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/service-pages')).UtilitiesPage,
+                  Component: (await import('@/features/tenant/utilities-page')).UtilitiesPage,
                 }),
               },
               {
                 path: 'utilities/allocations',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/service-pages')).AllocationsPage,
+                  Component: (await import('@/features/tenant/allocations-page')).AllocationsPage,
                 }),
               },
               {
                 path: 'maintenance',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/maintenance-pages')).MaintenancePage,
+                  Component: (await import('@/features/tenant/maintenance-page')).MaintenancePage,
                 }),
               },
               {
                 path: 'maintenance/new',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/maintenance-pages'))
+                  Component: (await import('@/features/tenant/create-maintenance-page'))
                     .CreateMaintenancePage,
                 }),
               },
               {
                 path: 'maintenance/:reportId',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/maintenance-pages'))
+                  Component: (await import('@/features/tenant/maintenance-detail-page'))
                     .MaintenanceDetailPage,
                 }),
               },
@@ -435,13 +638,14 @@ export const router = createBrowserRouter([
           {
             path: 'rooms/:roomId/appointments/new',
             lazy: async () => ({
-              Component: (await import('@/features/leasing/create-pages')).CreateAppointmentPage,
+              Component: (await import('@/features/leasing/create-appointment-page'))
+                .CreateAppointmentPage,
             }),
           },
           {
             path: 'rooms/:roomId/bookings/new',
             lazy: async () => ({
-              Component: (await import('@/features/leasing/create-pages')).CreateBookingPage,
+              Component: (await import('@/features/leasing/create-booking-page')).CreateBookingPage,
             }),
           },
           {
@@ -457,26 +661,28 @@ export const router = createBrowserRouter([
               {
                 path: 'user/appointments',
                 lazy: async () => ({
-                  Component: (await import('@/features/leasing/activity-pages')).AppointmentsPage,
+                  Component: (await import('@/features/leasing/appointments-page'))
+                    .AppointmentsPage,
                 }),
               },
               {
                 path: 'user/appointments/:appointmentId',
                 lazy: async () => ({
-                  Component: (await import('@/features/leasing/activity-pages'))
+                  Component: (await import('@/features/leasing/appointment-detail-page'))
                     .AppointmentDetailPage,
                 }),
               },
               {
                 path: 'user/bookings',
                 lazy: async () => ({
-                  Component: (await import('@/features/leasing/activity-pages')).BookingsPage,
+                  Component: (await import('@/features/leasing/bookings-page')).BookingsPage,
                 }),
               },
               {
                 path: 'user/bookings/:bookingId',
                 lazy: async () => ({
-                  Component: (await import('@/features/leasing/activity-pages')).BookingDetailPage,
+                  Component: (await import('@/features/leasing/booking-detail-page'))
+                    .BookingDetailPage,
                 }),
               },
               {
@@ -510,30 +716,30 @@ export const router = createBrowserRouter([
     children: [
       {
         path: 'login',
-        lazy: async () => ({ Component: (await import('@/features/auth/auth-pages')).LoginPage }),
+        lazy: async () => ({ Component: (await import('@/features/auth/login-page')).LoginPage }),
       },
       {
         path: 'register',
         lazy: async () => ({
-          Component: (await import('@/features/auth/auth-pages')).RegisterPage,
+          Component: (await import('@/features/auth/register-page')).RegisterPage,
         }),
       },
       {
         path: 'verify-email',
         lazy: async () => ({
-          Component: (await import('@/features/auth/auth-pages')).VerifyEmailPage,
+          Component: (await import('@/features/auth/verify-email-page')).VerifyEmailPage,
         }),
       },
       {
         path: 'forgot-password',
         lazy: async () => ({
-          Component: (await import('@/features/auth/auth-pages')).ForgotPasswordPage,
+          Component: (await import('@/features/auth/forgot-password-page')).ForgotPasswordPage,
         }),
       },
       {
         path: 'reset-password',
         lazy: async () => ({
-          Component: (await import('@/features/auth/auth-pages')).ResetPasswordPage,
+          Component: (await import('@/features/auth/reset-password-page')).ResetPasswordPage,
         }),
       },
     ],
