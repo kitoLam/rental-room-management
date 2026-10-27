@@ -7,8 +7,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * OpenAPI / Swagger UI configuration.
  *
- * <p>No security scheme yet — all endpoints are open. Add a bearerAuth
- * {@code @SecurityScheme} here once authentication is implemented.
+ * <p>Bearer authentication is configured in security/OpenApiSecurityConfig.
  */
 @Configuration
 @OpenAPIDefinition(
