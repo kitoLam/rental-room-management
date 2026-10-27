@@ -3,28 +3,36 @@ package com.kitolam.rentalroommanagement.modules.auth.service;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.AppException;
 import com.kitolam.rentalroommanagement.modules.auth.config.AuthProperties;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.mail.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.mail.MailException;
+import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VerificationMailService {
     private final JavaMailSender sender;
     private final AuthProperties properties;
 
-    // SMTP runs only after Mongo commits, so every delivered link refers to persisted data.
     @EventListener
     public void schedule(VerificationMailEvent event) {
-        // afterCommit propagates SMTP failures to the HTTP caller; the account remains persisted.
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { send(event); }
-        });
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send(event);
+                }
+            });
+        } else {
+            send(event);
+        }
     }
 
     private void send(VerificationMailEvent event) {
@@ -38,9 +46,11 @@ public class VerificationMailService {
                 + "\n\nLiên kết có hiệu lực trong " + properties.verificationTokenTtl().toHours()
                 + " giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.");
         try {
+            log.info("Đang gửi email xác thực đến: {}", event.email());
             sender.send(mail);
+            log.info("Gửi email xác thực thành công đến: {}", event.email());
         } catch (MailException ex) {
-            // Do not log SMTP exceptions: providers may embed recipients or message contents.
+            log.error("Lỗi khi gửi email xác thực đến {}: {}", event.email(), ex.getMessage(), ex);
             throw new MailDeliveryException();
         }
     }
@@ -48,7 +58,7 @@ public class VerificationMailService {
     public static class MailDeliveryException extends AppException {
         public MailDeliveryException() {
             super(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Đã lưu yêu cầu nhưng chưa gửi được email. Vui lòng gửi lại email xác thực sau thời gian chờ");
+                    "Đã lưu yêu cầu nhưng chưa gửi được email. Vui lòng kiểm tra cấu hình SMTP hoặc gửi lại sau");
         }
     }
 }

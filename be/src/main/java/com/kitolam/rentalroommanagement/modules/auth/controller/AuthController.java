@@ -1,17 +1,23 @@
 package com.kitolam.rentalroommanagement.modules.auth.controller;
 
+import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.common.exception.exceptions.UnauthorizedException;
 import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping({"/auth", "/api/auth"})
 @RequiredArgsConstructor
 @Tag(name = "Authentication")
 public class AuthController {
@@ -36,17 +42,62 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-        return auth.login(request);
+    public TokenResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+        TokenResponse tokens = auth.login(request);
+        setRefreshTokenCookie(response, tokens.refreshToken(), (int) tokens.refreshExpiresIn());
+        return tokens;
     }
 
     @PostMapping("/refresh")
-    public TokenResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        return auth.refresh(request);
+    public TokenResponse refresh(
+            @RequestBody(required = false) RefreshTokenRequest request,
+            @CookieValue(name = "refreshToken", required = false) String cookieToken,
+            HttpServletResponse response) {
+        String tokenStr = (request != null && request.refreshToken() != null && !request.refreshToken().isBlank())
+                ? request.refreshToken()
+                : cookieToken;
+        if (tokenStr == null || tokenStr.isBlank()) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        TokenResponse tokens = auth.refresh(new RefreshTokenRequest(tokenStr));
+        setRefreshTokenCookie(response, tokens.refreshToken(), (int) tokens.refreshExpiresIn());
+        return tokens;
     }
 
     @PostMapping("/logout")
-    public MessageResponse logout(@Valid @RequestBody RefreshTokenRequest request) {
-        return auth.logout(request);
+    public ResponseEntity<StandardResponse<Void>> logout(
+            @RequestBody(required = false) RefreshTokenRequest request,
+            @CookieValue(name = "refreshToken", required = false) String cookieToken,
+            HttpServletResponse response) {
+        String tokenStr = (request != null && request.refreshToken() != null && !request.refreshToken().isBlank())
+                ? request.refreshToken()
+                : cookieToken;
+        if (tokenStr != null && !tokenStr.isBlank()) {
+            auth.logout(new RefreshTokenRequest(tokenStr));
+        }
+        deleteRefreshTokenCookie(response);
+        return ResponseEntity.ok(StandardResponse.success("Đăng xuất thành công", null));
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken, int maxAge) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(maxAge)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void deleteRefreshTokenCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(false)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }

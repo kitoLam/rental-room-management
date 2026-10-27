@@ -11,7 +11,7 @@ import { authService, notificationService } from '@/services/guest-user'
 import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
-import { apiMode, hasMocks, provider } from '@/services/config'
+import { hasMocks, provider } from '@/services/config'
 import { cn } from '@/lib/utils'
 import { useHeaderOverlay } from './use-header-overlay'
 
@@ -104,11 +104,11 @@ export function SiteHeader() {
   })
   const logout = useMutation({
     mutationFn: authService.logout,
-    onSuccess: () => {
-      navigate('/', { replace: true, flushSync: true })
+    onSettled: () => {
       useSession.getState().clear()
       queryClient.clear()
       setMenu(false)
+      navigate('/login', { replace: true, flushSync: true })
     },
   })
   return (
@@ -302,12 +302,6 @@ export function PublicLayout() {
         Đến nội dung chính
       </a>
       <SiteHeader />
-      {apiMode === 'mock' && (
-        <div className="border-b border-border bg-primary/10 px-4 py-3 text-center text-sm">
-          Đang xem dữ liệu mẫu.{' '}
-          <Link to="/preview" className="font-bold text-primary underline">Xem thử / đổi vai trò không cần đăng nhập</Link>
-        </div>
-      )}
       <main id="main" className="min-w-0 flex-1">
         <Outlet />
       </main>

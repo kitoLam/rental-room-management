@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface UserRepository extends BaseRepository<User> {
     Optional<User> findByEmailAndIsDeletedFalse(String email);
+    Optional<User> findByPhoneAndIsDeletedFalse(String phone);
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
 }

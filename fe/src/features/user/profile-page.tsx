@@ -43,10 +43,10 @@ function ProfileForm({ user }: { user: User }) {
   })
   const logout = useMutation({
     mutationFn: authService.logout,
-    onSuccess: () => {
-      navigate('/', { replace: true, flushSync: true })
+    onSettled: () => {
       useSession.getState().clear()
       queryClient.clear()
+      navigate('/login', { replace: true, flushSync: true })
     },
   })
   return (

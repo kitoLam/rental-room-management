@@ -7,6 +7,7 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.*;
+import com.kitolam.rentalroommanagement.modules.auth.util.OpaqueTokenProvider;
 import com.kitolam.rentalroommanagement.security.*;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,10 +57,16 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public MessageResponse signup(SignupRequest request) {
-        if (users.existsByEmail(request.email())) throw new ConflictException("Email đã được sử dụng");
-        if (users.existsByPhone(request.phone())) throw new ConflictException("Số điện thoại đã được sử dụng");
+        var existingEmail = users.findByEmailAndIsDeletedFalse(request.email()).orElse(null);
+        if (existingEmail != null && existingEmail.isEmailVerified()) {
+            throw new ConflictException("Email đã được sử dụng");
+        }
+        var existingPhone = users.findByPhoneAndIsDeletedFalse(request.phone()).orElse(null);
+        if (existingPhone != null && (existingEmail == null || !existingPhone.getId().equals(existingEmail.getId()))) {
+            throw new ConflictException("Số điện thoại đã được sử dụng");
+        }
         var now = clock.instant();
-        var user = new User();
+        User user = existingEmail != null ? existingEmail : new User();
         user.setFullName(request.fullName());
         user.setEmail(request.email());
         user.setPhone(request.phone());
@@ -69,7 +76,12 @@ public class AuthServiceImpl implements AuthService {
         user.setEmailVerified(false);
         user.setTermsAcceptedAt(now);
         user.setLastVerificationSentAt(now);
-        users.insert(user);
+        if (existingEmail != null) {
+            users.save(user);
+            tokenStore.invalidateVerifications(user.getId(), now);
+        } else {
+            users.insert(user);
+        }
         sendVerification(user);
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để kích hoạt tài khoản");
     }
@@ -175,6 +187,7 @@ public class AuthServiceImpl implements AuthService {
         token.setPurgeAt(token.getExpiresAt().plus(Duration.ofDays(7)));
         refreshTokens.insert(token);
         return new TokenResponse(jwt.createAccessToken(user), raw, "Bearer",
-                security.accessTokenTtl().toSeconds(), security.refreshTokenTtl().toSeconds());
+                security.accessTokenTtl().toSeconds(), security.refreshTokenTtl().toSeconds(),
+                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name());
     }
 }

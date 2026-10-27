@@ -15,7 +15,14 @@ export function RegisterPage() {
   const redirect = safeRedirect(params.get('redirect'))
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+      termsAccepted: false,
+    },
   })
   const register = useMutation({
     mutationFn: authService.register,
@@ -32,9 +39,7 @@ export function RegisterPage() {
       <form
         className="grid gap-5"
         noValidate
-        onSubmit={form.handleSubmit(({ fullName, email, password }) =>
-          register.mutate({ fullName, email, password }),
-        )}
+        onSubmit={form.handleSubmit((input) => register.mutate(input))}
       >
         <Field label="Họ và tên" id="register-name" error={form.formState.errors.fullName?.message}>
           <input
@@ -56,10 +61,24 @@ export function RegisterPage() {
           />
         </Field>
         <Field
+          label="Số điện thoại"
+          id="register-phone"
+          error={form.formState.errors.phone?.message}
+        >
+          <input
+            id="register-phone"
+            className="input"
+            type="tel"
+            autoComplete="tel"
+            {...form.register('phone')}
+            aria-invalid={!!form.formState.errors.phone}
+          />
+        </Field>
+        <Field
           label="Mật khẩu"
           id="register-password"
           error={form.formState.errors.password?.message}
-          hint="Ít nhất 8 ký tự, tối đa 72 byte."
+          hint="Ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt; tối đa 72 byte."
         >
           <PasswordInput
             id="register-password"
@@ -80,6 +99,25 @@ export function RegisterPage() {
             aria-invalid={!!form.formState.errors.confirmPassword}
           />
         </Field>
+        <div>
+          <label className="flex min-h-11 items-center gap-3 text-sm" htmlFor="register-terms">
+            <input
+              id="register-terms"
+              type="checkbox"
+              {...form.register('termsAccepted')}
+              aria-invalid={!!form.formState.errors.termsAccepted}
+              aria-describedby={
+                form.formState.errors.termsAccepted ? 'register-terms-error' : undefined
+              }
+            />
+            Tôi đồng ý với điều khoản sử dụng.
+          </label>
+          {form.formState.errors.termsAccepted && (
+            <p id="register-terms-error" role="alert" className="text-sm text-danger">
+              {form.formState.errors.termsAccepted.message}
+            </p>
+          )}
+        </div>
         <InlineError error={register.error} />
         <Button type="submit" loading={register.isPending}>
           Tạo tài khoản
@@ -95,12 +133,6 @@ export function RegisterPage() {
           Đăng nhập
         </Link>
       </p>
-      <Link
-        to="/owner-onboarding"
-        className="mt-6 block text-center text-xs text-muted-foreground underline"
-      >
-        Bạn là chủ trọ? Tìm hiểu cách tham gia TroPro
-      </Link>
     </>
   )
 }

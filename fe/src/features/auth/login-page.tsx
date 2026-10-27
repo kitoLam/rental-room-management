@@ -1,7 +1,6 @@
 import { Field, InlineError, Notice } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { loginSchema, safeRedirect } from '@/lib/validation'
-import { provider } from '@/services/config'
 import { authService } from '@/services/guest-user'
 import { queryClient } from '@/services/query-client'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -82,62 +81,6 @@ export function LoginPage() {
           Đăng ký
         </Link>
       </p>
-      {provider('auth') === 'mock' && (
-        <div className="mt-8 rounded-lg bg-background p-4 text-xs leading-6 text-muted-foreground">
-          <p className="font-bold text-foreground">Tài khoản trải nghiệm</p>
-          <p>an@tropro.demo · TroPro@123</p>
-          <button
-            className="mt-2 min-h-11 font-bold text-primary underline"
-            type="button"
-            onClick={() => {
-              form.setValue('email', 'an@tropro.demo')
-              form.setValue('password', 'TroPro@123')
-            }}
-          >
-            Điền tài khoản demo
-          </button>
-          <button
-            className="ml-4 min-h-11 font-bold text-primary underline"
-            type="button"
-            onClick={() => {
-              form.setValue('email', 'tenant@tropro.demo')
-              form.setValue('password', 'TroPro@123')
-            }}
-          >
-            Điền tài khoản Tenant demo
-          </button>
-          <button
-            className="ml-4 min-h-11 font-bold text-primary underline"
-            type="button"
-            onClick={() => {
-              form.setValue('email', 'manager@tropro.demo')
-              form.setValue('password', 'TroPro@123')
-            }}
-          >
-            Điền tài khoản Manager demo
-          </button>
-          <button
-            className="ml-4 min-h-11 font-bold text-primary underline"
-            type="button"
-            onClick={() => {
-              form.setValue('email', 'owner@tropro.demo')
-              form.setValue('password', 'TroPro@123')
-            }}
-          >
-            Điền tài khoản Owner demo
-          </button>
-          <button
-            className="ml-4 min-h-11 font-bold text-primary underline"
-            type="button"
-            onClick={() => {
-              form.setValue('email', 'admin@tropro.demo')
-              form.setValue('password', 'TroPro@123')
-            }}
-          >
-            Điền tài khoản Admin demo
-          </button>
-        </div>
-      )}
     </>
   )
 }

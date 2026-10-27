@@ -12,9 +12,19 @@ export const loginSchema = z.object({
 })
 export const registerSchema = z
   .object({
-    fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
-    email: emailField,
-    password: passwordField,
+    fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(100),
+    email: emailField.max(254),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^(?:0|\+84)[35789][0-9]{8}$/, 'Nhập số di động Việt Nam hợp lệ.'),
+    termsAccepted: z.boolean().refine((value) => value, 'Bạn phải đồng ý điều khoản.'),
+    password: passwordField
+      .regex(/\p{Lu}/u, 'Mật khẩu cần có chữ hoa.')
+      .regex(/\p{Ll}/u, 'Mật khẩu cần có chữ thường.')
+      .regex(/\p{Nd}/u, 'Mật khẩu cần có chữ số.')
+      .regex(/[^\p{L}\p{N}\s]/u, 'Mật khẩu cần có ký tự đặc biệt.')
+      .refine((value) => !/\p{Cc}/u.test(value), 'Mật khẩu không được chứa ký tự điều khiển.'),
     confirmPassword: z.string(),
   })
   .refine((v) => v.password === v.confirmPassword, {

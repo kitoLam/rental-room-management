@@ -44,7 +44,7 @@ public class JwtProvider {
                             && jwt.getSubject().equals(jwt.getClaimAsString("userId"))
                             && jwt.getClaimAsString("email") != null
                             && jwt.getClaimAsString("role") != null
-                            && List.of("TENANT", "MANAGER", "ADMIN").contains(jwt.getClaimAsString("role"));
+                            && List.of("TENANT", "MANAGER", "ADMIN", "OWNER").contains(jwt.getClaimAsString("role"));
                     return valid ? OAuth2TokenValidatorResult.success() :
                             OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
                 }));

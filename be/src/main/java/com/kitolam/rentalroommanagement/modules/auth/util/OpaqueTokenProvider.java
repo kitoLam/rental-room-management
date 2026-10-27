@@ -1,6 +1,7 @@
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.modules.auth.util;
 
 import org.springframework.stereotype.Component;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

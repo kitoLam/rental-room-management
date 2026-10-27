@@ -1,43 +1,32 @@
 package com.kitolam.rentalroommanagement.security;
 
-import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.http.server.ServletServerHttpResponse;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
-import org.springframework.context.annotation.*;
-import org.springframework.web.cors.*;
-import org.springframework.web.filter.CorsFilter;
-import java.io.IOException;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.List;
 
 @Configuration
 public class CorsConfig {
-    @Bean
-    CorsFilter corsFilter(SecurityProperties properties, SecurityErrorHandler errors) {
-        var config = new CorsConfiguration();
-        if (properties.allowedOrigins().stream().anyMatch(origin -> origin.contains("*"))) {
-            throw new IllegalStateException("CORS phải liệt kê origin cụ thể");
-        }
-        config.setAllowedOrigins(properties.allowedOrigins());
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        config.setAllowCredentials(false);
-        config.setMaxAge(3600L);
-        var source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-        var filter = new CorsFilter(source);
-        filter.setCorsProcessor(new DefaultCorsProcessor() {
-            @Override
-            protected void rejectRequest(ServerHttpResponse response) throws IOException {
-                errors.write(((ServletServerHttpResponse) response).getServletResponse(), 403, "Origin không được phép");
-            }
-        });
-        return filter;
-    }
 
     @Bean
-    FilterRegistrationBean<CorsFilter> corsRegistration(CorsFilter corsFilter) {
-        var registration = new FilterRegistrationBean<>(corsFilter);
-        registration.setEnabled(false); // Run only inside the Spring Security chain.
-        return registration;
+    public CorsConfigurationSource corsConfigurationSource(SecurityProperties properties) {
+        CorsConfiguration config = new CorsConfiguration();
+        List<String> origins = properties.allowedOrigins();
+        if (origins != null && (origins.contains("*") || origins.isEmpty())) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            config.setAllowedOrigins(origins);
+        }
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

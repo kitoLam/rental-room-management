@@ -1,45 +1,75 @@
 package com.kitolam.rentalroommanagement.security;
 
+import com.kitolam.rentalroommanagement.common.exception.ApiError;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.*;
-import org.springframework.http.HttpMethod;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import tools.jackson.databind.ObjectMapper;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties(SecurityProperties.class)
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final SecurityProperties properties;
+    private final ObjectMapper objectMapper;
+
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityProperties properties,
-            JwtProvider jwt, AuthUserDetailsService users, SecurityErrorHandler errors) throws Exception {
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(properties.bcryptStrength());
+    }
+
+    @Bean
+    public Clock clock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtProvider jwtProvider) throws Exception {
         return http
-                // Authentication uses explicit bearer headers / JSON tokens, never session cookies.
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .requestCache(cache -> cache.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
-                .logout(logout -> logout.disable())
-                .exceptionHandling(handler -> handler.authenticationEntryPoint(errors).accessDeniedHandler(errors))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                            objectMapper.writeValue(response.getWriter(),
+                                    ApiError.of(401, "Bạn cần đăng nhập hoặc token không hợp lệ"));
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                            objectMapper.writeValue(response.getWriter(),
+                                    ApiError.of(403, "Bạn không có quyền truy cập tài nguyên này"));
+                        })
+                )
                 .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login",
-                            "/auth/resend-verification", "/auth/refresh", "/auth/logout").permitAll();
-                    auth.requestMatchers(HttpMethod.GET, "/auth/verify-email").permitAll();
-                    if (properties.publicDocs()) {
-                        auth.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll();
-                    }
-                    // Existing CRUD exposes management data; tenants need future ownership-scoped endpoints.
-                    auth.requestMatchers("/api/v1/**").hasAnyRole("MANAGER", "ADMIN");
+                    auth.requestMatchers("/auth/**", "/api/auth/**").permitAll();
+                    auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
+                    auth.requestMatchers("/api/v1/**").hasAnyRole("TENANT", "MANAGER", "ADMIN", "OWNER");
                     auth.anyRequest().authenticated();
                 })
-                .addFilterBefore(new JwtAuthenticationFilter(jwt, users, errors, properties.requireHttps()),
-                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

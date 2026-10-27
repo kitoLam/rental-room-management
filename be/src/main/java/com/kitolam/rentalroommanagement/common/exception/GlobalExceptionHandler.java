@@ -13,10 +13,21 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.*;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiError> unauthorized(AuthenticationException ex) {
+        return error(401, "Bạn cần đăng nhập");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> forbidden(AccessDeniedException ex) {
+        return error(403, "Bạn không có quyền truy cập tài nguyên này");
+    }
     private ResponseEntity<ApiError> error(int status, String message) {
         return ResponseEntity.status(status).body(ApiError.of(status, message));
     }
@@ -26,7 +37,7 @@ public class GlobalExceptionHandler {
         return error(ex.getStatus().value(), ex.getMessage());
     }
 
-    @ExceptionHandler(BindException.class)
+    @ExceptionHandler({BindException.class, org.springframework.web.bind.MethodArgumentNotValidException.class})
     public ResponseEntity<ApiError> validation(BindException ex) {
         String message = ex.getBindingResult().getAllErrors().stream()
                 .map(e -> e.getDefaultMessage() == null ? "Dữ liệu không hợp lệ" : e.getDefaultMessage())

@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
+      '/auth': {
+        target:
+          loadEnv(mode, process.cwd(), '').VITE_BACKEND_PROXY_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/api': {
         target:
           loadEnv(mode, process.cwd(), '').VITE_BACKEND_PROXY_TARGET || 'http://localhost:8080',

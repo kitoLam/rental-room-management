@@ -13,12 +13,15 @@ export class ApiError extends Error {
     this.code = code
   }
 }
-const envelope = z.object({
-  status: z.number().optional(),
-  code: z.number().optional(),
-  message: z.string().optional(),
-  data: z.unknown().optional(),
-})
+const envelope = z
+  .object({
+    status: z.number().optional(),
+    code: z.number().optional(),
+    message: z.string().optional(),
+    data: z.unknown().optional(),
+  })
+  .nullable()
+  .optional()
 const messages: Record<string, string> = {
   'Invalid login credentials': 'Email hoặc mật khẩu chưa đúng.',
   'Email is already in use': 'Email này đã được đăng ký.',
@@ -103,15 +106,16 @@ export async function request<T>(
     if (!data.success) throw new ApiError('Phản hồi máy chủ không đúng định dạng.', response.status)
     return data.data
   }
-  const parsed = envelope.safeParse(await response.json().catch(() => null))
+  const rawJson = await response.json().catch(() => null)
+  const parsed = envelope.safeParse(rawJson)
   if (!parsed.success) throw new ApiError('Phản hồi máy chủ không đúng định dạng.', response.status)
   const body = parsed.data
-  if (!response.ok || (body.code && body.code !== 0)) {
-    const message = body.message || ''
+  if (!response.ok || (body && body.code && body.code !== 0)) {
+    const message = body?.message || ''
     throw new ApiError(
       response.status >= 500
         ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại.'
-        : errorMessages[body.code || 0] ||
+        : errorMessages[body?.code || 0] ||
             messages[message] ||
             (provider(feature) === 'mock'
               ? message
@@ -123,13 +127,17 @@ export async function request<T>(
                     ? 'Dữ liệu đã thay đổi hoặc bị trùng. Vui lòng kiểm tra lại.'
                     : message || 'Không thể thực hiện yêu cầu.'),
       response.status,
-      body.code,
+      body?.code,
     )
   }
-  const data = schema.safeParse(body.data)
+  const payload =
+    body && typeof body === 'object' && 'data' in body && body.data !== undefined
+      ? body.data
+      : rawJson
+  const data = schema.safeParse(payload)
   if (!data.success) {
     if (import.meta.env.DEV) {
-      console.error('[API Contract mismatch]', path, data.error.issues, 'payload was:', body.data)
+      console.error('[API Contract mismatch]', path, data.error.issues, 'payload was:', body?.data)
     }
     throw new ApiError('Dữ liệu máy chủ chưa khớp hợp đồng API.', 502)
   }
@@ -142,10 +150,10 @@ export const write = (method: string, value?: unknown): RequestInit => ({
 const realAuthSchema = z.object({
   accessToken: z.string(),
   expiresIn: z.number(),
-  accountId: z.string().uuid(),
+  accountId: z.string(),
   email: z.string().email(),
   fullName: z.string(),
-  role: z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN']),
+  role: z.string(),
 })
 export async function authRequest(path: string, body?: unknown): Promise<Session> {
   if (provider('auth') === 'mock')
@@ -158,7 +166,7 @@ export async function authRequest(path: string, body?: unknown): Promise<Session
       id: data.accountId,
       email: data.email,
       fullName: data.fullName,
-      roles: [data.role],
+      roles: [data.role as 'USER' | 'TENANT' | 'MANAGER' | 'OWNER' | 'ADMIN'],
       phone: null,
       dateOfBirth: null,
       gender: null,
@@ -170,7 +178,7 @@ let recovery: Promise<void> | null = null
 export function recoverSession() {
   const previousToken = useSession.getState().accessToken
   if (!recovery)
-    recovery = authRequest('/api/auth/refresh')
+    recovery = authRequest(provider('auth') === 'real' ? '/auth/refresh' : '/api/auth/refresh')
       .then((s) => {
         if (useSession.getState().accessToken === previousToken) useSession.getState().setSession(s)
       })

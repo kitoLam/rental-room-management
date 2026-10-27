@@ -19,15 +19,42 @@ import {
 import { authRequest, request, write, ApiError } from './http'
 import { provider } from './config'
 
-const nullable = z.null().or(z.undefined())
+const nullable = z.unknown()
 export const authService = {
   login: async (input: { email: string; password: string }) =>
-    authRequest('/api/auth/login', input),
-  register: (input: { fullName: string; email: string; password: string }) =>
-    request('auth', '/api/auth/register', nullable, write('POST', input), false),
+    authRequest(provider('auth') === 'real' ? '/auth/login' : '/api/auth/login', input),
+  register: (input: {
+    fullName: string
+    email: string
+    password: string
+    phone: string
+    confirmPassword: string
+    termsAccepted: boolean
+  }) =>
+    request(
+      'auth',
+      provider('auth') === 'real' ? '/auth/signup' : '/api/auth/register',
+      nullable,
+      write('POST', input),
+      false,
+    ),
   verify: (token: string) =>
-    request('auth', '/api/auth/verify-email', nullable, write('POST', { token }), false),
-  logout: () => request('auth', '/api/auth/logout', nullable, write('POST')),
+    provider('auth') === 'real'
+      ? request(
+          'auth',
+          `/auth/verify-email?${new URLSearchParams({ token })}`,
+          nullable,
+          { method: 'GET' },
+          false,
+        )
+      : request('auth', '/api/auth/verify-email', nullable, write('POST', { token }), false),
+  logout: () =>
+    request(
+      'auth',
+      provider('auth') === 'real' ? '/auth/logout' : '/api/auth/logout',
+      nullable,
+      write('POST'),
+    ),
   forgot: (email: string) =>
     request('recovery', '/api/auth/forgot-password', nullable, write('POST', { email }), false),
   reset: (token: string, password: string) =>

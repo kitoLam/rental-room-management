@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Mail, MailCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { DemoMailbox, Heading } from './auth-shared'
+import { Heading } from './auth-shared'
 export function VerifyEmailPage() {
   const [params, setParams] = useSearchParams()
   const [finishedToken, setFinishedToken] = useState('')
@@ -17,7 +17,8 @@ export function VerifyEmailPage() {
     queryKey: ['verify-email', token],
     queryFn: async () => {
       try {
-        return await authService.verify(token)
+        const res = await authService.verify(token)
+        return res ?? true
       } finally {
         setFinishedToken(token)
       }
@@ -64,7 +65,6 @@ export function VerifyEmailPage() {
       <Button asChild className="mt-6 w-full">
         <Link to={`/login?redirect=${encodeURIComponent(redirect)}`}>Về đăng nhập</Link>
       </Button>
-      {!token && <DemoMailbox email={email} feature="auth" />}
     </>
   )
 }
