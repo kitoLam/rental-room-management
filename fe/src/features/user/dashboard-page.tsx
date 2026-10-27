@@ -124,7 +124,9 @@ export default function DashboardPage() {
         >
           <Panel>
             {notifications.data?.content.slice(0, 3).map((n) => {
-              const to = referenceLink(n.referenceType, n.referenceId,n.contractTenantId,n.branchId) || '/notifications'
+              const to =
+                referenceLink(n.referenceType, n.referenceId, n.contractTenantId, n.branchId) ||
+                '/notifications'
               return (
                 <Link
                   key={n.id}

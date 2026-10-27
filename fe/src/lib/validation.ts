@@ -84,7 +84,7 @@ export const dateRangeSchema = z
   })
 export const appointmentInputSchema = z
   .object({
-    roomId: z.guid(),
+    roomId: z.string().uuid(),
     startAt: z.string(),
     endAt: z.string(),
     note: z.string().max(1000),
@@ -105,10 +105,10 @@ export const appointmentInputSchema = z
   })
 export const bookingInputSchema = dateRangeSchema
   .safeExtend({
-    roomId: z.guid(),
-    roomSlotId: z.guid().optional(),
+    roomId: z.string().uuid(),
+    roomSlotId: z.string().uuid().optional(),
     rentalMode: z.enum(['ROOM', 'SLOT']),
-    policyId: z.guid(),
+    policyId: z.string().uuid(),
     policyVersion: z.number().int().positive(),
     acknowledged: z.literal(true, { error: 'Vui lòng xác nhận đã đọc chính sách.' }),
   })
@@ -122,4 +122,4 @@ export const bookingInputSchema = dateRangeSchema
         message: 'Thuê nguyên phòng không chọn slot.',
       })
   })
-export const uuid = (value?: string) => z.guid().safeParse(value).success
+export const uuid = (value?: string) => z.string().uuid().safeParse(value).success

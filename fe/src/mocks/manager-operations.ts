@@ -149,7 +149,7 @@ export function operationsAction(
   if (resource === 'service-requests') {
     const data = z
         .object({
-          contractTenantId: z.guid(),
+          contractTenantId: z.string().uuid(),
           decision: z.enum(['approve', 'reject']),
           reason: z.string().trim().min(5).max(1000),
         })
@@ -480,7 +480,7 @@ export function operationsAction(
     if (id && !current) throw new MockError('Không tìm thấy tài sản thuộc chi nhánh.', 404)
     if (action.startsWith('warranty')) {
       if (!current) throw new MockError('Chọn tài sản.', 422)
-      const raw = z.object({ warrantyId: z.guid().optional() }).parse(input),
+      const raw = z.object({ warrantyId: z.string().uuid().optional() }).parse(input),
         warranty = current.warranties.find((w) => w.id === raw.warrantyId)
       if (action === 'warranty-delete') {
         if (!warranty) throw new MockError('Không tìm thấy bảo hành.', 404)
@@ -548,7 +548,7 @@ export function operationsAction(
         .object({
           reason: z.string().trim().min(5).max(2000),
           handler: z.string().trim().min(2).max(100).optional(),
-          recordId: z.guid().optional(),
+          recordId: z.string().uuid().optional(),
         })
         .parse(input)
     const append = (status: string, description: string, evidence: string[] = []) =>

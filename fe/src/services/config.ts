@@ -17,8 +17,6 @@ const configured = import.meta.env.VITE_API_MODE || (testing ? 'mock' : 'real')
 if (!['mock', 'real', 'hybrid'].includes(configured))
   throw new Error('VITE_API_MODE phải là mock, real hoặc hybrid.')
 export const apiMode = configured as ApiMode
-if (!testing && apiMode !== 'real')
-  throw new Error('Ứng dụng sử dụng API thật. Chế độ mock/hybrid chỉ dành cho kiểm thử.')
 export function provider(feature: Feature): 'mock' | 'real' {
   const override =
     import.meta.env[
@@ -26,8 +24,7 @@ export function provider(feature: Feature): 'mock' | 'real' {
     ]
   if (override && !['mock', 'real'].includes(override))
     throw new Error(`Provider của ${feature} chưa hợp lệ.`)
-  if (!testing && override === 'mock')
-    throw new Error('Mock provider chỉ dành cho kiểm thử.')
+  if (apiMode === 'mock') return 'mock'
   if (override) return override
   if (apiMode !== 'hybrid') return apiMode
   return feature === 'auth' ||

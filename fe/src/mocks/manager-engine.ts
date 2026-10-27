@@ -228,7 +228,7 @@ export class ManagerEngine {
     )
   }
   scope(actor: User, branchId: string, write = false) {
-    if (!z.guid().safeParse(branchId).success)
+    if (!z.string().uuid().safeParse(branchId).success)
       throw new MockError('Mã chi nhánh chưa hợp lệ.', 422)
     const branch = this.branches(actor).find((b) => b.id === branchId)
     if (!branch) throw new MockError('Bạn không còn quyền quản lý chi nhánh này.', 403)
@@ -828,7 +828,7 @@ export class ManagerEngine {
       else this.inventory.state.types.push({ id: crypto.randomUUID(), branchId, ...data })
       return current || this.inventory.state.types.at(-1)
     }
-    const raw = z.object({ roomId: z.guid() }).parse(input),
+    const raw = z.object({ roomId: z.string().uuid() }).parse(input),
       room = this.room(branchId, raw.roomId),
       current = id
         ? this.inventory.state.slots.find((s) => s.id === id && s.roomId === room.id)

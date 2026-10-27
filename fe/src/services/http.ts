@@ -77,8 +77,6 @@ export async function request<T>(
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        // Bỏ qua trang cảnh báo của ngrok free khi API_BASE_URL trỏ thẳng vào ngrok
-        'ngrok-skip-browser-warning': 'true',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...mockHeaders,
@@ -129,7 +127,12 @@ export async function request<T>(
     )
   }
   const data = schema.safeParse(body.data)
-  if (!data.success) throw new ApiError('Dữ liệu máy chủ chưa khớp hợp đồng API.', 502)
+  if (!data.success) {
+    if (import.meta.env.DEV) {
+      console.error('[API Contract mismatch]', path, data.error.issues, 'payload was:', body.data)
+    }
+    throw new ApiError('Dữ liệu máy chủ chưa khớp hợp đồng API.', 502)
+  }
   return data.data
 }
 export const write = (method: string, value?: unknown): RequestInit => ({
@@ -139,7 +142,7 @@ export const write = (method: string, value?: unknown): RequestInit => ({
 const realAuthSchema = z.object({
   accessToken: z.string(),
   expiresIn: z.number(),
-  accountId: z.guid(),
+  accountId: z.string().uuid(),
   email: z.string().email(),
   fullName: z.string(),
   role: z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN']),

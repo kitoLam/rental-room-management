@@ -203,6 +203,7 @@ export default function RoomSearchPage() {
   }
   return (
     <Page
+      wide
       eyebrow="TÌM MỘT NƠI THUỘC VỀ BẠN"
       title="Không gian vừa vặn với cuộc sống."
       description="Chọn khu vực, mức giá và cách ở phù hợp. Lịch trống được kiểm tra lại theo ngày bạn muốn thuê."
@@ -270,7 +271,9 @@ export default function RoomSearchPage() {
                 <option value="recommended">Thứ tự mặc định</option>
                 <option value="price-asc">Giá thấp đến cao</option>
                 <option value="price-desc">Giá cao đến thấp</option>
-                <option value="area-desc" disabled={real}>Diện tích lớn trước</option>
+                <option value="area-desc" disabled={real}>
+                  Diện tích lớn trước
+                </option>
               </select>
             </div>
             {(filters.mode !== 'ALL' ||

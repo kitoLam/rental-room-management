@@ -4,6 +4,7 @@ import {
   availabilitySchema,
   bookingSchema,
   branchSchema,
+  databaseIdSchema,
   notificationSchema,
   pageSchema,
   paymentSchema,
@@ -46,9 +47,9 @@ export const authService = {
 }
 const publicRoomSchema = z.object({
   room: z.object({
-    id: z.guid(),
-    branchId: z.guid(),
-    roomTypeId: z.guid(),
+    id: databaseIdSchema,
+    branchId: databaseIdSchema,
+    roomTypeId: databaseIdSchema,
     code: z.string(),
     rentalMode: z.enum(['ROOM', 'SLOT']),
     capacity: z.number(),
@@ -60,7 +61,7 @@ const publicRoomSchema = z.object({
     imageRefs: z.unknown(),
     operationalStatus: z.string(),
   }),
-  branchId: z.guid(),
+  branchId: databaseIdSchema,
   branchName: z.string(),
   address: z.string(),
   roomTypeName: z.string(),
@@ -161,7 +162,7 @@ export const catalogService = {
     request(
       'catalog',
       '/api/v1/public/room-types',
-      z.array(z.object({ id: z.guid(), name: z.string() })),
+      z.array(z.object({ id: z.string().uuid(), name: z.string() })),
     ),
   availability: (id: string, startDate: string, endDate: string) =>
     request(

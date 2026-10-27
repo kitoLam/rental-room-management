@@ -10,7 +10,7 @@ import {
   attachmentSchema,
 } from './tenant'
 
-export const uuid = z.guid(),
+export const uuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID'),
   date = z.iso.date(),
   vnd = z.number().int().nonnegative().max(1000000000000),
   text = z.string().trim().min(1).max(2000)

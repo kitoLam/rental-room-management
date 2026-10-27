@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const id = z.guid()
+const id = z.string().uuid()
 const money = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const date = z.iso.date()
 export const tenancySchema = z.object({

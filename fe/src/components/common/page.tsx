@@ -25,6 +25,7 @@ export function Page({
   actions,
   children,
   narrow = false,
+  wide = false,
 }: {
   title: string
   description?: string
@@ -33,9 +34,10 @@ export function Page({
   actions?: ReactNode
   children: ReactNode
   narrow?: boolean
+  wide?: boolean
 }) {
   return (
-    <Container className={cn('py-8 sm:py-12', narrow && 'max-w-3xl')}>
+    <Container wide={wide} className={cn('py-8 sm:py-12', narrow && 'max-w-3xl')}>
       {back && (
         <Link
           to={back}

@@ -13,11 +13,11 @@ describe('Owner API provider contracts', () => {
     expect(provider('auth')).toBe('real')
     expect(endpoint('owner', '/api/owner/branches')).toBe('/__mock/api/owner/branches')
   })
-  it('honors explicit Owner provider override', async () => {
+  it('keeps Owner offline in full mock mode even with an old real override', async () => {
     vi.stubEnv('VITE_API_MODE', 'mock')
     vi.stubEnv('VITE_OWNER_PROVIDER', 'real')
     vi.resetModules()
-    expect((await import('./config')).provider('owner')).toBe('real')
+    expect((await import('./config')).provider('owner')).toBe('mock')
   })
   it('does not replace a failed real Owner mutation with mock success', async () => {
     vi.stubEnv('VITE_API_MODE', 'real')

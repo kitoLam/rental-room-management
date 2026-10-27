@@ -61,7 +61,7 @@ export function AdminLayout() {
       .flatMap(([, items]) => items)
       .find(([p]) => location.pathname.startsWith(`/admin/${p}`))?.[0] || 'dashboard'
   return (
-    <Container className="py-7 sm:py-10">
+    <Container wide className="py-7 sm:py-10">
       {!allowed ? (
         <Notice tone="warning">
           Bạn không có quyền quản trị hệ thống.{' '}

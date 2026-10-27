@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RoomFilters } from '@/interfaces/domain'
+import { databaseIdSchema, type RoomFilters } from '@/interfaces/domain'
 const number = z.coerce.number().nonnegative().finite()
 const filtersSchema = z
   .object({
@@ -8,12 +8,12 @@ const filtersSchema = z
     mode: z.enum(['ALL', 'ROOM', 'SLOT']),
     minPrice: number.optional(),
     maxPrice: number.optional(),
-    roomTypeId: z.union([z.literal(''), z.guid()]),
+    roomTypeId: z.union([z.literal(''), databaseIdSchema]),
     minCapacity: z.coerce.number().int().min(1).max(100).optional(),
     availableOnly: z.boolean(),
     sort: z.enum(['recommended', 'price-asc', 'price-desc', 'area-desc']),
     page: z.coerce.number().int().min(1).max(10000),
-    branchId: z.guid().optional(),
+    branchId: databaseIdSchema.optional(),
   })
   .refine((v) => v.minPrice === undefined || v.maxPrice === undefined || v.minPrice <= v.maxPrice, {
     message: 'Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu.',

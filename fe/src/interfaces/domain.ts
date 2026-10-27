@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const roleSchema = z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN'])
 export type Role = z.infer<typeof roleSchema>
 export const userSchema = z.object({
-  id: z.guid(),
+  id: z.string().uuid(),
   email: z.string().email(),
   fullName: z.string(),
   roles: z.array(roleSchema),
@@ -21,11 +21,13 @@ export const sessionSchema = z.object({
 export type Session = z.infer<typeof sessionSchema>
 export const modeSchema = z.enum(['ROOM', 'SLOT'])
 export type RentalMode = z.infer<typeof modeSchema>
+// Java/PostgreSQL UUIDs may contain legacy IDs without RFC version/variant bits.
+export const databaseIdSchema = z.guid()
 export const roomSchema = z.object({
-  id: z.guid(),
+  id: databaseIdSchema,
   code: z.string(),
   title: z.string(),
-  branchId: z.guid(),
+  branchId: databaseIdSchema,
   branchName: z.string(),
   address: z.string(),
   areaKey: z.string(),
@@ -34,7 +36,7 @@ export const roomSchema = z.object({
   capacity: z.number(),
   availableSlots: z.number().nullable(),
   rentalMode: modeSchema,
-  roomTypeId: z.guid(),
+  roomTypeId: databaseIdSchema,
   roomTypeName: z.string(),
   status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
   operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
@@ -48,8 +50,8 @@ export const roomSchema = z.object({
 })
 export type Room = z.infer<typeof roomSchema>
 export const policySchema = z.object({
-  id: z.guid(),
-  branchId: z.guid(),
+  id: z.string().uuid(),
+  branchId: z.string().uuid(),
   version: z.number(),
   effectiveFrom: z.string(),
   bookingHoldAmount: z.number(),
@@ -66,7 +68,7 @@ export const policySchema = z.object({
 })
 export type BranchPolicy = z.infer<typeof policySchema>
 export const branchSchema = z.object({
-  id: z.guid(),
+  id: z.string().uuid(),
   name: z.string(),
   address: z.string(),
   description: z.string(),
@@ -79,12 +81,12 @@ export const branchSchema = z.object({
 })
 export type Branch = z.infer<typeof branchSchema>
 export const availabilitySchema = z.object({
-  roomId: z.guid(),
+  roomId: z.string().uuid(),
   startDate: z.string(),
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
-  slots: z.array(z.object({ id: z.guid(), label: z.string(), available: z.boolean() })),
+  slots: z.array(z.object({ id: z.string().uuid(), label: z.string(), available: z.boolean() })),
 })
 export type Availability = z.infer<typeof availabilitySchema>
 export const appointmentStatuses = [
@@ -107,9 +109,9 @@ export const timelineSchema = z.array(
   z.object({ status: z.string(), at: z.string(), note: z.string() }),
 )
 export const appointmentSchema = z.object({
-  id: z.guid(),
-  requesterUserId: z.guid(),
-  roomId: z.guid(),
+  id: z.string().uuid(),
+  requesterUserId: z.string().uuid(),
+  roomId: z.string().uuid(),
   roomTitle: z.string(),
   branchName: z.string(),
   startAt: z.string(),
@@ -123,13 +125,13 @@ export const appointmentSchema = z.object({
 })
 export type Appointment = z.infer<typeof appointmentSchema>
 export const bookingSchema = z.object({
-  id: z.guid(),
-  requesterUserId: z.guid(),
-  roomId: z.guid(),
+  id: z.string().uuid(),
+  requesterUserId: z.string().uuid(),
+  roomId: z.string().uuid(),
   roomTitle: z.string(),
-  branchId: z.guid(),
+  branchId: z.string().uuid(),
   branchName: z.string(),
-  roomSlotId: z.guid().nullable(),
+  roomSlotId: z.string().uuid().nullable(),
   slotLabel: z.string().nullable(),
   rentalMode: modeSchema,
   startDate: z.string(),
@@ -143,12 +145,12 @@ export const bookingSchema = z.object({
   paymentEnvironment: z.enum(['SANDBOX', 'PRODUCTION']),
   createdAt: z.string(),
   timeline: timelineSchema,
-  contractId: z.guid().nullable(),
+  contractId: z.string().uuid().nullable(),
 })
 export type Booking = z.infer<typeof bookingSchema>
 export const paymentSchema = z.object({
-  id: z.guid(),
-  bookingId: z.guid(),
+  id: z.string().uuid(),
+  bookingId: z.string().uuid(),
   amount: z.number(),
   reference: z.string(),
   status: z.enum(['PENDING', 'VERIFIED', 'FAILED', 'REVIEW']),
@@ -160,16 +162,16 @@ export const paymentSchema = z.object({
 })
 export type Payment = z.infer<typeof paymentSchema>
 export const notificationSchema = z.object({
-  id: z.guid(),
+  id: z.string().uuid(),
   title: z.string(),
   message: z.string(),
   type: z.string(),
   createdAt: z.string(),
   read: z.boolean(),
   referenceType: z.string().nullable(),
-  referenceId: z.guid().nullable(),
-  contractTenantId: z.guid().optional(),
-  branchId: z.guid().optional(),
+  referenceId: z.string().uuid().nullable(),
+  contractTenantId: z.string().uuid().optional(),
+  branchId: z.string().uuid().optional(),
 })
 export type Notification = z.infer<typeof notificationSchema>
 export const pageSchema = <T extends z.ZodType>(item: T) =>

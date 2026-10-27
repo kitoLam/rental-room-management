@@ -36,7 +36,11 @@ export const useManagerSelection = create<{
 export const useManager = () =>
   useOutletContext<{ branch: ManagerBranch; branches: ManagerBranch[] }>()
 export function managerLink(path: string, branchId: string, params: Record<string, string> = {}) {
-  const workspace: Record<string,string> = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('workspace') === 'owner' ? {workspace:'owner'} : {}
+  const workspace: Record<string, string> =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('workspace') === 'owner'
+      ? { workspace: 'owner' }
+      : {}
   return `${path}?${new URLSearchParams({ branchId, ...workspace, ...params })}`
 }
 export function useManagerQuery<T>(
@@ -49,7 +53,15 @@ export function useManagerQuery<T>(
     userId = useSession((s) => s.user!.id),
     [params] = useSearchParams()
   return useQuery({
-    queryKey: ['manager', userId, branch.id, params.get('workspace') || 'manager', key, ...extra, params.get('demo')],
+    queryKey: [
+      'manager',
+      userId,
+      branch.id,
+      params.get('workspace') || 'manager',
+      key,
+      ...extra,
+      params.get('demo'),
+    ],
     queryFn: () => fn(branch.id),
     refetchInterval: poll ? 4000 : false,
   })

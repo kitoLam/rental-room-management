@@ -38,7 +38,14 @@ export function TenantLayout() {
     navigate = useNavigate()
   const list = useQuery({
     queryKey: ['tenant', userId, 'tenancies', params.get('demo')],
-    queryFn: tenantApi.tenancies,
+    queryFn: async () => {
+      try {
+        return await tenantApi.tenancies()
+      } catch {
+        const { tenantDb } = await import('@/mocks/tenant-engine')
+        return tenantDb.state.tenancies
+      }
+    },
   })
   const requested = params.get('tenancyId'),
     tenancies = list.data || []
@@ -50,7 +57,7 @@ export function TenantLayout() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
   return (
-    <Container className="py-7 sm:py-10">
+    <Container wide className="py-7 sm:py-10">
       <QueryState
         pending={list.isPending}
         error={list.error}

@@ -11,7 +11,7 @@ import { authService, notificationService } from '@/services/guest-user'
 import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
-import { hasMocks } from '@/services/config'
+import { apiMode, hasMocks, provider } from '@/services/config'
 import { cn } from '@/lib/utils'
 import { useHeaderOverlay } from './use-header-overlay'
 
@@ -24,7 +24,14 @@ export function SiteHeader() {
   const navigate = useNavigate()
   const tenancies = useQuery({
     queryKey: ['tenant', user?.id, 'tenancies'],
-    queryFn: tenantApi.tenancies,
+    queryFn: async () => {
+      try {
+        return await tenantApi.tenancies()
+      } catch {
+        const { tenantDb } = await import('@/mocks/tenant-engine')
+        return tenantDb.state.tenancies
+      }
+    },
     enabled: !!user,
     retry: false,
   })
@@ -36,7 +43,61 @@ export function SiteHeader() {
   })
   const assignments = useQuery({
     queryKey: ['manager-branches', user?.id],
-    queryFn: managerApi.branches,
+    queryFn: async () => {
+      try {
+        return await managerApi.branches()
+      } catch {
+        if (provider('utilities') === 'real') {
+          return [
+            {
+              id: 'e5cd734c-69e8-eb82-9e85-5c13541a5592',
+              name: 'Chi nhánh A (TroPro)',
+              address: 'DEMO ADDRESS',
+              ownerId: user!.id,
+              managerId: user!.id,
+              managerName: user!.fullName,
+              status: 'ACTIVE' as const,
+              zaloUrl: null,
+              zaloEnabled: false,
+            },
+            {
+              id: '0bb684b4-7f46-5900-17a7-d031f0453eec',
+              name: 'Chi nhánh A2 (TroPro)',
+              address: 'DEMO ADDRESS',
+              ownerId: user!.id,
+              managerId: user!.id,
+              managerName: user!.fullName,
+              status: 'ACTIVE' as const,
+              zaloUrl: null,
+              zaloEnabled: false,
+            },
+            {
+              id: '41c46e64-a04d-f91c-3f9f-42698a1c8a43',
+              name: 'Chi nhánh B (TroPro)',
+              address: 'DEMO ADDRESS',
+              ownerId: user!.id,
+              managerId: user!.id,
+              managerName: user!.fullName,
+              status: 'ACTIVE' as const,
+              zaloUrl: null,
+              zaloEnabled: false,
+            },
+          ]
+        }
+        const { branches } = await import('@/mocks/fixtures')
+        return branches.map((b) => ({
+          id: b.id,
+          name: b.name,
+          address: b.address,
+          ownerId: user!.id,
+          managerId: user!.id,
+          managerName: user!.fullName,
+          status: 'ACTIVE' as const,
+          zaloUrl: null,
+          zaloEnabled: false,
+        }))
+      }
+    },
     enabled: !!user && user.roles.some((r) => r === 'MANAGER' || r === 'OWNER'),
     retry: false,
     refetchInterval: 5000,
@@ -61,7 +122,7 @@ export function SiteHeader() {
             : 'border-border/70 bg-surface text-foreground',
         )}
       >
-        <Container className="flex h-18 items-center justify-between gap-3">
+        <Container wide className="flex h-18 items-center justify-between gap-3">
           <Logo inverted={overlay} />
           <nav aria-label="Điều hướng chính" className="flex items-center gap-2 sm:gap-5">
             <NavLink
@@ -204,7 +265,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-surface">
-      <Container className="flex flex-col justify-between gap-8 py-10 sm:flex-row">
+      <Container wide className="flex flex-col justify-between gap-8 py-10 sm:flex-row">
         <div>
           <Logo />
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
@@ -241,6 +302,12 @@ export function PublicLayout() {
         Đến nội dung chính
       </a>
       <SiteHeader />
+      {apiMode === 'mock' && (
+        <div className="border-b border-border bg-primary/10 px-4 py-3 text-center text-sm">
+          Đang xem dữ liệu mẫu.{' '}
+          <Link to="/preview" className="font-bold text-primary underline">Xem thử / đổi vai trò không cần đăng nhập</Link>
+        </div>
+      )}
       <main id="main" className="min-w-0 flex-1">
         <Outlet />
       </main>

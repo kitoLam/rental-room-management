@@ -47,7 +47,7 @@ export const utilitiesService = {
       if (filters.type) params.set('type', filters.type)
       if (filters.mandatory !== undefined) params.set('mandatory', String(filters.mandatory))
       if (filters.active !== undefined) params.set('active', String(filters.active))
-      params.set('page', String(filters.page !== undefined ? filters.page : 1))
+      params.set('page', String(filters.page !== undefined ? filters.page : 0))
       params.set('size', String(filters.size !== undefined ? filters.size : 20))
 
       return request(
@@ -74,6 +74,15 @@ export const utilitiesService = {
       )
     },
 
+    delete: (serviceId: string): Promise<void> => {
+      return request(
+        'utilities',
+        `/api/services/${encodeURIComponent(serviceId)}`,
+        z.unknown(),
+        write('DELETE'),
+      ).then(() => undefined)
+    },
+
     update: (serviceId: string, input: UpdateServiceInput): Promise<ServiceCatalogItem> => {
       return request(
         'utilities',
@@ -88,6 +97,14 @@ export const utilitiesService = {
   // 2. ROOM SERVICES [P1-69]
   // ==========================================
   roomServices: {
+    listByBranch: (branchId: string, status?: string): Promise<RoomServiceItem[]> => {
+      const q = status ? `?status=${encodeURIComponent(status)}` : ''
+      return request(
+        'utilities',
+        `/api/branches/${encodeURIComponent(branchId)}/room-services${q}`,
+        z.array(roomServiceResponseSchema),
+      )
+    },
     listByRoom: (roomId: string): Promise<RoomServiceItem[]> => {
       return request(
         'utilities',
@@ -119,6 +136,28 @@ export const utilitiesService = {
   // 3. CONTRACT SERVICES [P1-71][P1-72][P1-73]
   // ==========================================
   contractServices: {
+    list: (
+      filters: {
+        contractId?: string
+        branchId?: string
+        roomId?: string
+        status?: string
+      } = {},
+    ): Promise<ContractServiceItem[]> => {
+      const params = new URLSearchParams()
+      if (filters.contractId) params.set('contractId', filters.contractId)
+      if (filters.branchId) params.set('branchId', filters.branchId)
+      if (filters.roomId) params.set('roomId', filters.roomId)
+      if (filters.status) params.set('status', filters.status)
+      const q = params.toString() ? `?${params.toString()}` : ''
+
+      return request(
+        'utilities',
+        `/api/contract-services${q}`,
+        z.array(contractServiceResponseSchema),
+      )
+    },
+
     listByContract: (
       contractId: string,
       status?: string,

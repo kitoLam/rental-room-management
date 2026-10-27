@@ -15,7 +15,7 @@ export function FeaturedRooms() {
 
   return (
     <section aria-labelledby="featured-title" className="py-16 sm:py-20">
-      <Container>
+      <Container wide>
         <div className="mb-8 flex items-center justify-between gap-4">
           <h2 id="featured-title" className="text-xl font-bold">
             {provider('catalog') === 'real' ? 'Khám phá các phòng' : 'Phòng đang cho thuê'}

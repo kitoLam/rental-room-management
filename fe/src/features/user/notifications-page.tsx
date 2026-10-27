@@ -99,9 +99,14 @@ export default function NotificationsPage() {
               ['TENANT_ALLOCATION', 'Phân bổ phí'],
               ['TENANT_MAINTENANCE', 'Bảo trì'],
               ['TENANT_BRANCH', 'Chi nhánh'],
-              ...(useSession.getState().user?.roles.includes('ADMIN') ? [['ADMIN_VERIFICATION','Xác minh chủ trọ'],['ADMIN_USER','Quản trị tài khoản']] : []),
-              ['OWNER_VERIFICATION','Kết quả xác minh chủ trọ'],
-              ['ACCOUNT_STATUS','Trạng thái tài khoản'],
+              ...(useSession.getState().user?.roles.includes('ADMIN')
+                ? [
+                    ['ADMIN_VERIFICATION', 'Xác minh chủ trọ'],
+                    ['ADMIN_USER', 'Quản trị tài khoản'],
+                  ]
+                : []),
+              ['OWNER_VERIFICATION', 'Kết quả xác minh chủ trọ'],
+              ['ACCOUNT_STATUS', 'Trạng thái tài khoản'],
             ].map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -130,7 +135,12 @@ export default function NotificationsPage() {
             <Panel>
               <ul className="divide-y divide-border">
                 {list.data.content.map((n) => {
-                  const to = referenceLink(n.referenceType, n.referenceId, n.contractTenantId,n.branchId)
+                  const to = referenceLink(
+                    n.referenceType,
+                    n.referenceId,
+                    n.contractTenantId,
+                    n.branchId,
+                  )
                   return (
                     <li key={n.id} className="flex gap-4 py-5 first:pt-0 last:pb-0">
                       <div

@@ -480,6 +480,9 @@ export class AdminEngine {
     const users = this.e.db.state.users
     return {
       totalUsers: users.length,
+      totalRooms: this.e.inventory.state.rooms.length,
+      publishedRooms: this.e.inventory.state.rooms.filter((r) => r.isPublic).length,
+      totalBranches: this.e.state.branches.length,
       accounts: ['INVITED', 'PENDING_VERIFICATION', 'ACTIVE', 'LOCKED', 'DISABLED'].map(
         (status) => ({ status, count: users.filter((u) => u.status === status).length }),
       ),
