@@ -21,6 +21,18 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/preview-page')).default }),
       },
       {
+        path: 'payment/vnpay-test',
+        lazy: async () => ({
+          Component: (await import('@/features/payment/vnpay-test-page')).VnPayTestPage,
+        }),
+      },
+      {
+        path: 'payment/vnpay-return',
+        lazy: async () => ({
+          Component: (await import('@/features/payment/vnpay-return-page')).VnPayReturnPage,
+        }),
+      },
+      {
         path: 'rooms',
         lazy: async () => ({
           Component: (await import('@/features/rooms/room-search-page')).default,
