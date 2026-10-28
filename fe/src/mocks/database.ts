@@ -298,9 +298,17 @@ export class MockDatabase {
       .filter(
         (r) =>
           (!filters.q ||
-            `${r.title} ${r.address} ${r.branchName}`
+            filters.q
               .toLocaleLowerCase('vi')
-              .includes(filters.q.toLocaleLowerCase('vi'))) &&
+              .split(/\s+/)
+              .filter(Boolean)
+              .every((t) =>
+                [r.title, r.code, r.address, r.branchName, r.ownerName]
+                  .filter(Boolean)
+                  .join(' ')
+                  .toLocaleLowerCase('vi')
+                  .includes(t),
+              )) &&
           (!filters.area ||
             r.areaKey === filters.area ||
             (filters.area === 'thu-duc' && r.address.includes('Thủ Đức'))) &&
@@ -309,6 +317,8 @@ export class MockDatabase {
           (!filters.roomTypeId || r.roomTypeId === filters.roomTypeId) &&
           (filters.minPrice === undefined || r.price >= filters.minPrice) &&
           (filters.maxPrice === undefined || r.price <= filters.maxPrice) &&
+          (filters.minArea === undefined || (r.sizeM2 !== null && r.sizeM2 >= filters.minArea)) &&
+          (filters.maxArea === undefined || (r.sizeM2 !== null && r.sizeM2 <= filters.maxArea)) &&
           (!filters.minCapacity || r.capacity >= filters.minCapacity) &&
           (!filters.availableOnly || r.status === 'AVAILABLE'),
       )
@@ -319,6 +329,8 @@ export class MockDatabase {
           ? b.price - a.price
           : filters.sort === 'area-desc'
             ? (b.sizeM2 || 0) - (a.sizeM2 || 0)
+            : filters.sort === 'area-asc'
+              ? (a.sizeM2 || 0) - (b.sizeM2 || 0)
             : a.code.localeCompare(b.code),
     )
     return data

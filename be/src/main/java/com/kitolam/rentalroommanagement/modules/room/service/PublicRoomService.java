@@ -4,7 +4,10 @@ import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+import com.kitolam.rentalroommanagement.modules.auth.document.User;
+import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
+import com.kitolam.rentalroommanagement.modules.branch.dto.response.BranchResponse;
 import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
@@ -16,6 +19,7 @@ import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomtype.document.RoomType;
+import com.kitolam.rentalroommanagement.modules.roomtype.dto.response.RoomTypeResponse;
 import com.kitolam.rentalroommanagement.modules.roomtype.repository.RoomTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
@@ -27,14 +31,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,15 +42,20 @@ public class PublicRoomService {
     private final RoomRepository rooms;
     private final BranchRepository branches;
     private final RoomTypeRepository roomTypes;
+    private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
     private final RoomService roomService;
 
     public PagedResponse<PublicRoomResponse> search(
+            String keyword,
             String branchId,
             String roomTypeId,
             String address,
+            String roomMode,
             BigDecimal minPrice,
             BigDecimal maxPrice,
+            BigDecimal minArea,
+            BigDecimal maxArea,
             Integer minCapacity,
             int page,
             int size,
@@ -61,7 +65,10 @@ public class PublicRoomService {
             throw new BadRequestException("Trang hoặc kích thước trang không hợp lệ");
         }
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
-            throw new BadRequestException("Khoảng giá không hợp lệ");
+            throw new BadRequestException("Khoảng giá không hợp lệ (giá tối thiểu không được lớn hơn giá tối đa)");
+        }
+        if (minArea != null && maxArea != null && minArea.compareTo(maxArea) > 0) {
+            throw new BadRequestException("Khoảng diện tích không hợp lệ (diện tích tối thiểu không được lớn hơn tối đa)");
         }
 
         List<Criteria> branchFilters = new ArrayList<>();
@@ -71,7 +78,7 @@ public class PublicRoomService {
             branchFilters.add(Criteria.where("id").is(MongoQueryHelper.toObjectId(branchId)));
         }
         if (StringUtils.hasText(address)) {
-            branchFilters.add(Criteria.where("address").regex(Pattern.quote(address.trim()), "i"));
+            branchFilters.add(Criteria.where("address").regex(toVietnameseRegexPattern(address.trim()), "i"));
         }
         Criteria branchCriteria = new Criteria().andOperator(branchFilters);
         List<Branch> activeBranches = mongoTemplate.find(Query.query(branchCriteria), Branch.class);
@@ -79,20 +86,96 @@ public class PublicRoomService {
             return PagedResponse.of(List.of(), page + 1, size, 0);
         }
 
+        // Lấy danh sách loại phòng và chủ phòng để phục vụ map và tìm kiếm
+        List<RoomType> allRoomTypes = roomTypes.findAll().stream()
+                .filter(rt -> !Boolean.TRUE.equals(rt.getIsDeleted()))
+                .toList();
+
+        Set<String> ownerIds = activeBranches.stream()
+                .map(Branch::getOwnerAccountId)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        List<User> owners = userRepository.findAllById(ownerIds);
+        Map<String, User> ownerById = owners.stream()
+                .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+
         List<Criteria> roomFilters = new ArrayList<>();
         roomFilters.add(MongoQueryHelper.notDeleted());
         roomFilters.add(Criteria.where("status").is(RoomStatus.AVAILABLE.name()));
         roomFilters.add(Criteria.where("branchId")
                 .in(activeBranches.stream().map(b -> new ObjectId(b.getId())).toList()));
+
+        // 1. Tìm kiếm tổng hợp theo từng chữ (tên phòng, mã phòng, chủ đăng bài, địa chỉ đăng phòng)
+        if (StringUtils.hasText(keyword)) {
+            String[] tokens = keyword.trim().split("\\s+");
+            for (String token : tokens) {
+                if (token.isBlank()) continue;
+                String regexPattern = toVietnameseRegexPattern(token);
+                Pattern compiled = Pattern.compile(regexPattern, Pattern.CASE_INSENSITIVE);
+
+                // Chủ nhà có tên khớp với từ khóa
+                Set<String> matchingOwnerIds = owners.stream()
+                        .filter(o -> o.getFullName() != null && compiled.matcher(o.getFullName()).find())
+                        .map(User::getId)
+                        .collect(Collectors.toSet());
+
+                // Chi nhánh có tên, địa chỉ hoặc chủ nhà khớp từ khóa
+                Set<ObjectId> matchingBranchIds = activeBranches.stream()
+                        .filter(b -> (b.getName() != null && compiled.matcher(b.getName()).find())
+                                || (b.getAddress() != null && compiled.matcher(b.getAddress()).find())
+                                || (b.getOwnerAccountId() != null && matchingOwnerIds.contains(b.getOwnerAccountId())))
+                        .map(b -> MongoQueryHelper.toObjectId(b.getId()))
+                        .collect(Collectors.toSet());
+
+                // Loại phòng có tên khớp từ khóa
+                Set<ObjectId> matchingRoomTypeIds = allRoomTypes.stream()
+                        .filter(rt -> rt.getName() != null && compiled.matcher(rt.getName()).find())
+                        .map(rt -> MongoQueryHelper.toObjectId(rt.getId()))
+                        .collect(Collectors.toSet());
+
+                List<Criteria> tokenMatches = new ArrayList<>();
+                // Khớp mã số phòng
+                tokenMatches.add(Criteria.where("roomNumber").regex(regexPattern, "i"));
+                if (!matchingBranchIds.isEmpty()) {
+                    tokenMatches.add(Criteria.where("branchId").in(matchingBranchIds));
+                }
+                if (!matchingRoomTypeIds.isEmpty()) {
+                    tokenMatches.add(Criteria.where("roomTypeId").in(matchingRoomTypeIds));
+                }
+
+                roomFilters.add(new Criteria().orOperator(tokenMatches));
+            }
+        }
+
+        // 2. Lọc theo Loại phòng
         if (StringUtils.hasText(roomTypeId)) {
             roomFilters.add(Criteria.where("roomTypeId").is(MongoQueryHelper.toObjectId(roomTypeId)));
         }
+
+        // 3. Lọc theo Hình thức (Nhà riêng / Căn hộ nguyên căn vs Ở ghép theo slot)
+        if (StringUtils.hasText(roomMode) && !"ALL".equalsIgnoreCase(roomMode)) {
+            RoomMode mode = "SLOT".equalsIgnoreCase(roomMode) || "PER_SLOT".equalsIgnoreCase(roomMode)
+                    ? RoomMode.PER_SLOT : RoomMode.WHOLE_ROOM;
+            roomFilters.add(Criteria.where("roomMode").is(mode.name()));
+        }
+
+        // 4. Lọc kéo khoảng giá (500.000 - 20.000.000)
         if (minPrice != null || maxPrice != null) {
             Criteria price = Criteria.where("listedRentPrice");
             if (minPrice != null) price.gte(minPrice);
             if (maxPrice != null) price.lte(maxPrice);
             roomFilters.add(price);
         }
+
+        // 5. Lọc kéo khoảng diện tích (10m2 - 100m2)
+        if (minArea != null || maxArea != null) {
+            Criteria area = Criteria.where("area");
+            if (minArea != null) area.gte(minArea);
+            if (maxArea != null) area.lte(maxArea);
+            roomFilters.add(area);
+        }
+
+        // 6. Lọc sức chứa tối thiểu
         if (minCapacity != null) {
             if (minCapacity < 1) {
                 throw new BadRequestException("Sức chứa tối thiểu phải lớn hơn 0");
@@ -131,11 +214,18 @@ public class PublicRoomService {
             pageRooms.addAll(findRooms(new Criteria().andOperator(occupiedFilters),
                     offset - availableCount, size, roomSort));
         }
+
         Map<String, Branch> branchById = new HashMap<>();
         activeBranches.forEach(branch -> branchById.put(branch.getId(), branch));
+
         List<PublicRoomResponse> content = pageRooms.stream()
-                .map(room -> toResponse(room, branchById.get(room.getBranchId()), false))
+                .map(room -> {
+                    Branch branch = branchById.get(room.getBranchId());
+                    User owner = branch != null ? ownerById.get(branch.getOwnerAccountId()) : null;
+                    return toResponse(room, branch, owner, false);
+                })
                 .toList();
+
         return PagedResponse.of(content, page + 1, size, total);
     }
 
@@ -146,18 +236,44 @@ public class PublicRoomService {
         Branch branch = branches.findByIdAndIsDeletedFalse(room.getBranchId())
                 .filter(value -> value.getStatus() == BranchStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng công khai"));
-        return toResponse(room, branch, true);
+        User owner = branch.getOwnerAccountId() != null ? userRepository.findByIdAndIsDeletedFalse(branch.getOwnerAccountId()).orElse(null) : null;
+        return toResponse(room, branch, owner, true);
+    }
+
+    public List<RoomTypeResponse> getPublicRoomTypes() {
+        return roomTypes.findAll().stream()
+                .filter(rt -> !Boolean.TRUE.equals(rt.getIsDeleted()))
+                .map(rt -> new RoomTypeResponse(rt.getId(), rt.getName(), rt.getDescription(), rt.getCreatedAt(), rt.getUpdatedAt()))
+                .toList();
+    }
+
+    public List<BranchResponse> getPublicBranches() {
+        return branches.findAll().stream()
+                .filter(b -> !Boolean.TRUE.equals(b.getIsDeleted()) && b.getStatus() == BranchStatus.ACTIVE)
+                .map(b -> new BranchResponse(
+                        b.getId(), b.getName(), b.getAddress(), b.getPhone(), b.getEmail(),
+                        b.getDescription(), b.getStatus(), b.getCreatedAt(), b.getUpdatedAt(),
+                        b.getOwnerAccountId(), b.getElectricityRate(), b.getWaterRate(), b.getParkingRate()
+                ))
+                .toList();
     }
 
     private Sort parseSort(String value) {
-        String[] parts = StringUtils.hasText(value) ? value.split(",", 2) : new String[]{"code", "asc"};
-        String property = switch (parts[0]) {
-            case "referencePrice" -> "listedRentPrice";
+        if (!StringUtils.hasText(value)) {
+            return Sort.by(Sort.Direction.ASC, "roomNumber");
+        }
+        String separator = value.contains("-") ? "-" : ",";
+        String[] parts = value.split(separator, 2);
+        String field = parts[0].trim();
+        String dir = parts.length > 1 ? parts[1].trim() : "asc";
+
+        String property = switch (field) {
+            case "referencePrice", "price" -> "listedRentPrice";
+            case "area", "size" -> "area";
+            case "createdAt", "newest" -> "createdAt";
             default -> "roomNumber";
         };
-        Sort.Direction direction = parts.length > 1 && "desc".equalsIgnoreCase(parts[1])
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
+        Sort.Direction direction = "desc".equalsIgnoreCase(dir) ? Sort.Direction.DESC : Sort.Direction.ASC;
         return Sort.by(direction, property);
     }
 
@@ -205,7 +321,7 @@ public class PublicRoomService {
         return mongoTemplate.find(query, Room.class);
     }
 
-    private PublicRoomResponse toResponse(Room room, Branch branch, boolean includeRates) {
+    private PublicRoomResponse toResponse(Room room, Branch branch, User owner, boolean includeRates) {
         RoomType type = roomTypes.findByIdAndIsDeletedFalse(room.getRoomTypeId()).orElse(null);
         PublicRoomResponse.PublicRoom publicRoom = new PublicRoomResponse.PublicRoom(
                 room.getId(),
@@ -224,11 +340,44 @@ public class PublicRoomService {
         );
         return new PublicRoomResponse(
                 publicRoom,
-                branch.getId(),
-                branch.getName(),
-                branch.getAddress() == null ? "" : branch.getAddress(),
+                branch != null ? branch.getId() : "",
+                branch != null ? branch.getName() : "",
+                branch != null && branch.getAddress() != null ? branch.getAddress() : "",
                 type == null ? "Phòng" : type.getName(),
+                owner != null ? owner.getFullName() : "",
                 includeRates ? roomService.publicUtilityRates(room.getId()) : null
         );
+    }
+
+    /**
+     * Chuyển đổi từ khóa tìm kiếm tiếng Việt thành biểu thức Regex hỗ trợ cả có dấu và không dấu
+     */
+    public static String toVietnameseRegexPattern(String input) {
+        if (input == null || input.isBlank()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (char c : input.toCharArray()) {
+            char lower = Character.toLowerCase(c);
+            switch (lower) {
+                case 'a', 'à', 'á', 'ả', 'ã', 'ạ', 'ă', 'ằ', 'ắ', 'ẳ', 'ẵ', 'ặ', 'â', 'ầ', 'ấ', 'ẩ', 'ẫ', 'ậ' ->
+                        sb.append("[aàáảãạăằắẳẵặâầấẩẫậ]");
+                case 'd', 'đ' -> sb.append("[dđ]");
+                case 'e', 'è', 'é', 'ẻ', 'ẽ', 'ẹ', 'ê', 'ề', 'ế', 'ể', 'ễ', 'ệ' ->
+                        sb.append("[eèéẻẽẹêềếểễệ]");
+                case 'i', 'ì', 'í', 'ỉ', 'ĩ', 'ị' -> sb.append("[iìíỉĩị]");
+                case 'o', 'ò', 'ó', 'ỏ', 'õ', 'ọ', 'ô', 'ồ', 'ố', 'ổ', 'ỗ', 'ộ', 'ơ', 'ờ', 'ớ', 'ở', 'ỡ', 'ợ' ->
+                        sb.append("[oòóỏõọôồốổỗộơờớởỡợ]");
+                case 'u', 'ù', 'ú', 'ủ', 'ũ', 'ụ', 'ư', 'ừ', 'ứ', 'ử', 'ữ', 'ự' ->
+                        sb.append("[uùúủũụưừứửữự]");
+                case 'y', 'ỳ', 'ý', 'ỷ', 'ỹ', 'ỵ' -> sb.append("[yỳýỷỹỵ]");
+                default -> {
+                    if ("\\^$.|?*+()[]{}".indexOf(c) != -1) {
+                        sb.append('\\').append(c);
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 }

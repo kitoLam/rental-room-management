@@ -53,6 +53,11 @@ export function RoomCard({ room }: RoomCardProps) {
           <MapPin className="size-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{room.address}</span>
         </p>
+        {room.ownerName && (
+          <p className="text-xs text-muted-foreground truncate">
+            Chủ nhà: <span className="font-medium text-foreground">{room.ownerName}</span>
+          </p>
+        )}
         <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <li className="flex items-center gap-1">
             <Ruler className="size-3.5" aria-hidden="true" />

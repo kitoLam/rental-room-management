@@ -8,10 +8,12 @@ const filtersSchema = z
     mode: z.enum(['ALL', 'ROOM', 'SLOT']),
     minPrice: number.optional(),
     maxPrice: number.optional(),
+    minArea: number.optional(),
+    maxArea: number.optional(),
     roomTypeId: z.union([z.literal(''), databaseIdSchema]),
     minCapacity: z.coerce.number().int().min(1).max(100).optional(),
     availableOnly: z.boolean(),
-    sort: z.enum(['recommended', 'price-asc', 'price-desc', 'area-desc']),
+    sort: z.enum(['recommended', 'price-asc', 'price-desc', 'area-desc', 'area-asc', 'newest']),
     page: z.coerce.number().int().min(1).max(10000),
     branchId: databaseIdSchema.optional(),
   })
@@ -19,14 +21,21 @@ const filtersSchema = z
     message: 'Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu.',
     path: ['maxPrice'],
   })
+  .refine((v) => v.minArea === undefined || v.maxArea === undefined || v.minArea <= v.maxArea, {
+    message: 'Diện tích tối đa phải lớn hơn hoặc bằng diện tích tối thiểu.',
+    path: ['maxArea'],
+  })
 export function parseFilters(params: URLSearchParams) {
   const preset = params.get('price')?.split('-')
+  const areaPreset = params.get('areaRange')?.split('-')
   return filtersSchema.safeParse({
     q: params.get('q') || '',
     area: params.get('area') || '',
     mode: params.get('mode') || 'ALL',
     minPrice: params.get('minPrice') || preset?.[0] || undefined,
     maxPrice: params.get('maxPrice') || preset?.[1] || undefined,
+    minArea: params.get('minArea') || areaPreset?.[0] || undefined,
+    maxArea: params.get('maxArea') || areaPreset?.[1] || undefined,
     minCapacity: params.get('minCapacity') || undefined,
     roomTypeId: params.get('roomTypeId') || '',
     availableOnly: params.get('availableOnly') === 'true',

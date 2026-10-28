@@ -54,6 +54,7 @@ export const roomSchema = z.object({
   amenities: z.array(z.string()),
   services: z.array(z.object({ name: z.string(), price: z.number(), unit: z.string() })),
   utilityRates: utilityRatesSchema.nullish(),
+  ownerName: z.string().optional(),
 })
 export type Room = z.infer<typeof roomSchema>
 export const policySchema = z.object({
@@ -209,6 +210,8 @@ export type RoomFilters = {
   area: string
   minPrice?: number
   maxPrice?: number
+  minArea?: number
+  maxArea?: number
   mode: 'ALL' | RentalMode
   roomTypeId: string
   minCapacity?: number
