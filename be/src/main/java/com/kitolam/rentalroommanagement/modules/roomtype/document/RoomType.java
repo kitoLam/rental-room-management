@@ -17,6 +17,4 @@ public class RoomType extends BaseDocument {
     private String name;
 
     private String description;
-
-    private Integer maxOccupants;
 }
