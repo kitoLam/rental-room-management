@@ -2,6 +2,7 @@ package com.kitolam.rentalroommanagement.modules.booking.controller;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingCreateRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingFilterRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingPaymentRequest;
@@ -16,7 +17,6 @@ import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentMethod;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayCreatePaymentRequest;
 import com.kitolam.rentalroommanagement.modules.vnpay.service.VnPayService;
-import com.kitolam.rentalroommanagement.security.AuthPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -49,7 +49,6 @@ public class BookingController {
     private final VnPayService vnPayService;
 
     @GetMapping("/availability")
-    @PreAuthorize("hasRole('TENANT')")
     public StandardResponse<RoomAvailabilityResponse> checkAvailability(
             @RequestParam String roomId, @RequestParam java.time.LocalDate startDate,
             @RequestParam java.time.LocalDate endDate) {

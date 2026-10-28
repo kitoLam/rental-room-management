@@ -11,6 +11,7 @@ export type Feature =
   | 'admin'
   | 'adminUsers'
   | 'utilities'
+  | 'viewing'
 export type ApiMode = 'mock' | 'real' | 'hybrid'
 const testing = import.meta.env.MODE === 'test'
 const configured = import.meta.env.VITE_API_MODE || (testing ? 'mock' : 'real')
@@ -30,7 +31,11 @@ export function provider(feature: Feature): 'mock' | 'real' {
   return feature === 'auth' ||
     feature === 'notifications' ||
     feature === 'adminUsers' ||
-    feature === 'utilities'
+    feature === 'utilities' ||
+    feature === 'catalog' ||
+    feature === 'leasing' ||
+    feature === 'manager' ||
+    feature === 'viewing'
     ? 'real'
     : 'mock'
 }
@@ -49,6 +54,7 @@ export const hasMocks = (
     'admin',
     'adminUsers',
     'utilities',
+    'viewing',
   ] as Feature[]
 ).some((f) => provider(f) === 'mock')
 export function endpoint(feature: Feature, path: string) {

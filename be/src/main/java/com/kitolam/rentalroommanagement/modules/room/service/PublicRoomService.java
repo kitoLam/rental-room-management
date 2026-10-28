@@ -40,6 +40,7 @@ public class PublicRoomService {
     private final BranchRepository branches;
     private final RoomTypeRepository roomTypes;
     private final MongoTemplate mongoTemplate;
+    private final RoomService roomService;
 
     public PagedResponse<PublicRoomResponse> search(
             String branchId,
@@ -99,7 +100,7 @@ public class PublicRoomService {
         Map<String, Branch> branchById = new HashMap<>();
         activeBranches.forEach(branch -> branchById.put(branch.getId(), branch));
         List<PublicRoomResponse> content = result.getContent().stream()
-                .map(room -> toResponse(room, branchById.get(room.getBranchId())))
+                .map(room -> toResponse(room, branchById.get(room.getBranchId()), false))
                 .toList();
         return PagedResponse.of(content, result.getNumber() + 1, size, result.getTotalElements());
     }
@@ -111,7 +112,7 @@ public class PublicRoomService {
         Branch branch = branches.findByIdAndIsDeletedFalse(room.getBranchId())
                 .filter(value -> value.getStatus() == BranchStatus.ACTIVE)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng công khai"));
-        return toResponse(room, branch);
+        return toResponse(room, branch, true);
     }
 
     private Sort parseSort(String value) {
@@ -126,7 +127,7 @@ public class PublicRoomService {
         return Sort.by(direction, property);
     }
 
-    private PublicRoomResponse toResponse(Room room, Branch branch) {
+    private PublicRoomResponse toResponse(Room room, Branch branch, boolean includeRates) {
         RoomType type = roomTypes.findByIdAndIsDeletedFalse(room.getRoomTypeId()).orElse(null);
         PublicRoomResponse.PublicRoom publicRoom = new PublicRoomResponse.PublicRoom(
                 room.getId(),
@@ -148,7 +149,8 @@ public class PublicRoomService {
                 branch.getId(),
                 branch.getName(),
                 branch.getAddress() == null ? "" : branch.getAddress(),
-                type == null ? "Phòng" : type.getName()
+                type == null ? "Phòng" : type.getName(),
+                includeRates ? roomService.publicUtilityRates(room.getId()) : null
         );
     }
 }

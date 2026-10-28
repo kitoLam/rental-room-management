@@ -156,7 +156,16 @@ export const managerApi = {
       `${scope(branchId)}/invoices/${encodeURIComponent(id)}/editor`,
       invoiceInputSchema,
     ),
-  branches: () => request('manager', '/api/manager/branches', z.array(branchAssignmentSchema)),
+  branches: async () => {
+    if (provider('manager') === 'mock') return request('manager', '/api/manager/branches', z.array(branchAssignmentSchema))
+    const branches = await request('manager', '/api/v1/branches/managed', z.array(z.object({
+      id: z.string(), ownerAccountId: z.string(), name: z.string(), address: z.string().nullable(), status: z.enum(['ACTIVE','INACTIVE']),
+    })))
+    return branches.map(branch => branchAssignmentSchema.parse({
+      id: branch.id, ownerId: branch.ownerAccountId, name: branch.name, address: branch.address ?? '', status: branch.status,
+      managerId: null, managerName: '', zaloUrl: null, zaloEnabled: false,
+    }))
+  },
   list: async <K extends ManagerResource>(
     branchId: string,
     resource: K,

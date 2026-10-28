@@ -56,4 +56,11 @@ public class Room extends BaseDocument {
     private String rules;
 
     private RoomStatus status = RoomStatus.AVAILABLE;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal electricityRate;
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal waterRate;
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal parkingRate;
 }

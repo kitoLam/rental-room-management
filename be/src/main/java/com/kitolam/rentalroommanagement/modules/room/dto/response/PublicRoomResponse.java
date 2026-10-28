@@ -2,13 +2,15 @@ package com.kitolam.rentalroommanagement.modules.room.dto.response;
 
 import java.math.BigDecimal;
 import java.util.List;
+import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.UtilityRatesResponse;
 
 public record PublicRoomResponse(
         PublicRoom room,
         String branchId,
         String branchName,
         String address,
-        String roomTypeName
+        String roomTypeName,
+        UtilityRatesResponse utilityRates
 ) {
     public record PublicRoom(
             String id,

@@ -5,9 +5,12 @@ import com.kitolam.rentalroommanagement.modules.manager.dto.request.ManagerCreat
 import com.kitolam.rentalroommanagement.modules.manager.dto.request.ManagerFilterRequest;
 import com.kitolam.rentalroommanagement.modules.manager.dto.request.ManagerUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.manager.dto.response.ManagerResponse;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 
 public interface ManagerService {
+    String VIEWING_PERMISSION = "MANAGE_VIEWING_APPOINTMENTS";
+    Optional<ManagerResponse> findAssignment(String email);
 
     ManagerResponse create(ManagerCreateRequest request);
 

@@ -5,11 +5,11 @@ import { ShieldCheck } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { Notice, QueryState } from '@/components/common/page'
 import { useSession } from '@/features/auth/session-store'
+import { dashboardPath } from '@/features/auth/navigation'
 import { adminApi } from '@/services/admin'
 import { queryClient } from '@/services/query-client'
 import type { Role } from '@/interfaces/domain'
 const workspaceRoles: Record<string, Role> = {
-  '/user/dashboard': 'USER',
   '/owner/dashboard': 'OWNER',
   '/manager/dashboard': 'MANAGER',
   '/tenant/dashboard': 'TENANT',
@@ -65,7 +65,7 @@ export function AdminLayout() {
       {!allowed ? (
         <Notice tone="warning">
           Bạn không có quyền quản trị hệ thống.{' '}
-          <Link className="font-bold underline" to="/user/dashboard">
+          <Link className="font-bold underline" to={dashboardPath(user.roles)}>
             Về tài khoản
           </Link>
         </Notice>
@@ -138,7 +138,6 @@ export function AdminLayout() {
                 }}
               >
                 <option value="/admin/dashboard">Quản trị hệ thống</option>
-                <option value="/user/dashboard">Tài khoản của tôi</option>
                 {user.roles.includes('OWNER') && <option value="/owner/dashboard">Chủ trọ</option>}
                 {user.roles.includes('MANAGER') && (
                   <option value="/manager/dashboard">Quản lý</option>

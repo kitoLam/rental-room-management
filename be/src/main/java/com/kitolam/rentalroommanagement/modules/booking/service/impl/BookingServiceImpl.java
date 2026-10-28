@@ -5,12 +5,12 @@ import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestEx
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ForbiddenException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
-import com.kitolam.rentalroommanagement.modules.appointment.enums.AppointmentStatus;
-import com.kitolam.rentalroommanagement.modules.appointment.repository.AppointmentRepository;
+import com.kitolam.rentalroommanagement.modules.auth.document.User;
+import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import com.kitolam.rentalroommanagement.modules.booking.document.Booking;
 import com.kitolam.rentalroommanagement.modules.booking.document.BookingTimelineEntry;
-import com.kitolam.rentalroommanagement.modules.booking.event.BookingStatusChangedEvent;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingCreateRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingFilterRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingReviewRequest;
@@ -19,16 +19,16 @@ import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingUpdat
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.PaymentReconciliationRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingPaymentResponse;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingResponse;
+import com.kitolam.rentalroommanagement.modules.booking.dto.response.EffectiveRoomHoldResponse;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.RoomAvailabilityResponse;
 import com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus;
 import com.kitolam.rentalroommanagement.modules.booking.enums.DepositStatus;
+import com.kitolam.rentalroommanagement.modules.booking.event.BookingStatusChangedEvent;
 import com.kitolam.rentalroommanagement.modules.booking.repository.BookingRepository;
 import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
-import com.kitolam.rentalroommanagement.modules.auth.document.User;
-import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
-import com.kitolam.rentalroommanagement.modules.manager.repository.ManagerRepository;
+import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.payment.document.Payment;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentMethod;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentStatus;
@@ -38,23 +38,22 @@ import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
-import com.kitolam.rentalroommanagement.security.AuthPrincipal;
-import lombok.RequiredArgsConstructor;
-import org.bson.types.ObjectId;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.bson.types.ObjectId;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -65,12 +64,25 @@ public class BookingServiceImpl implements BookingService {
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
-    private final ManagerRepository managerRepository;
     private final PaymentRepository paymentRepository;
-    private final AppointmentRepository appointmentRepository;
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final BranchService branchAccess;
+
+    @Override
+    public EffectiveRoomHoldResponse currentRoomHold(String roomId) {
+        var active = bookingRepository.findByRoomIdAndStatusInAndIsDeletedFalse(roomId,
+                List.of(BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CONVERTED));
+        var official = active.stream().filter(b -> (b.getStatus() == BookingStatus.CONFIRMED || b.getStatus() == BookingStatus.CONVERTED)
+                && b.getDepositStatus() == DepositStatus.PAID).map(b -> b.getId()).toList();
+        var now = clock.instant();
+        boolean temporary = active.stream().anyMatch(b -> b.getStatus() == BookingStatus.AWAITING_PAYMENT
+                && b.getTermsAcceptedAt() != null && b.getHoldExpiresAt() != null && b.getHoldExpiresAt().isAfter(now)
+                && b.getPaymentDeadline() != null && b.getPaymentDeadline().isAfter(now));
+        String revision = active.stream().map(b -> b.getId() + ":" + b.getStatus() + ":" + b.getUpdatedAt()).sorted().collect(Collectors.joining("|"));
+        return new EffectiveRoomHoldResponse(official, temporary, revision);
+    }
 
     @Override
     @Transactional
@@ -129,14 +141,18 @@ public class BookingServiceImpl implements BookingService {
         if (isRole(principal, "TENANT")) {
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", tenant(principal).getId());
         } else if (isRole(principal, "MANAGER")) {
-            String branchId = managerRepository.findByEmailAndIsDeletedFalse(principal.email())
-                    .orElseThrow(() -> new ForbiddenException("Tài khoản không được gán chi nhánh quản lý"))
-                    .getBranchId();
+            String branchId = managerBranch(principal);
             List<ObjectId> roomIds = roomRepository.findByBranchIdAndIsDeletedFalse(branchId).stream()
                     .map(Room::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
             criteria.add(Criteria.where("roomId").in(roomIds));
         } else {
             requireRole(principal, "OWNER", "ADMIN");
+            if (isRole(principal, "OWNER")) {
+                var branches = branchAccess.ownedBranchIds(principal.userId());
+                var ownedRooms = roomRepository.findByBranchIdInAndIsDeletedFalse(branches).stream()
+                        .map(r -> new ObjectId(r.getId())).toList();
+                criteria.add(Criteria.where("roomId").in(ownedRooms));
+            }
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", filter.tenantId());
         }
         MongoQueryHelper.addObjectIdEquals(criteria, "roomId", filter.roomId());
@@ -314,7 +330,6 @@ public class BookingServiceImpl implements BookingService {
                 Room room = room(booking.getRoomId());
                 room.setStatus(RoomStatus.RESERVED);
                 roomRepository.save(room);
-                cancelOverlappingAppointments(booking);
                 return response(saveTransition(booking, BookingStatus.EXPIRED, "Thanh toán đến muộn nhưng khoảng thuê vẫn còn trống."));
             }
             booking.setDepositStatus(DepositStatus.PAID);
@@ -343,7 +358,6 @@ public class BookingServiceImpl implements BookingService {
             Room room = room(booking.getRoomId());
             room.setStatus(RoomStatus.RESERVED);
             roomRepository.save(room);
-            cancelOverlappingAppointments(booking);
         } else {
             booking.setStatus(BookingStatus.EXPIRED);
             booking.setDepositStatus(DepositStatus.PAID);
@@ -444,17 +458,6 @@ public class BookingServiceImpl implements BookingService {
             throw new ConflictException("Phòng hiện không nhận yêu cầu đặt");
     }
 
-    private void cancelOverlappingAppointments(Booking booking) {
-        appointmentRepository.findByRoomIdAndAppointmentDateGreaterThanEqualAndAppointmentDateLessThanAndIsDeletedFalse(
-                booking.getRoomId(), booking.getExpectedMoveInDate(), booking.getExpectedMoveOutDate())
-                .forEach(appointment -> {
-                    if (appointment.getStatus() == AppointmentStatus.PENDING || appointment.getStatus() == AppointmentStatus.CONFIRMED) {
-                        appointment.setStatus(AppointmentStatus.CANCELLED);
-                        appointmentRepository.save(appointment);
-                    }
-                });
-    }
-
     private Booking saveTransition(Booking booking, BookingStatus previous, String note) {
         if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
         booking.getTimeline().add(new BookingTimelineEntry(booking.getStatus().name(), clock.instant(), note));
@@ -502,13 +505,15 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void ensureCanManage(Booking booking, AuthPrincipal principal) {
-        if (isRole(principal, "OWNER") || isRole(principal, "ADMIN")) return;
-        requireRole(principal, "MANAGER");
-        String branchId = managerRepository.findByEmailAndIsDeletedFalse(principal.email())
-                .orElseThrow(() -> new ForbiddenException("Tài khoản không được gán chi nhánh quản lý"))
-                .getBranchId();
-        if (!room(booking.getRoomId()).getBranchId().equals(branchId))
-            throw new ForbiddenException("Booking nằm ngoài chi nhánh được quản lý");
+        if (isRole(principal, "ADMIN")) return;
+        requireRole(principal, "OWNER", "MANAGER");
+        branchAccess.requireManagementAccess(room(booking.getRoomId()).getBranchId(), principal);
+    }
+
+    private String managerBranch(AuthPrincipal principal) {
+        return branchAccess.managedBranches(principal).stream().findFirst()
+                .orElseThrow(() -> new ForbiddenException("Tài khoản chưa được phân công chi nhánh đang hoạt động"))
+                .id();
     }
 
     private boolean isRole(AuthPrincipal principal, String role) {

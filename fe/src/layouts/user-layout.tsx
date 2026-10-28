@@ -2,15 +2,21 @@ import { NavLink, Outlet } from 'react-router'
 import { CalendarDays, House, KeyRound, UserRound } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { cn } from '@/lib/utils'
+import { useSession } from '@/features/auth/session-store'
+import { dashboardPath } from '@/features/auth/navigation'
+import { useManagerSelection } from '@/features/manager/context'
+import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 export function UserLayout() {
+  const user = useSession((state) => state.user)
+  const branchId = useManagerSelection((state) => user ? state.byUser[user.id] : undefined)
   return (
     <>
       <div className="border-b border-border bg-surface">
         <Container>
           <nav aria-label="Không gian cá nhân" className="flex gap-1 overflow-x-auto py-2 sm:gap-5">
             {[
-              { to: '/user/dashboard', label: 'Tổng quan', icon: House },
-              { to: '/user/appointments', label: 'Lịch xem phòng', icon: CalendarDays },
+              { to: dashboardPath(user?.roles ?? []), label: 'Tổng quan', icon: House },
+              { to: viewingAppointmentsPath(user?.roles ?? [], { branchId }), label: 'Lịch xem phòng', icon: CalendarDays },
               { to: '/user/bookings', label: 'Giữ chỗ', icon: KeyRound },
               { to: '/profile', label: 'Hồ sơ', icon: UserRound },
             ].map(({ to, label, icon: Icon }) => (

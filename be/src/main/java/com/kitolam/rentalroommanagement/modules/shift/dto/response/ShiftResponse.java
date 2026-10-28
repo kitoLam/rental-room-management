@@ -1,19 +1,14 @@
 package com.kitolam.rentalroommanagement.modules.shift.dto.response;
 
-import java.time.DayOfWeek;
+import com.kitolam.rentalroommanagement.modules.shift.document.Shift;
+import com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType;
 import java.time.Instant;
-import java.util.Set;
+import java.time.LocalDate;
+import java.util.List;
 
-public record ShiftResponse(
-        String id,
-        String roomId,
-        String name,
-        Set<DayOfWeek> daysOfWeek,
-        String startTime,
-        String endTime,
-        Integer maxAppointments,
-        Boolean isActive,
-        Instant createdAt,
-        Instant updatedAt
-) {
+public record ShiftResponse(String roomId, String branchId, String roomNumber, String branchName,
+                            Long version, List<Shift.Period> periods,
+                            List<ExistingAppointment> existingAppointments) {
+    public record ExistingAppointment(String id, LocalDate date, ShiftType type,
+                                      Instant startAt, Instant endAt, String status) { }
 }

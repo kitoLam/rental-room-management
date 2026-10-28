@@ -38,14 +38,7 @@ export function TenantLayout() {
     navigate = useNavigate()
   const list = useQuery({
     queryKey: ['tenant', userId, 'tenancies', params.get('demo')],
-    queryFn: async () => {
-      try {
-        return await tenantApi.tenancies()
-      } catch {
-        const { tenantDb } = await import('@/mocks/tenant-engine')
-        return tenantDb.state.tenancies
-      }
-    },
+    queryFn: tenantApi.tenancies,
   })
   const requested = params.get('tenancyId'),
     tenancies = list.data || []

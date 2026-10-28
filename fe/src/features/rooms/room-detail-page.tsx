@@ -31,9 +31,14 @@ import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
 import { RoomCostEstimator } from './components/room-cost-estimator'
+import { useSession } from '@/features/auth/session-store'
+import { managerApi } from '@/services/manager'
 
 export default function RoomDetailPage() {
   const { roomId = '' } = useParams()
+  const user = useSession((state) => state.user)
+  const branches = useQuery({ queryKey: ['manager-branches', user?.id], queryFn: managerApi.branches,
+    enabled: !!user?.roles.some((role) => role === 'OWNER' || role === 'MANAGER'), retry: false })
   const validRoomId = databaseIdSchema.safeParse(roomId).success
   const [params] = useSearchParams()
   const [gallery, setGallery] = useState(false)
@@ -216,6 +221,9 @@ export default function RoomDetailPage() {
                   )}
                 </section>
                 <RoomCostEstimator key={r.id} room={r} />
+                {branches.data?.some((branch) => branch.id === r.branchId) && <Button asChild variant="outline" className="mt-4">
+                  <Link to={`/rooms/${r.id}/utility-rates`}>Cấu hình đơn giá điện, nước và gửi xe</Link>
+                </Button>}
                 <Panel>
                   <p className="mb-2 text-xs text-muted-foreground">CHI NHÁNH</p>
                   <h2 className="font-bold">{r.branchName}</h2>

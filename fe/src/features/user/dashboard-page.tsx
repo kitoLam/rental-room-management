@@ -1,20 +1,33 @@
-import { Link } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, CalendarDays, KeyRound, Search } from 'lucide-react'
 import { Page, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/empty-state'
 import { useSession } from '@/features/auth/session-store'
-import { appointmentService, bookingService, notificationService } from '@/services/guest-user'
+import { dashboardPath } from '@/features/auth/navigation'
+import { bookingService, notificationService } from '@/services/guest-user'
+import { viewingDependenciesService } from '@/services/viewing-dependencies'
+import { ViewingAppointmentBadge } from '@/features/leasing/viewing-appointment-pages'
+import { viewingDateTime } from '@/features/leasing/viewing-time'
+import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 import { ActivityRow } from '@/features/leasing/activity-pages'
 import { dateTime, referenceLink } from '@/lib/activity'
+import { provider } from '@/services/config'
 import { useNow } from '@/hooks/use-now'
 export default function DashboardPage() {
+  const user = useSession((state) => state.user)
+  const home = dashboardPath(user?.roles ?? [])
+  if (home !== '/user/dashboard') return <Navigate to={home} replace />
+  return <PersonalDashboard />
+}
+
+function PersonalDashboard() {
   const now = useNow()
   const user = useSession((s) => s.user)
   const appointments = useQuery({
-    queryKey: ['appointments', 'dashboard'],
-    queryFn: () => appointmentService.list(),
+    queryKey: ['viewing-appointments', 'dashboard'],
+    queryFn: () => viewingDependenciesService.appointments(),
     refetchInterval: 30000,
   })
   const bookings = useQuery({
@@ -23,11 +36,18 @@ export default function DashboardPage() {
     refetchInterval: 15000,
   })
   const notifications = useQuery({
-    queryKey: ['notifications', 'dashboard'],
-    queryFn: () => notificationService.list(),
+    queryKey: ['viewing-notifications', 'dashboard', user?.id],
+    queryFn: async () => {
+      if (provider('viewing') === 'real') return viewingDependenciesService.notifications()
+      const page = await notificationService.list()
+      return { ...page, content: page.content.map((item) => ({
+        ...item,
+        detailPath: referenceLink(item.referenceType, item.referenceId, item.contractTenantId, item.branchId) || '/notifications',
+      })) }
+    },
   })
   const upcoming = appointments.data?.content
-    .filter((a) => ['PENDING', 'CONFIRMED'].includes(a.status) && Date.parse(a.startAt) > now)
+    .filter((a) => ['PENDING', 'CONFIRMED'].includes(a.status) && Date.parse(a.startAt ?? '') > now)
     .slice(0, 3)
   const active = bookings.data?.content
     .filter((b) => ['REQUESTED', 'AWAITING_PAYMENT', 'CONFIRMED'].includes(b.status))
@@ -68,7 +88,7 @@ export default function DashboardPage() {
               <CalendarDays size={18} className="text-primary" />
               Lịch hẹn sắp tới
             </h2>
-            <Link className="min-h-11 py-3 text-xs text-primary underline" to="/user/appointments">
+            <Link className="min-h-11 py-3 text-xs text-primary underline" to={viewingAppointmentsPath(user?.roles ?? [], { branchId: appointments.data?.content[0]?.branchId })}>
               Xem tất cả
             </Link>
           </div>
@@ -78,7 +98,22 @@ export default function DashboardPage() {
             retry={appointments.refetch}
           >
             {upcoming?.length ? (
-              upcoming.map((a) => <ActivityRow key={a.id} record={a} kind="appointments" />)
+              upcoming.map((a) => (
+                <article key={a.id} className="border-b border-border py-4 last:border-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Link
+                      className="text-sm font-bold text-primary"
+                      to={viewingAppointmentsPath(user?.roles ?? [], { appointmentId: a.id, branchId: a.branchId })}
+                    >
+                      {a.roomNumber}
+                    </Link>
+                    <ViewingAppointmentBadge status={a.status} />
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {a.branchName} · {viewingDateTime(a.startAt)}
+                  </p>
+                </article>
+              ))
             ) : (
               <EmptyState
                 icon={CalendarDays}
@@ -111,8 +146,8 @@ export default function DashboardPage() {
       </div>
       <section className="mt-9">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-bold">Cập nhật gần đây</h2>
-          <Link to="/notifications" className="min-h-11 py-3 text-sm text-primary underline">
+          <h2 className="text-xl font-bold">Cập nhật lịch xem phòng</h2>
+          <Link to="/notifications/viewing" className="min-h-11 py-3 text-sm text-primary underline">
             Xem thông báo
           </Link>
         </div>
@@ -124,9 +159,7 @@ export default function DashboardPage() {
         >
           <Panel>
             {notifications.data?.content.slice(0, 3).map((n) => {
-              const to =
-                referenceLink(n.referenceType, n.referenceId, n.contractTenantId, n.branchId) ||
-                '/notifications'
+              const to = n.detailPath
               return (
                 <Link
                   key={n.id}

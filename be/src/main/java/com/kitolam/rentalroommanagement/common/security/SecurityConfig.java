@@ -1,24 +1,25 @@
 package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.common.exception.ApiError;
+import com.kitolam.rentalroommanagement.modules.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.SecurityFilterChain;
 import tools.jackson.databind.ObjectMapper;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 
 @Configuration
 @EnableMethodSecurity
@@ -40,7 +41,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtProvider jwtProvider) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtProvider jwtProvider,
+            AuthService accounts) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
@@ -68,10 +70,13 @@ public class SecurityConfig {
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
                     auth.requestMatchers("/api/v1/vnpay/**").permitAll();
                     auth.requestMatchers("/api/v1/public/**").permitAll();
+                    auth.requestMatchers(HttpMethod.GET,
+                            "/api/v1/shifts/rooms/*/availability", "/api/v1/appointments/rooms/*/eligibility",
+                            "/api/v1/bookings/availability").permitAll();
                     auth.requestMatchers("/api/v1/**").hasAnyRole("TENANT", "MANAGER", "ADMIN", "OWNER");
                     auth.anyRequest().authenticated();
                 })
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider, accounts), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

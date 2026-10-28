@@ -38,6 +38,9 @@ server:
   forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
 
 app:
+  seed:
+    auth:
+      enabled: ${AUTH_SEED_ENABLED:false}
   security:
     jwt-secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:rental-room-management}

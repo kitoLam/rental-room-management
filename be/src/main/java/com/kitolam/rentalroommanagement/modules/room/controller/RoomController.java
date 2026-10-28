@@ -25,6 +25,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
+import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.UtilityRatesRequest;
+import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomUtilityRatesResponse;
 
 @RestController
 @RequestMapping("/api/v1/rooms")
@@ -33,6 +40,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoomController {
 
     private final RoomService roomService;
+
+    @GetMapping("/{id}/utility-rates")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
+    public StandardResponse<RoomUtilityRatesResponse> utilityRates(@PathVariable @ValidObjectId String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(roomService.utilityRateConfiguration(id, principal));
+    }
+
+    @PutMapping("/{id}/utility-rates")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
+    public StandardResponse<RoomUtilityRatesResponse> updateUtilityRates(@PathVariable @ValidObjectId String id,
+            @Valid @RequestBody UtilityRatesRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(roomService.updateUtilityRates(id, request, principal));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

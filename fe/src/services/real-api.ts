@@ -8,14 +8,52 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
+  if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
+  if (
+    feature === 'viewing' &&
+    ((pathname === '/api/v1/appointments/notifications' && verb === 'GET') ||
+      (matches('/api/v1/appointments/notifications/([0-9a-f]{64}/read|read-all)') &&
+        verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    ((pathname === '/api/v1/appointments' && ['GET', 'POST'].includes(verb)) ||
+      (matches('/api/v1/appointments/[0-9a-fA-F]{24}(/history)?') && verb === 'GET') ||
+      (matches(
+        '/api/v1/appointments/[0-9a-fA-F]{24}/(approval|rejection|cancellation|completion|no-show|result-corrections)',
+      ) &&
+        verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    matches('/api/v1/shifts/branches/[0-9a-fA-F]{24}') &&
+    ['GET', 'PATCH'].includes(verb)
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    ((matches('/api/v1/shifts/rooms/[0-9a-fA-F]{24}') && ['GET', 'PUT'].includes(verb)) ||
+      (matches('/api/v1/shifts/rooms/[0-9a-fA-F]{24}/availability') && verb === 'GET'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    verb === 'GET' &&
+    (pathname === '/api/v1/appointments/context' ||
+      matches('/api/v1/appointments/rooms/[0-9a-fA-F]{24}/eligibility'))
+  )
+    return null
   if (
     feature === 'auth' &&
-    ((['/api/v1/auth/signup', '/auth/signup'].includes(pathname) && verb === 'POST') ||
-      (['/api/v1/auth/login', '/auth/login'].includes(pathname) && verb === 'POST') ||
-      (['/api/v1/auth/refresh', '/auth/refresh'].includes(pathname) && verb === 'POST') ||
-      (['/api/v1/auth/logout', '/auth/logout'].includes(pathname) && verb === 'POST') ||
-      (['/api/v1/auth/resend-verification', '/auth/resend-verification'].includes(pathname) && verb === 'POST') ||
-      (['/api/v1/auth/verify-email', '/auth/verify-email'].includes(pathname) && ['GET', 'POST'].includes(verb)))
+    ((pathname === '/api/v1/auth/signup' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/login' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
   )
     return null
   if (
@@ -23,13 +61,6 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     ((matches('/api/owner/properties') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/owner/properties/${id}`) && ['GET', 'PUT'].includes(verb)) ||
       (matches(`/api/owner/properties/${id}/rooms`) && ['GET', 'POST'].includes(verb)))
-  )
-    return null
-
-  if (
-    feature === 'auth' &&
-    verb === 'POST' &&
-    matches('/(?:api/v1/auth|api/auth)/(login|register|signup|verify-email|refresh|logout)')
   )
     return null
 

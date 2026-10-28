@@ -1,19 +1,22 @@
 package com.kitolam.rentalroommanagement.modules.booking.service;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingCreateRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingFilterRequest;
-import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingUpdateRequest;
-import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingResponse;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingReviewRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingTermsRequest;
+import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.PaymentReconciliationRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingPaymentResponse;
+import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingResponse;
+import com.kitolam.rentalroommanagement.modules.booking.dto.response.EffectiveRoomHoldResponse;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.RoomAvailabilityResponse;
-import com.kitolam.rentalroommanagement.security.AuthPrincipal;
+import java.util.List;
 import org.springframework.data.domain.Pageable;
 
 public interface BookingService {
+    EffectiveRoomHoldResponse currentRoomHold(String roomId);
 
     BookingResponse create(BookingCreateRequest request, AuthPrincipal principal);
 
@@ -33,7 +36,7 @@ public interface BookingService {
 
     BookingPaymentResponse createVnPayPayment(String id, AuthPrincipal principal);
 
-    java.util.List<BookingPaymentResponse> payments(String id, AuthPrincipal principal);
+    List<BookingPaymentResponse> payments(String id, AuthPrincipal principal);
 
     BookingResponse reconcilePayment(String id, String paymentId, PaymentReconciliationRequest request, AuthPrincipal principal);
 

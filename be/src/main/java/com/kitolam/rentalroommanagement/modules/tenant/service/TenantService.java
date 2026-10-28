@@ -5,9 +5,11 @@ import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantCreateR
 import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantFilterRequest;
 import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.tenant.dto.response.TenantResponse;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 
 public interface TenantService {
+    Optional<String> profileIdByEmail(String email);
 
     TenantResponse create(TenantCreateRequest request);
 

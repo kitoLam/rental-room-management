@@ -6,6 +6,7 @@ import { provider } from '@/services/config'
 import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
+import { Link } from 'react-router'
 import { ActionDialog, ManagerLink, ManagerPage, ManagerStatus } from './components'
 import { managerLink, useManager, useManagerAction, useManagerQuery } from './context'
 
@@ -50,6 +51,7 @@ export function ManagerRoomDetail() {
                 {query.data.description}
               </p>
               <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+                <Link className="inline-flex min-h-11 items-center text-sm font-bold text-primary" to={`/rooms/${roomId}/viewing-settings`}>Cấu hình ca xem phòng</Link>
                 <ManagerLink to={`/manager/rooms/${roomId}/edit`}>Chỉnh sửa</ManagerLink>
                 {query.data.rentalMode === 'SLOT' && (
                   <ManagerLink to={`/manager/rooms/${roomId}/slots`}>Quản lý chỗ</ManagerLink>

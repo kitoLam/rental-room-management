@@ -23,6 +23,12 @@ export const sessionSchema = z.object({
 export type Session = z.infer<typeof sessionSchema>
 export const modeSchema = z.enum(['ROOM', 'SLOT'])
 export type RentalMode = z.infer<typeof modeSchema>
+export const utilityRatesSchema = z.object({
+  electricityRate: z.number().nonnegative().nullable(),
+  waterRate: z.number().nonnegative().nullable(),
+  parkingRate: z.number().nonnegative().nullable(),
+})
+export type UtilityRates = z.infer<typeof utilityRatesSchema>
 export const roomSchema = z.object({
   id: databaseIdSchema,
   code: z.string(),
@@ -47,6 +53,7 @@ export const roomSchema = z.object({
   description: z.string(),
   amenities: z.array(z.string()),
   services: z.array(z.object({ name: z.string(), price: z.number(), unit: z.string() })),
+  utilityRates: utilityRatesSchema.nullish(),
 })
 export type Room = z.infer<typeof roomSchema>
 export const policySchema = z.object({
@@ -164,6 +171,7 @@ export const paymentSchema = z.object({
   createdAt: z.string(),
   verifiedAt: z.string().nullable(),
   qrUrl: z.string().nullable(),
+  paymentUrl: z.string().url().nullable().optional(),
   instructions: z.string(),
 })
 export type Payment = z.infer<typeof paymentSchema>

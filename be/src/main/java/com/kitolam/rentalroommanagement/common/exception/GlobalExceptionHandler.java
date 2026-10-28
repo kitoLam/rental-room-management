@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiError> business(AppException ex) {
-        return error(ex.getStatus().value(), ex.getMessage());
+        return ResponseEntity.status(ex.getStatus()).body(ApiError.of(ex.getStatus().value(), ex.getMessage(), ex.getErrorCode()));
     }
 
     @ExceptionHandler({BindException.class, org.springframework.web.bind.MethodArgumentNotValidException.class})

@@ -11,6 +11,7 @@ import {
   policySchema,
   roomSchema,
   userSchema,
+  utilityRatesSchema,
   type AppointmentInput,
   type BookingInput,
   type PaymentScenario,
@@ -73,6 +74,7 @@ export const authService = {
     ),
 }
 const publicRoomSchema = z.object({
+  utilityRates: utilityRatesSchema.nullish(),
   room: z.object({
     id: databaseIdSchema,
     branchId: databaseIdSchema,
@@ -126,7 +128,7 @@ function adaptRoom(data: RealRoom) {
         ? 'MAINTENANCE'
         : r.operationalStatus === 'INACTIVE'
           ? 'INACTIVE'
-          : 'UNKNOWN',
+          : 'AVAILABLE',
     availableSlots: null,
     imageUrl: images[0] || '',
     imageAlt: `${data.roomTypeName} ${r.code}`,
@@ -134,6 +136,7 @@ function adaptRoom(data: RealRoom) {
     description: r.description || '',
     amenities: r.amenities || [],
     services: [],
+    utilityRates: data.utilityRates,
   })
 }
 export const defaultFilters: RoomFilters = {
@@ -311,14 +314,15 @@ function adaptPayment(p: z.infer<typeof backendPaymentSchema>) {
     environment: 'PRODUCTION',
     createdAt: p.createdAt || new Date(0).toISOString(),
     verifiedAt: p.paidAt,
-    qrUrl: p.paymentUrl,
+    qrUrl: null,
+    paymentUrl: p.paymentUrl,
     instructions: p.method === 'BANK_TRANSFER' ? 'Chuyển khoản và gửi mã tham chiếu cho Owner để đối soát.' : '',
   })
 }
 export const bookingService = {
   list: async (status = '', page = 1) => {
     if (provider('leasing') === 'real') {
-      const query = new URLSearchParams({ page: String(page - 1), size: '8' })
+      const query = new URLSearchParams({ page: String(page), size: '8' })
       if (status) query.set('status', toBackendBookingStatus(status))
       const result = await request('leasing', `/api/v1/bookings?${query}`, pageSchema(backendBookingSchema))
       return { ...result, content: result.content.map(adaptBooking) }
@@ -358,13 +362,15 @@ export const bookingService = {
   initiate: async (id: string, scenario: PaymentScenario) => {
     if (provider('leasing') !== 'real')
       return request('leasing', `/api/bookings/${id}/payments`, paymentSchema, write('POST', { scenario }))
-    return adaptPayment(await request('leasing', `/api/v1/bookings/${id}/payments`, backendPaymentSchema,
+    const payment = adaptPayment(await request('leasing', `/api/v1/bookings/${id}/payments`, backendPaymentSchema,
       write('POST', { method: 'VNPAY' })))
+    if (!payment.paymentUrl) throw new ApiError('Máy chủ chưa cung cấp liên kết thanh toán VNPAY.', 502)
+    return payment
   },
   review: async (id: string, value: unknown) =>
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/review`, backendBookingSchema, write('POST', value))),
   managerList: async (status = '', page = 1) => {
-    const query = new URLSearchParams({ page: String(page - 1), size: '8' })
+    const query = new URLSearchParams({ page: String(page), size: '8' })
     if (status) query.set('status', toBackendBookingStatus(status))
     const result = await request('manager', `/api/v1/bookings?${query}`, pageSchema(backendBookingSchema))
     return { ...result, content: result.content.map(adaptBooking) }

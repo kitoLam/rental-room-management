@@ -44,7 +44,8 @@ export default function PaymentPage() {
     mutationFn: () => bookingService.initiate(bookingId, scenario),
     onSuccess: async (payment) => {
       await invalidateActivity()
-      if (provider('leasing') === 'real' && payment.qrUrl) window.location.assign(payment.qrUrl)
+      if (provider('leasing') === 'real' && payment.paymentUrl)
+        window.location.assign(payment.paymentUrl)
     },
   })
   const paymentState = payments.data?.map((p) => `${p.id}-${p.status}`).join(',') || ''
@@ -84,7 +85,8 @@ export default function PaymentPage() {
     b?.status === 'AWAITING_PAYMENT' &&
     seconds > 0 &&
     !!b?.termsAcceptedAt &&
-    !payments.data?.some((p) => ['PENDING', 'VERIFIED'].includes(p.status))
+    !payments.data?.some((p) => p.status === 'VERIFIED' ||
+      (provider('leasing') === 'mock' && p.status === 'PENDING'))
   const mock = provider('leasing') === 'mock'
   return (
     <Page
@@ -186,10 +188,10 @@ export default function PaymentPage() {
                   <RefreshCw />
                   Kiểm tra trạng thái
                 </Button>
-                <Button variant="outline" onClick={() => setQr(true)}>
+                {mock && <Button variant="outline" onClick={() => setQr(true)}>
                   <QrCode />
                   {mock ? 'Hướng dẫn demo' : 'Xem mã QR'}
-                </Button>
+                </Button>}
               </div>
               <div className="mt-6">
                 {b.status === 'EXPIRED' || (b.status === 'AWAITING_PAYMENT' && !seconds) ? (
@@ -215,6 +217,20 @@ export default function PaymentPage() {
               </div>
             </Panel>
             <div className="space-y-6">
+              {!mock && (
+                <Panel>
+                  <h2 className="font-bold">Thanh toán qua VNPAY</h2>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    Bạn sẽ được chuyển đến cổng VNPAY để thanh toán khoản giữ chỗ đã thống nhất.
+                    Kết quả chỉ được ghi nhận sau khi máy chủ xác minh giao dịch.
+                  </p>
+                  <InlineError error={initiate.error} />
+                  <Button className="mt-5 w-full" loading={initiate.isPending}
+                    disabled={!canPay} onClick={() => initiate.mutate()}>
+                    {p?.status === 'PENDING' ? 'Tiếp tục thanh toán VNPAY' : 'Thanh toán VNPAY'}
+                  </Button>
+                </Panel>
+              )}
               {mock && (
                 <Panel>
                   <ShieldCheck className="mb-3 size-7 text-primary" />
