@@ -48,7 +48,6 @@ public class Room extends BaseDocument {
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal listedDepositAmount;
 
-    @Field("room_mode")
     private RoomMode roomMode;
 
     /** WHOLE_ROOM: max people in the room. PER_SLOT: number of slots. See {@link RoomMode}. */
