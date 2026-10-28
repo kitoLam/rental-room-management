@@ -1,4 +1,4 @@
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

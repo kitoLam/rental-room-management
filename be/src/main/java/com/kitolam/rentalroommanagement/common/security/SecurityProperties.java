@@ -1,4 +1,4 @@
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import jakarta.validation.constraints.*;
 import org.springframework.boot.context.properties.ConfigurationProperties;

@@ -8,7 +8,7 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.*;
 import com.kitolam.rentalroommanagement.modules.auth.util.OpaqueTokenProvider;
-import com.kitolam.rentalroommanagement.security.*;
+import com.kitolam.rentalroommanagement.common.security.*;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;

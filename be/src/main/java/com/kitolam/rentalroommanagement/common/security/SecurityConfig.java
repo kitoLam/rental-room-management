@@ -1,4 +1,4 @@
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.common.exception.ApiError;
 import jakarta.servlet.http.HttpServletResponse;

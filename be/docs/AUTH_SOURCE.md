@@ -1180,8 +1180,9 @@ package com.kitolam.rentalroommanagement.modules.auth.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.kitolam.rentalroommanagement.security.validation.StrongPassword;
+import com.kitolam.rentalroommanagement.common.security.validation.StrongPassword;
 import jakarta.validation.constraints.*;
+
 import java.util.Locale;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1207,7 +1208,9 @@ public record SignupRequest(
     }
 
     @Override
-    public String toString() { return "SignupRequest[REDACTED]"; }
+    public String toString() {
+        return "SignupRequest[REDACTED]";
+    }
 }
 ~~~
 
@@ -1359,11 +1362,12 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.*;
-import com.kitolam.rentalroommanagement.security.*;
+import com.kitolam.rentalroommanagement.common.security.*;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -1387,9 +1391,9 @@ public class AuthServiceImpl implements AuthService {
     private final String dummyPasswordHash;
 
     public AuthServiceImpl(UserRepository users, VerificationTokenRepository verifications,
-            RefreshTokenRepository refreshTokens, AuthTokenStore tokenStore, PasswordEncoder passwords,
-            OpaqueTokenProvider tokens, JwtProvider jwt, SecurityProperties security,
-            AuthProperties properties, ApplicationEventPublisher events, Clock clock) {
+                           RefreshTokenRepository refreshTokens, AuthTokenStore tokenStore, PasswordEncoder passwords,
+                           OpaqueTokenProvider tokens, JwtProvider jwt, SecurityProperties security,
+                           AuthProperties properties, ApplicationEventPublisher events, Clock clock) {
         this.users = users;
         this.verifications = verifications;
         this.refreshTokens = refreshTokens;
@@ -1624,12 +1628,13 @@ public class RentalRoomManagementApplication {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/AuthPrincipal.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.modules.auth.document.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
 import java.util.Collection;
 import java.util.List;
 
@@ -1639,20 +1644,38 @@ public record AuthPrincipal(String userId, String email, String passwordHash,
         return new AuthPrincipal(user.getId(), user.getEmail(), user.getPasswordHash(),
                 user.getRole().name(), user.isEnabled() && user.isEmailVerified());
     }
-    @Override public Collection<? extends GrantedAuthority> getAuthorities() {
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role));
     }
-    @Override public String getPassword() { return passwordHash; }
-    @Override public String getUsername() { return email; }
-    @Override public boolean isEnabled() { return enabled; }
-    @Override public String toString() { return "AuthPrincipal[REDACTED]"; }
+
+    @Override
+    public String getPassword() {
+        return passwordHash;
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    @Override
+    public String toString() {
+        return "AuthPrincipal[REDACTED]";
+    }
 }
 ~~~
 
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/AuthUserDetailsService.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -1680,7 +1703,7 @@ public class AuthUserDetailsService implements UserDetailsService {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/CorsConfig.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpResponse;
@@ -1688,6 +1711,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.*;
 import org.springframework.web.cors.*;
 import org.springframework.web.filter.CorsFilter;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -1728,7 +1752,7 @@ public class CorsConfig {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/JwtAuthenticationFilter.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
@@ -1739,6 +1763,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -1795,7 +1820,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/JwtProvider.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.modules.auth.document.User;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
@@ -1803,6 +1828,7 @@ import org.springframework.security.oauth2.core.*;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Component;
+
 import javax.crypto.spec.SecretKeySpec;
 import java.time.Clock;
 import java.time.Duration;
@@ -1834,17 +1860,17 @@ public class JwtProvider {
         timestamps.setClock(clock);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 timestamps, new JwtIssuerValidator(properties.issuer()), jwt -> {
-                    boolean valid = jwt.getExpiresAt() != null && jwt.getIssuedAt() != null
-                            && !jwt.getIssuedAt().isAfter(clock.instant())
-                            && jwt.getAudience() != null && jwt.getAudience().contains(properties.audience())
-                            && jwt.getSubject() != null && jwt.getSubject().matches("[0-9a-f]{24}")
-                            && jwt.getSubject().equals(jwt.getClaimAsString("userId"))
-                            && jwt.getClaimAsString("email") != null
-                            && jwt.getClaimAsString("role") != null
-                            && List.of("TENANT", "MANAGER", "ADMIN").contains(jwt.getClaimAsString("role"));
-                    return valid ? OAuth2TokenValidatorResult.success() :
-                            OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
-                }));
+            boolean valid = jwt.getExpiresAt() != null && jwt.getIssuedAt() != null
+                    && !jwt.getIssuedAt().isAfter(clock.instant())
+                    && jwt.getAudience() != null && jwt.getAudience().contains(properties.audience())
+                    && jwt.getSubject() != null && jwt.getSubject().matches("[0-9a-f]{24}")
+                    && jwt.getSubject().equals(jwt.getClaimAsString("userId"))
+                    && jwt.getClaimAsString("email") != null
+                    && jwt.getClaimAsString("role") != null
+                    && List.of("TENANT", "MANAGER", "ADMIN").contains(jwt.getClaimAsString("role"));
+            return valid ? OAuth2TokenValidatorResult.success() :
+                    OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
+        }));
     }
 
     public String createAccessToken(User user) {
@@ -1859,16 +1885,19 @@ public class JwtProvider {
                 JwsHeader.with(MacAlgorithm.HS256).type("JWT").build(), claims)).getTokenValue();
     }
 
-    public Jwt decode(String token) { return decoder.decode(token); }
+    public Jwt decode(String token) {
+        return decoder.decode(token);
+    }
 }
 ~~~
 
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/OpaqueTokenProvider.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import org.springframework.stereotype.Component;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -1905,7 +1934,7 @@ public class OpaqueTokenProvider {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/OpenApiSecurityConfig.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
@@ -1930,12 +1959,13 @@ public class OpenApiSecurityConfig {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/PasswordConfig.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
 import java.time.Clock;
 
 @Configuration
@@ -1955,7 +1985,7 @@ public class PasswordConfig {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/SecurityConfig.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.*;
@@ -1973,7 +2003,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityProperties properties,
-            JwtProvider jwt, AuthUserDetailsService users, SecurityErrorHandler errors) throws Exception {
+                                            JwtProvider jwt, AuthUserDetailsService users, SecurityErrorHandler errors) throws Exception {
         return http
                 // Authentication uses explicit bearer headers / JSON tokens, never session cookies.
                 .csrf(csrf -> csrf.disable())
@@ -2005,7 +2035,7 @@ public class SecurityConfig {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/SecurityErrorHandler.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.common.exception.ApiError;
 import jakarta.servlet.http.*;
@@ -2016,12 +2046,16 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 
 @Component
 public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
     private final ObjectMapper mapper;
-    public SecurityErrorHandler(ObjectMapper mapper) { this.mapper = mapper; }
+
+    public SecurityErrorHandler(ObjectMapper mapper) {
+        this.mapper = mapper;
+    }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
@@ -2049,7 +2083,7 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/SecurityExceptionHandler.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.common.exception.ApiError;
 import org.springframework.core.Ordered;
@@ -2077,11 +2111,12 @@ public class SecurityExceptionHandler {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/SecurityProperties.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import jakarta.validation.constraints.*;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
+
 import java.time.Duration;
 import java.util.List;
 
@@ -2098,7 +2133,9 @@ public record SecurityProperties(
         boolean publicDocs,
         @Min(10) @Max(16) int bcryptStrength) {
     @Override
-    public String toString() { return "SecurityProperties[REDACTED]"; }
+    public String toString() {
+        return "SecurityProperties[REDACTED]";
+    }
 
     @AssertTrue(message = "Token TTL phải lớn hơn 0")
     public boolean isTtlValid() {
@@ -2111,10 +2148,11 @@ public record SecurityProperties(
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/validation/StrongPassword.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security.validation;
+package com.kitolam.rentalroommanagement.common.security.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
+
 import java.lang.annotation.*;
 
 @Target({ElementType.FIELD, ElementType.PARAMETER, ElementType.RECORD_COMPONENT})
@@ -2122,7 +2160,9 @@ import java.lang.annotation.*;
 @Constraint(validatedBy = StrongPasswordValidator.class)
 public @interface StrongPassword {
     String message() default "Mật khẩu cần ít nhất 8 ký tự, chữ hoa, chữ thường, số, ký tự đặc biệt và tối đa 72 byte UTF-8";
+
     Class<?>[] groups() default {};
+
     Class<? extends Payload>[] payload() default {};
 }
 ~~~
@@ -2130,10 +2170,11 @@ public @interface StrongPassword {
 ## be/src/main/java/com/kitolam/rentalroommanagement/security/validation/StrongPasswordValidator.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security.validation;
+package com.kitolam.rentalroommanagement.common.security.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
+
 import java.nio.charset.StandardCharsets;
 
 public class StrongPasswordValidator implements ConstraintValidator<StrongPassword, String> {
@@ -2225,7 +2266,7 @@ package com.kitolam.rentalroommanagement.auth;
 
 import com.kitolam.rentalroommanagement.modules.auth.document.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
-import com.kitolam.rentalroommanagement.security.*;
+import com.kitolam.rentalroommanagement.common.security.*;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -2243,10 +2284,12 @@ import org.springframework.test.web.servlet.*;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.mongodb.MongoDBContainer;
 import tools.jackson.databind.*;
+
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Pattern;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -2259,6 +2302,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthIntegrationTest {
     @Container
     static final MongoDBContainer MONGO = new MongoDBContainer("mongo:8.0").withReplicaSet();
+
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.mongodb.uri", MONGO::getConnectionString);
@@ -2272,15 +2316,24 @@ class AuthIntegrationTest {
         registry.add("spring.mail.host", () -> "localhost");
     }
 
-    @Autowired MockMvc mvc;
-    @Autowired ObjectMapper json;
-    @Autowired UserRepository users;
-    @Autowired VerificationTokenRepository verifications;
-    @Autowired RefreshTokenRepository refreshTokens;
-    @Autowired OpaqueTokenProvider opaque;
-    @MockitoSpyBean JwtProvider jwt;
-    @Autowired PasswordEncoder encoder;
-    @MockitoBean JavaMailSender mail;
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    ObjectMapper json;
+    @Autowired
+    UserRepository users;
+    @Autowired
+    VerificationTokenRepository verifications;
+    @Autowired
+    RefreshTokenRepository refreshTokens;
+    @Autowired
+    OpaqueTokenProvider opaque;
+    @MockitoSpyBean
+    JwtProvider jwt;
+    @Autowired
+    PasswordEncoder encoder;
+    @MockitoBean
+    JavaMailSender mail;
 
     @BeforeEach
     void resetData() {
@@ -2541,7 +2594,7 @@ class AuthIntegrationTest {
 ## be/src/test/java/com/kitolam/rentalroommanagement/security/SecurityUnitTests.java
 
 ~~~java
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.modules.auth.document.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
@@ -2549,8 +2602,10 @@ import jakarta.validation.Validation;
 import org.junit.jupiter.api.*;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtException;
+
 import java.time.*;
 import java.util.*;
+
 import static org.assertj.core.api.Assertions.*;
 
 class SecurityUnitTests {

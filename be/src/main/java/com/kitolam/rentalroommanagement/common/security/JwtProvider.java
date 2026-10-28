@@ -1,4 +1,4 @@
-package com.kitolam.rentalroommanagement.security;
+package com.kitolam.rentalroommanagement.common.security;
 
 import com.kitolam.rentalroommanagement.modules.auth.document.User;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
