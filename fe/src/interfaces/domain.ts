@@ -137,7 +137,7 @@ export const bookingSchema = z.object({
   requesterName: z.string().optional(),
   requesterEmail: z.string().optional(),
   requesterPhone: z.string().nullable().optional(),
-  roomId: databaseIdSchema,
+  roomId: z.union([databaseIdSchema, z.literal('')]),
   roomTitle: z.string(),
   branchId: databaseIdSchema,
   branchName: z.string(),
