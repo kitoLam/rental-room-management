@@ -217,7 +217,7 @@ export function BookingDetailPage() {
           <Field id="review-hold-expiry" label="Thời điểm hết hạn giữ chỗ">
             <input id="review-hold-expiry" className="input" type="datetime-local" required value={reviewDraft.holdExpiresAt} onChange={(event) => setReviewDraft({ ...reviewDraft, holdExpiresAt: event.target.value })} />
           </Field>
-          {reviewDeadlineError && <p className="text-sm text-destructive" role="alert">{reviewDeadlineError}</p>}
+          {reviewDeadlineError && <p className="text-sm font-semibold text-danger" role="alert">{reviewDeadlineError}</p>}
           <Field id="review-cancellation-policy" label="Điều kiện hủy">
             <textarea id="review-cancellation-policy" className="input min-h-24" required value={reviewDraft.cancellationPolicy} onChange={(event) => setReviewDraft({ ...reviewDraft, cancellationPolicy: event.target.value })} />
           </Field>
