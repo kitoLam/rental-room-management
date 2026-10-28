@@ -182,7 +182,8 @@ public class PublicRoomService {
         List<ObjectId> slotIds = slots.stream().map(slot -> MongoQueryHelper.toObjectId(slot.getId())).toList();
         List<RoomSlotOccupancy> occupancies = mongoTemplate.find(Query.query(new Criteria().andOperator(
                 Criteria.where("isDeleted").is(false),
-                Criteria.where("status").is(OccupancyStatus.ACTIVE.name()),
+                Criteria.where("status").in(List.of(
+                        OccupancyStatus.RESERVED.name(), OccupancyStatus.ACTIVE.name())),
                 Criteria.where("roomSlotId").in(slotIds))), RoomSlotOccupancy.class);
         Set<String> occupiedSlotIds = new HashSet<>();
         Map<String, Integer> occupiedSlotCounts = new HashMap<>();
