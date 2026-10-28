@@ -2,9 +2,11 @@ package com.kitolam.rentalroommanagement.modules.vnpay.controller;
 
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayCreatePaymentRequest;
+import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayRefundRequest;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayCreatePaymentResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayIpnResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayPaymentResponse;
+import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayRefundResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.service.VnPayService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,15 +14,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/vnpay")
 @RequiredArgsConstructor
-@Tag(name = "VNPay Payment Gateway", description = "Các API thanh toán tích hợp VNPay Sandbox")
+@Tag(name = "VNPay Payment Gateway", description = "Các API thanh toán và hoàn tiền tích hợp VNPay")
 public class VnPayController {
 
     private final VnPayService vnPayService;
@@ -45,5 +47,14 @@ public class VnPayController {
     @Operation(summary = "Xử lý thông báo tức thời từ máy chủ VNPay (IPN)", description = "VNPay gọi endpoint này ngầm để xác thực giao dịch và cập nhật trạng thái đơn hàng")
     public VnPayIpnResponse processIpn(@RequestParam Map<String, String> queryParams) {
         return vnPayService.processIpn(queryParams);
+    }
+
+    @PostMapping("/refund")
+    @Operation(summary = "Hoàn tiền giao dịch VNPay (Refund)", description = "Gửi yêu cầu hoàn tiền toàn phần hoặc một phần qua cổng thanh toán VNPay")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
+    public StandardResponse<VnPayRefundResponse> refund(
+            @Valid @RequestBody VnPayRefundRequest request,
+            HttpServletRequest httpRequest) {
+        return StandardResponse.success("Xử lý yêu cầu hoàn tiền VNPay thành công", vnPayService.refund(request, httpRequest));
     }
 }

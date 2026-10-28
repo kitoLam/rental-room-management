@@ -1,26 +1,38 @@
 package com.kitolam.rentalroommanagement.modules.vnpay.service.impl;
 
+import com.kitolam.rentalroommanagement.common.config.VnPayProperties;
+import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
+import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
+import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
+import com.kitolam.rentalroommanagement.common.util.VnPayUtil;
+import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus;
 import com.kitolam.rentalroommanagement.modules.invoice.repository.InvoiceRepository;
 import com.kitolam.rentalroommanagement.modules.payment.document.Payment;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentMethod;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentStatus;
 import com.kitolam.rentalroommanagement.modules.payment.repository.PaymentRepository;
-import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
-import com.kitolam.rentalroommanagement.common.config.VnPayProperties;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayCreatePaymentRequest;
+import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayRefundRequest;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayCreatePaymentResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayIpnResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayPaymentResponse;
+import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayRefundResponse;
 import com.kitolam.rentalroommanagement.modules.vnpay.service.VnPayService;
-import com.kitolam.rentalroommanagement.common.util.VnPayUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -37,9 +49,14 @@ public class VnPayServiceImpl implements VnPayService {
     private final PaymentRepository paymentRepository;
     private final InvoiceRepository invoiceRepository;
     private final BookingService bookingService;
+    private final ObjectMapper objectMapper;
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(15))
+            .build();
 
     @Override
     @Transactional
@@ -169,6 +186,9 @@ public class VnPayServiceImpl implements VnPayService {
                 if (isSuccess) {
                     payment.setStatus(PaymentStatus.SUCCESS);
                     payment.setPaidAt(Instant.now());
+                    if (transactionNo != null && !transactionNo.isBlank()) {
+                        payment.setGatewayTransactionNo(transactionNo);
+                    }
                     updateInvoiceIfPresent(payment);
                 } else {
                     payment.setStatus(PaymentStatus.FAILED);
@@ -247,6 +267,10 @@ public class VnPayServiceImpl implements VnPayService {
         if (isSuccess) {
             payment.setStatus(PaymentStatus.SUCCESS);
             payment.setPaidAt(Instant.now());
+            String transactionNo = queryParams.get("vnp_TransactionNo");
+            if (transactionNo != null && !transactionNo.isBlank()) {
+                payment.setGatewayTransactionNo(transactionNo);
+            }
             updateInvoiceIfPresent(payment);
             log.info("VNPay IPN: Giao dịch [{}] thanh toán THÀNH CÔNG", txnRef);
         } else {
@@ -257,6 +281,160 @@ public class VnPayServiceImpl implements VnPayService {
         paymentRepository.save(payment);
         if (payment.getBookingId() != null) bookingService.processPaymentResult(payment.getBookingId(), isSuccess);
         return VnPayIpnResponse.success();
+    }
+
+    @Override
+    @Transactional
+    public VnPayRefundResponse refund(VnPayRefundRequest request, HttpServletRequest httpRequest) {
+        String txnRef = request.getTransactionCode();
+        Payment payment = paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy giao dịch thanh toán với mã: " + txnRef));
+
+        if (!PaymentMethod.VNPAY.equals(payment.getMethod())) {
+            throw new BadRequestException("Giao dịch không phải thanh toán qua VNPay");
+        }
+        if (payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new ConflictException("Giao dịch này đã được hoàn tiền trước đó");
+        }
+        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+            throw new BadRequestException("Chỉ có thể hoàn tiền cho giao dịch đã thanh toán THÀNH CÔNG (Trạng thái hiện tại: " + payment.getStatus() + ")");
+        }
+
+        BigDecimal refundAmount = request.getAmount() != null ? request.getAmount() : payment.getAmount();
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0 || refundAmount.compareTo(payment.getAmount()) > 0) {
+            throw new BadRequestException("Số tiền hoàn không hợp lệ (Phải từ 1,000 VNĐ đến tối đa " + payment.getAmount() + " VNĐ)");
+        }
+
+        String refundType = request.getRefundType();
+        if (refundType == null || (!"02".equals(refundType) && !"03".equals(refundType))) {
+            refundType = refundAmount.compareTo(payment.getAmount()) == 0 ? "02" : "03";
+        }
+
+        ZonedDateTime now = ZonedDateTime.now(VIETNAM_ZONE);
+        String vnpRequestId = VnPayUtil.getRandomNumber(8);
+        String vnpCreateDate = now.format(VNPAY_DATE_FORMAT);
+        String clientIp = VnPayUtil.getIpAddress(httpRequest);
+
+        String orderInfo = request.getOrderInfo();
+        if (orderInfo == null || orderInfo.isBlank()) {
+            orderInfo = "Hoan tien giao dich " + txnRef;
+        }
+
+        // Chế độ mô phỏng Sandbox (khi cấu hình bật flag hoặc không có TMN Code thật)
+        if (properties.isRefundSimulationEnabled() || properties.getTmnCode() == null || properties.getTmnCode().isBlank()) {
+            log.info("VNPay Refund: Đang chạy chế độ mô phỏng sandbox. TxnRef={}, Amount={}", txnRef, refundAmount);
+            payment.setStatus(PaymentStatus.REFUNDED);
+            paymentRepository.save(payment);
+
+            return VnPayRefundResponse.builder()
+                    .requestId(vnpRequestId)
+                    .responseCode("00")
+                    .message("Hoàn tiền thành công (Mô phỏng Sandbox)")
+                    .transactionCode(txnRef)
+                    .amount(refundAmount)
+                    .transactionNo("SIM-" + VnPayUtil.getRandomNumber(8))
+                    .refundType(refundType)
+                    .transactionStatus("00")
+                    .payDate(vnpCreateDate)
+                    .refundedAt(Instant.now().toString())
+                    .success(true)
+                    .build();
+        }
+
+        // Gọi API VNPay thật
+        String vnpTransactionNo = payment.getGatewayTransactionNo() != null && !payment.getGatewayTransactionNo().isBlank()
+                ? payment.getGatewayTransactionNo() : "0";
+        Instant paidAt = payment.getPaidAt() != null ? payment.getPaidAt() : payment.getCreatedAt();
+        String vnpTransactionDate = paidAt != null
+                ? ZonedDateTime.ofInstant(paidAt, VIETNAM_ZONE).format(VNPAY_DATE_FORMAT)
+                : vnpCreateDate;
+
+        long amountCents = refundAmount.multiply(BigDecimal.valueOf(100)).longValue();
+        String vnpCreateBy = "SystemAdmin";
+
+        String hashData = VnPayUtil.buildRefundHashData(
+                vnpRequestId,
+                properties.getVersion(),
+                "refund",
+                properties.getTmnCode(),
+                refundType,
+                txnRef,
+                String.valueOf(amountCents),
+                vnpTransactionNo,
+                vnpTransactionDate,
+                vnpCreateBy,
+                vnpCreateDate,
+                clientIp,
+                orderInfo
+        );
+        String vnpSecureHash = VnPayUtil.hmacSHA512(properties.getHashSecret(), hashData);
+
+        Map<String, Object> requestPayload = new HashMap<>();
+        requestPayload.put("vnp_RequestId", vnpRequestId);
+        requestPayload.put("vnp_Version", properties.getVersion());
+        requestPayload.put("vnp_Command", "refund");
+        requestPayload.put("vnp_TmnCode", properties.getTmnCode());
+        requestPayload.put("vnp_TransactionType", refundType);
+        requestPayload.put("vnp_TxnRef", txnRef);
+        requestPayload.put("vnp_Amount", amountCents);
+        requestPayload.put("vnp_OrderInfo", orderInfo);
+        requestPayload.put("vnp_TransactionNo", Long.parseLong(vnpTransactionNo.matches("\\d+") ? vnpTransactionNo : "0"));
+        requestPayload.put("vnp_TransactionDate", vnpTransactionDate);
+        requestPayload.put("vnp_CreateBy", vnpCreateBy);
+        requestPayload.put("vnp_CreateDate", vnpCreateDate);
+        requestPayload.put("vnp_IpAddr", clientIp);
+        requestPayload.put("vnp_SecureHash", vnpSecureHash);
+
+        try {
+            String jsonBody = objectMapper.writeValueAsString(requestPayload);
+            log.info("VNPay Refund Request: Url={}, Payload={}", properties.getApiUrl(), jsonBody);
+
+            HttpRequest apiRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(properties.getApiUrl()))
+                    .header("Content-Type", "application/json")
+                    .header("Accept", "application/json")
+                    .timeout(Duration.ofSeconds(30))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> apiResponse = httpClient.send(apiRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            log.info("VNPay Refund Response: Status={}, Body={}", apiResponse.statusCode(), apiResponse.body());
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> respMap = (Map<String, Object>) objectMapper.readValue(apiResponse.body(), Map.class);
+            String responseCode = respMap.get("vnp_ResponseCode") != null ? respMap.get("vnp_ResponseCode").toString() : "99";
+            String transactionStatus = respMap.get("vnp_TransactionStatus") != null ? respMap.get("vnp_TransactionStatus").toString() : "";
+            String message = getRefundResponseMessage(responseCode);
+            String vnpPayDate = respMap.get("vnp_PayDate") != null ? respMap.get("vnp_PayDate").toString() : vnpCreateDate;
+            String respTransactionNo = respMap.get("vnp_TransactionNo") != null ? respMap.get("vnp_TransactionNo").toString() : vnpTransactionNo;
+
+            boolean isSuccess = "00".equals(responseCode);
+            if (isSuccess) {
+                payment.setStatus(PaymentStatus.REFUNDED);
+                paymentRepository.save(payment);
+                log.info("VNPay Refund: Hoàn tiền thành công cho giao dịch [{}]", txnRef);
+            } else {
+                log.warn("VNPay Refund: Hoàn tiền thất bại cho giao dịch [{}], code={}, msg={}", txnRef, responseCode, message);
+            }
+
+            return VnPayRefundResponse.builder()
+                    .requestId(vnpRequestId)
+                    .responseCode(responseCode)
+                    .message(message)
+                    .transactionCode(txnRef)
+                    .amount(refundAmount)
+                    .transactionNo(respTransactionNo)
+                    .refundType(refundType)
+                    .transactionStatus(transactionStatus)
+                    .payDate(vnpPayDate)
+                    .refundedAt(isSuccess ? Instant.now().toString() : null)
+                    .success(isSuccess)
+                    .build();
+
+        } catch (Exception ex) {
+            log.error("Lỗi khi kết nối gọi API hoàn tiền VNPay: txnRef={}", txnRef, ex);
+            throw new BadRequestException("Không thể kết nối đến cổng thanh toán VNPay để xử lý hoàn tiền: " + ex.getMessage());
+        }
     }
 
     private Map<String, String> filterVnPayParams(Map<String, String> queryParams) {
@@ -312,6 +490,25 @@ public class VnPayServiceImpl implements VnPayService {
             case "79" -> "Nhập sai mật khẩu thanh toán quá số lần quy định";
             case "99" -> "Lỗi không xác định từ hệ thống";
             default -> "Giao dịch thất bại (Mã lỗi: " + responseCode + ")";
+        };
+    }
+
+    private String getRefundResponseMessage(String responseCode) {
+        if (responseCode == null) return "Không xác định";
+        return switch (responseCode) {
+            case "00" -> "Hoàn tiền giao dịch thành công";
+            case "02" -> "Tổng số tiền hoàn lớn hơn số tiền giao dịch gốc";
+            case "03" -> "Dữ liệu gửi sang VNPay không đúng định dạng";
+            case "04" -> "Không cho phép hoàn tiền do giao dịch đã được hoàn trả trước đó";
+            case "13" -> "Giao dịch không thành công tại VNPAY, không thể thực hiện hoàn tiền";
+            case "91" -> "Không tìm thấy giao dịch yêu cầu hoàn tiền tại VNPAY";
+            case "93" -> "Số tiền hoàn không hợp lệ (số tiền hoàn phải nhỏ hơn hoặc bằng số tiền thanh toán)";
+            case "94" -> "Yêu cầu bị trùng lặp trong thời gian giới hạn xử lý";
+            case "95" -> "Giao dịch này không thành công bên VNPAY, không hoàn trả được";
+            case "97" -> "Chữ ký không hợp lệ (Sai checksum)";
+            case "98" -> "Timeout: Không nhận được phản hồi từ ngân hàng hoặc VNPay";
+            case "99" -> "Lỗi không xác định từ hệ thống VNPay";
+            default -> "Hoàn tiền thất bại (Mã phản hồi VNPay: " + responseCode + ")";
         };
     }
 }
