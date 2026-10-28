@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { roomSchema, appointmentSchema, bookingSchema } from './domain'
+import { roomSchema, appointmentSchema, bookingSchema, databaseIdSchema } from './domain'
 import {
   tenancySchema,
   invoiceSchema,
@@ -15,9 +15,9 @@ export const uuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
   vnd = z.number().int().nonnegative().max(1000000000000),
   text = z.string().trim().min(1).max(2000)
 export const branchAssignmentSchema = z.object({
-  id: uuid,
-  ownerId: uuid,
-  managerId: uuid.nullable(),
+  id: databaseIdSchema,
+  ownerId: databaseIdSchema,
+  managerId: databaseIdSchema.nullable(),
   name: text,
   address: z.string(),
   status: z.enum(['DRAFT', 'ACTIVE', 'INACTIVE']),

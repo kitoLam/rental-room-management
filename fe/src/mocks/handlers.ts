@@ -122,7 +122,7 @@ export const handlers = [
       ])
         if (!db.state.users.some((u) => u.id === demo.id)) db.state.users.push(structuredClone(demo))
       const payload = async <T>() => (await request.json()) as T
-      if (path === '/api/auth/login') {
+      if (path === '/api/v1/auth/login' || path === '/api/auth/login') {
         const input = loginSchema.parse(await payload())
         const user = db.state.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase())
         const matches =
@@ -151,14 +151,14 @@ export const handlers = [
           )
         return ok(session(user))
       }
-      if (path === '/api/auth/refresh') {
+      if (path === '/api/v1/auth/refresh' || path === '/api/auth/refresh') {
         const user = db.state.users.find(
           (u) => u.id === db.state.refreshUserId && u.status === 'ACTIVE',
         )
         if (!user) throw new MockError('Chưa có phiên đăng nhập.', 401)
         return ok(session(user))
       }
-      if (path === '/api/auth/logout') {
+      if (path === '/api/v1/auth/logout' || path === '/api/auth/logout') {
         const user = current(request)
         Object.entries(db.state.sessions).forEach(([key, id]) => {
           if (id === user.id) delete db.state.sessions[key]
@@ -167,9 +167,9 @@ export const handlers = [
         db.save()
         return ok()
       }
-      if (path === '/api/auth/register') {
-        const raw = await payload<{ fullName: string; email: string; password: string }>()
-        const input = registerSchema.parse({ ...raw, confirmPassword: raw.password })
+      if (path === '/api/v1/auth/signup' || path === '/api/v1/auth/register' || path === '/api/auth/register') {
+        const raw = await payload<{ fullName: string; email: string; password: string; phone?: string; termsAccepted?: boolean }>()
+        const input = registerSchema.parse({ phone: '0901234567', termsAccepted: true, ...raw, confirmPassword: raw.password })
         if (db.state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase()))
           throw new MockError('Email này đã được đăng ký.', 409)
         const user = {
@@ -193,10 +193,10 @@ export const handlers = [
         db.save()
         return ok(null, 202)
       }
-      if (path === '/api/auth/verify-email') {
-        const input = z.object({ token: z.string().min(1) }).parse(await payload())
+      if (path === '/api/v1/auth/verify-email' || path === '/api/auth/verify-email') {
+        const token = method === 'GET' ? params.get('token') : (z.object({ token: z.string().min(1) }).parse(await payload())).token
         const challenge = db.state.challenges.find(
-          (c) => c.token === input.token && c.purpose === 'verify' && c.expiresAt > Date.now(),
+          (c) => c.token === token && c.purpose === 'verify' && c.expiresAt > Date.now(),
         )
         if (!challenge) throw new MockError('Liên kết xác minh không hợp lệ hoặc đã hết hạn.', 400)
         const user = db.state.users.find((u) => u.id === challenge.userId)!

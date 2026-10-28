@@ -12,9 +12,6 @@ export function RoomCostEstimator({ room }: { room: Room }) {
     vehicles: '0',
     electricity: '0',
     water: '0',
-    electricityRate: '',
-    waterRate: '',
-    parkingRate: '',
   })
   type Key = keyof typeof values
   const fields: { key: Key; label: string; unit: string; min: number; step: number }[] = [
@@ -22,24 +19,34 @@ export function RoomCostEstimator({ room }: { room: Room }) {
     { key: 'vehicles', label: 'Số xe', unit: 'xe', min: 0, step: 1 },
     { key: 'electricity', label: 'Điện dự kiến / tháng', unit: 'kWh', min: 0, step: 1 },
     { key: 'water', label: 'Nước dự kiến / tháng', unit: 'm³', min: 0, step: 0.1 },
-    { key: 'electricityRate', label: 'Đơn giá điện', unit: '₫ / kWh', min: 0, step: 1 },
-    { key: 'waterRate', label: 'Đơn giá nước', unit: '₫ / m³', min: 0, step: 1 },
-    { key: 'parkingRate', label: 'Phí gửi xe / tháng', unit: '₫ / xe', min: 0, step: 1 },
   ]
+  const rateFields = [
+    {
+      key: 'electricityRate' as const,
+      label: 'Đơn giá điện',
+      unit: '₫ / kWh',
+      usage: 'electricity' as const,
+    },
+    { key: 'waterRate' as const, label: 'Đơn giá nước', unit: '₫ / m³', usage: 'water' as const },
+    {
+      key: 'parkingRate' as const,
+      label: 'Phí gửi xe / tháng',
+      unit: '₫ / xe',
+      usage: 'vehicles' as const,
+    },
+  ]
+  const rates = room.utilityRates ?? { electricityRate: null, waterRate: null, parkingRate: null }
   const numbers = Object.fromEntries(
     Object.entries(values).map(([key, value]) => [key, Number(value)]),
   ) as Record<Key, number>
-  const requiredRates = {
-    electricityRate: numbers.electricity > 0,
-    waterRate: numbers.water > 0,
-    parkingRate: numbers.vehicles > 0,
-  }
+  const missingRates = rateFields.filter(
+    ({ key, usage }) => rates[key] == null && numbers[usage] > 0,
+  )
   function errorFor(key: Key) {
     const value = values[key]
     const number = numbers[key]
     const field = fields.find((field) => field.key === key)!
-    const optionalRate = key in requiredRates && !requiredRates[key as keyof typeof requiredRates]
-    if (value === '') return optionalRate ? undefined : 'Nhập giá trị để tính chi phí.'
+    if (value === '') return 'Nhập giá trị để tính chi phí.'
     if (!Number.isFinite(number) || number < field.min) return `Nhập số từ ${field.min} trở lên.`
     if (key !== 'water' && !Number.isInteger(number)) return 'Vui lòng nhập số nguyên.'
     if (key === 'people' && room.capacity > 0 && number > room.capacity)
@@ -47,9 +54,17 @@ export function RoomCostEstimator({ room }: { room: Room }) {
     return undefined
   }
   const valid = fields.every(({ key }) => !errorFor(key))
-  const costs = valid
-    ? estimateMonthlyCost({ rent: room.price, rentalMode: room.rentalMode, ...numbers })
-    : null
+  const costs =
+    valid && missingRates.length === 0
+      ? estimateMonthlyCost({
+          rent: room.price,
+          rentalMode: room.rentalMode,
+          ...numbers,
+          electricityRate: rates.electricityRate ?? 0,
+          waterRate: rates.waterRate ?? 0,
+          parkingRate: rates.parkingRate ?? 0,
+        })
+      : null
   const money = (value: number) => formatVnd(Math.round(value))
 
   return (
@@ -66,8 +81,8 @@ export function RoomCostEstimator({ room }: { room: Room }) {
         </h2>
       </div>
       <p className="mb-6 text-sm leading-7 text-muted-foreground">
-        Tiền thuê lấy từ giá tham khảo của phòng. Nhập lượng điện, nước dùng chung cho tất cả người
-        ở và đơn giá bạn muốn tính.
+        Tiền thuê lấy từ giá tham khảo của phòng. Nhập số xe và lượng điện, nước dự kiến dùng chung
+        cho tất cả người ở. Đơn giá do Owner/Manager cấu hình.
         {room.rentalMode === 'SLOT' && ' Giá thuê theo chỗ được nhân với số người.'}
       </p>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-background p-4">
@@ -88,7 +103,6 @@ export function RoomCostEstimator({ room }: { room: Room }) {
                 max={key === 'people' && room.capacity > 0 ? room.capacity : undefined}
                 className="input pr-24"
                 value={values[key]}
-                placeholder="Nhập đơn giá"
                 aria-invalid={!!errorFor(key)}
                 aria-describedby={errorFor(key) ? `${id}-${key}-error` : undefined}
                 onChange={(event) =>
@@ -101,10 +115,27 @@ export function RoomCostEstimator({ room }: { room: Room }) {
             </div>
           </Field>
         ))}
+        {rateFields.map(({ key, label, unit }) => (
+          <Field key={key} id={`${id}-${key}`} label={label}>
+            <div className="relative min-w-0">
+              <input
+                id={`${id}-${key}`}
+                type="text"
+                readOnly
+                aria-readonly="true"
+                className="input bg-background pr-24 text-muted-foreground"
+                value={rates[key] == null ? 'Chưa cấu hình' : money(rates[key])}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
+                {unit}
+              </span>
+            </div>
+          </Field>
+        ))}
       </div>
       <p className="mt-4 text-xs leading-6 text-muted-foreground">
-        Đơn giá do bạn nhập, chưa phải bảng giá xác nhận của chi nhánh. Nhập 0 nếu dịch vụ miễn phí
-        hoặc đã bao gồm trong tiền thuê.
+        Đơn giá áp dụng theo cấu hình riêng của phòng hoặc đơn giá mặc định của chi nhánh. Giá 0 ₫
+        nghĩa là miễn phí; “Chưa cấu hình” không được tính là miễn phí.
       </p>
       <div
         className="mt-6 rounded-xl bg-primary-soft p-5 sm:p-6"
@@ -138,7 +169,11 @@ export function RoomCostEstimator({ room }: { room: Room }) {
             </p>
           </>
         ) : (
-          <p className="text-sm">Hoàn tất các trường được đánh dấu để xem tổng chi phí dự tính.</p>
+          <p className="text-sm">
+            {valid && missingRates.length
+              ? `Chưa thể tính tổng vì chưa có ${missingRates.map((field) => field.label.toLowerCase()).join(', ')}. Vui lòng liên hệ chi nhánh để xác nhận.`
+              : 'Hoàn tất các trường được đánh dấu để xem tổng chi phí dự tính.'}
+          </p>
         )}
       </div>
       <p className="mt-4 text-xs leading-6 text-muted-foreground">

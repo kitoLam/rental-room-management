@@ -11,6 +11,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import { z } from 'zod'
 import { Heading, PasswordInput } from './auth-shared'
 import { useSession } from './session-store'
+import { postLoginPath } from './navigation'
 export function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -25,10 +26,10 @@ export function LoginPage() {
     onSuccess: (session) => {
       queryClient.clear()
       useSession.getState().setSession(session)
-      navigate(redirect, { replace: true })
+      navigate(postLoginPath(params.get('redirect'), session.user.roles), { replace: true })
     },
   })
-  if (user) return <Navigate to={redirect} replace />
+  if (user) return <Navigate to={postLoginPath(params.get('redirect'), user.roles)} replace />
   return (
     <>
       <Heading title="Chào bạn trở lại.">

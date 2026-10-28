@@ -11,11 +11,6 @@ export function CreateBookingPage() {
     queryFn: () => catalogService.room(roomId),
     enabled: uuid(roomId),
   })
-  const policy = useQuery({
-    queryKey: ['policy', room.data?.branchId],
-    queryFn: () => catalogService.policy(room.data!.branchId),
-    enabled: !!room.data,
-  })
   if (!uuid(roomId))
     return (
       <Page title="Liên kết phòng không hợp lệ" back="/rooms">
@@ -30,20 +25,11 @@ export function CreateBookingPage() {
       description="Kiểm tra ngày thuê và chính sách chi nhánh. Bạn không cần có lịch xem phòng trước đó."
     >
       <QueryState
-        pending={room.isPending || policy.isPending}
-        error={room.error || policy.error}
-        retry={() => {
-          void room.refetch()
-          void policy.refetch()
-        }}
+        pending={room.isPending}
+        error={room.error}
+        retry={room.refetch}
       >
-        {room.data && policy.data && (
-          <BookingForm
-            key={policy.data.id + policy.data.version}
-            room={room.data}
-            policy={policy.data}
-          />
-        )}
+        {room.data && <BookingForm room={room.data} />}
       </QueryState>
     </Page>
   )

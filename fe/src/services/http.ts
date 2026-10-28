@@ -7,21 +7,24 @@ import { realApiIssue } from './real-api'
 export class ApiError extends Error {
   status: number
   code?: number
-  constructor(message: string, status = 500, code?: number) {
+  errorCode?: string
+  constructor(message: string, status = 500, code?: number, errorCode?: string) {
     super(message)
     this.status = status
     this.code = code
+    this.errorCode = errorCode
   }
 }
-const envelope = z
-  .object({
-    status: z.number().optional(),
-    code: z.number().optional(),
-    message: z.string().optional(),
-    data: z.unknown().optional(),
-  })
-  .nullable()
-  .optional()
+const envelope = z.object({
+  status: z.number().optional(),
+  code: z.number().optional(),
+  errorCode: z.string().optional(),
+  message: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((value) => (Array.isArray(value) ? value.join('\n') : value)),
+  data: z.unknown().optional(),
+}).nullable().optional()
 const messages: Record<string, string> = {
   'Invalid login credentials': 'Email hoặc mật khẩu chưa đúng.',
   'Email is already in use': 'Email này đã được đăng ký.',
@@ -58,7 +61,13 @@ export async function request<T>(
       ? new URLSearchParams(window.location.search).get('demo')
       : null
   const mockHeaders: Record<string, string> = {}
-  if (feature === 'manager' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('workspace') === 'owner') mockHeaders['X-TroPro-Workspace'] = 'OWNER'
+  if (
+    feature === 'manager' &&
+    provider(feature) === 'mock' &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('workspace') === 'owner'
+  )
+    mockHeaders['X-TroPro-Workspace'] = 'OWNER'
   if (scenario && ['loading', 'error', 'empty'].includes(scenario))
     mockHeaders['X-TroPro-Demo-Scenario'] = scenario
   if (
@@ -91,7 +100,7 @@ export async function request<T>(
   } finally {
     clearTimeout(timer)
   }
-  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/') && !path.startsWith('/api/v1/auth/')) {
     if (useSession.getState().accessToken !== token)
       throw new ApiError('Phiên của yêu cầu đã thay đổi.', 401)
     try {
@@ -130,6 +139,7 @@ export async function request<T>(
                 : 'Không thể thực hiện yêu cầu.'),
       response.status,
       body?.code,
+      body?.errorCode,
     )
   }
   const payload =
@@ -180,7 +190,7 @@ let recovery: Promise<void> | null = null
 export function recoverSession() {
   const previousToken = useSession.getState().accessToken
   if (!recovery)
-    recovery = authRequest(provider('auth') === 'real' ? '/auth/refresh' : '/api/auth/refresh')
+    recovery = authRequest('/api/v1/auth/refresh')
       .then((s) => {
         if (useSession.getState().accessToken === previousToken) useSession.getState().setSession(s)
       })

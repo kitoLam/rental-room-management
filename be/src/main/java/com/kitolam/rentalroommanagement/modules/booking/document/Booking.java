@@ -14,6 +14,8 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -31,6 +33,8 @@ public class Booking extends BaseDocument {
 
     private LocalDate expectedMoveInDate;
 
+    private LocalDate expectedMoveOutDate;
+
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal holdingDepositAmount;
 
@@ -44,5 +48,9 @@ public class Booking extends BaseDocument {
 
     private String rejectReason;
 
-    private BookingStatus status = BookingStatus.PENDING;
+    private Instant termsAcceptedAt;
+
+    private List<BookingTimelineEntry> timeline = new ArrayList<>();
+
+    private BookingStatus status = BookingStatus.REQUESTED;
 }

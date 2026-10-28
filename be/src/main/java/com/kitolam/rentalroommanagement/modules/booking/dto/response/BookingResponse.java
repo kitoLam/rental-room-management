@@ -2,16 +2,19 @@ package com.kitolam.rentalroommanagement.modules.booking.dto.response;
 
 import com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus;
 import com.kitolam.rentalroommanagement.modules.booking.enums.DepositStatus;
+import com.kitolam.rentalroommanagement.modules.booking.document.BookingTimelineEntry;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public record BookingResponse(
         String id,
         String tenantId,
         String roomId,
         LocalDate expectedMoveInDate,
+        LocalDate expectedMoveOutDate,
         BigDecimal holdingDepositAmount,
         Instant paymentDeadline,
         Instant holdExpiresAt,
@@ -19,7 +22,16 @@ public record BookingResponse(
         DepositStatus depositStatus,
         String rejectReason,
         BookingStatus status,
+        Instant termsAcceptedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String requesterUserId,
+        String requesterName,
+        String requesterEmail,
+        String requesterPhone,
+        String roomTitle,
+        String branchId,
+        String branchName,
+        List<BookingTimelineEntry> timeline
 ) {
 }

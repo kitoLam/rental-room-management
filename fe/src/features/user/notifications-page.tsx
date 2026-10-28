@@ -10,7 +10,12 @@ import { dateTime, referenceLink } from '@/lib/activity'
 import { useSession } from '@/features/auth/session-store'
 import { provider } from '@/services/config'
 import { SendNotificationDialog } from './send-notification-dialog'
+import ViewingNotificationsPage from '@/features/leasing/viewing-notifications-page'
 export default function NotificationsPage() {
+  if (provider('notifications') === 'real') return <ViewingNotificationsPage />
+  return <DemoNotificationsPage />
+}
+function DemoNotificationsPage() {
   const [params, setParams] = useSearchParams()
   const [sendOpen, setSendOpen] = useState(false)
   const user = useSession((s) => s.user)
@@ -47,6 +52,11 @@ export default function NotificationsPage() {
       description="Theo dõi phản hồi lịch xem phòng, giữ chỗ và trạng thái thanh toán."
       actions={
         <div className="flex flex-wrap gap-2">
+          {provider('viewing') === 'real' && (
+            <Button asChild variant="outline">
+              <Link to="/notifications/viewing">Thông báo lịch xem</Link>
+            </Button>
+          )}
           {canSend && (
             <Button onClick={() => setSendOpen(true)}>
               <Send size={16} />

@@ -215,7 +215,7 @@ export function SearchBox({
 export type FieldSpec = {
   name: string
   label: string
-  kind?: 'text' | 'number' | 'date' | 'month' | 'textarea' | 'select' | 'check' | 'list'
+  kind?: 'text' | 'number' | 'date' | 'datetime-local' | 'month' | 'textarea' | 'select' | 'check' | 'list'
   options?: { value: string; label: string }[]
   nullable?: boolean
   hint?: string
@@ -335,6 +335,8 @@ export function ManagerForm({
       onSubmit={form.handleSubmit((raw) => {
         const value = { ...raw }
         for (const f of fields) {
+          if (f.kind === 'datetime-local' && value[f.name])
+            value[f.name] = new Date(String(value[f.name])).toISOString()
           if (f.kind === 'number')
             value[f.name] =
               value[f.name] === '' || value[f.name] == null
@@ -420,6 +422,8 @@ export function ManagerForm({
                     ? 'number'
                     : f.kind === 'date'
                       ? 'date'
+                      : f.kind === 'datetime-local'
+                        ? 'datetime-local'
                       : f.kind === 'month'
                         ? 'month'
                         : 'text'

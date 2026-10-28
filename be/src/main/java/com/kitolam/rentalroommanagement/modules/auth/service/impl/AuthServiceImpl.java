@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.auth.service.impl;
 
 import com.kitolam.rentalroommanagement.common.exception.exceptions.*;
+import com.kitolam.rentalroommanagement.common.security.*;
 import com.kitolam.rentalroommanagement.modules.auth.config.AuthProperties;
 import com.kitolam.rentalroommanagement.modules.auth.document.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
@@ -8,14 +9,15 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.*;
 import com.kitolam.rentalroommanagement.modules.auth.util.OpaqueTokenProvider;
-import com.kitolam.rentalroommanagement.security.*;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.nio.charset.StandardCharsets;
-import java.time.Clock;
-import java.time.Duration;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -34,6 +36,22 @@ public class AuthServiceImpl implements AuthService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final String dummyPasswordHash;
+
+    @Override
+    public Optional<AccountIdentityResponse> findAccount(String id) {
+        return users.findByIdAndIsDeletedFalse(id).map(this::identity);
+    }
+
+    @Override
+    public List<AccountIdentityResponse> activeManagementAccounts() {
+        return users.findByRoleInAndEnabledTrueAndEmailVerifiedTrueAndIsDeletedFalse(List.of(Role.OWNER, Role.MANAGER))
+                .stream().map(this::identity).toList();
+    }
+
+    private AccountIdentityResponse identity(User user) {
+        return new AccountIdentityResponse(user.getId(), user.getEmail(), user.getFullName(), user.getPhone(),
+                user.getRole().name(), user.isEnabled() && user.isEmailVerified());
+    }
 
     public AuthServiceImpl(UserRepository users, VerificationTokenRepository verifications,
             RefreshTokenRepository refreshTokens, AuthTokenStore tokenStore, PasswordEncoder passwords,

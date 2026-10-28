@@ -12,6 +12,7 @@ import {
   type ManagerRecord,
 } from '@/interfaces/manager'
 import { utilitiesService } from './utilities'
+import { bookingService } from './guest-user'
 const scope = (branchId: string) => `/api/manager/branches/${encodeURIComponent(branchId)}`
 const result = z.object({ id: z.string().uuid().optional() }).passthrough().nullable()
 const roomDto = z.object({
@@ -155,12 +156,25 @@ export const managerApi = {
       `${scope(branchId)}/invoices/${encodeURIComponent(id)}/editor`,
       invoiceInputSchema,
     ),
-  branches: () => request('manager', '/api/manager/branches', z.array(branchAssignmentSchema)),
+  branches: async () => {
+    if (provider('manager') === 'mock') return request('manager', '/api/manager/branches', z.array(branchAssignmentSchema))
+    const branches = await request('manager', '/api/v1/branches/managed', z.array(z.object({
+      id: z.string(), ownerAccountId: z.string(), name: z.string(), address: z.string().nullable(), status: z.enum(['ACTIVE','INACTIVE']),
+    })))
+    return branches.map(branch => branchAssignmentSchema.parse({
+      id: branch.id, ownerId: branch.ownerAccountId, name: branch.name, address: branch.address ?? '', status: branch.status,
+      managerId: null, managerName: '', zaloUrl: null, zaloEnabled: false,
+    }))
+  },
   list: async <K extends ManagerResource>(
     branchId: string,
     resource: K,
     filters: Record<string, string> = {},
   ): Promise<Page<ManagerRecord<K>>> => {
+    if (resource === 'bookings' && provider('manager') === 'real') {
+      const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1)
+      return result as unknown as Page<ManagerRecord<K>>
+    }
     if (resource === 'services' && provider('utilities') === 'real') {
       const raw = await utilitiesService.catalog.list(branchId, {
         page: Number(filters.page || 0),
@@ -333,6 +347,8 @@ export const managerApi = {
     resource: K,
     id: string,
   ): Promise<ManagerRecord<K>> => {
+    if (resource === 'bookings' && provider('manager') === 'real')
+      return bookingService.managerGet(id) as unknown as Promise<ManagerRecord<K>>
     if (resource === 'services' && provider('utilities') === 'real') {
       const item = await utilitiesService.catalog.get(id)
       return {
@@ -381,6 +397,14 @@ export const managerApi = {
     value: unknown,
     method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
   ) => {
+    if (resource === 'bookings' && provider('manager') === 'real' && id) {
+      if (action === 'reconcile') {
+        const v = value as { paymentId: string; successful: boolean; reason: string }
+        return bookingService.reconcile(id, v.paymentId, v.successful, v.reason)
+      }
+      if (action === 'refund') return bookingService.approveRefund(id)
+      return bookingService.review(id, value)
+    }
     if (resource === 'services' && provider('utilities') === 'real') {
       if (method === 'DELETE' && id) {
         await utilitiesService.catalog.delete(id)

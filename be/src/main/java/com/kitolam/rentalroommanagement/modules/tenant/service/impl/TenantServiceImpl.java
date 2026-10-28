@@ -7,6 +7,7 @@ import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantUpdateR
 import com.kitolam.rentalroommanagement.modules.tenant.dto.response.TenantResponse;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,10 @@ import org.springframework.stereotype.Service;
 public class TenantServiceImpl implements TenantService {
 
     private final TenantRepository tenantRepository;
+    @Override
+    public Optional<String> profileIdByEmail(String email) {
+        return tenantRepository.findByEmailAndIsDeletedFalse(email).map(t -> t.getId());
+    }
 
     @Override
     public TenantResponse create(TenantCreateRequest request) {

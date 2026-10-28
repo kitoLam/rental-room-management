@@ -7,7 +7,10 @@ import { Logo } from '@/components/common/logo'
 import { InlineError, Modal } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
+import { dashboardPath } from '@/features/auth/navigation'
 import { authService, notificationService } from '@/services/guest-user'
+import { viewingDependenciesService } from '@/services/viewing-dependencies'
+import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
@@ -24,80 +27,21 @@ export function SiteHeader() {
   const navigate = useNavigate()
   const tenancies = useQuery({
     queryKey: ['tenant', user?.id, 'tenancies'],
-    queryFn: async () => {
-      try {
-        return await tenantApi.tenancies()
-      } catch {
-        const { tenantDb } = await import('@/mocks/tenant-engine')
-        return tenantDb.state.tenancies
-      }
-    },
+    queryFn: tenantApi.tenancies,
     enabled: !!user,
     retry: false,
   })
   const unread = useQuery({
-    queryKey: ['notifications', 'unread', user?.id],
-    queryFn: notificationService.unread,
+    queryKey: ['viewing-notifications', 'unread', user?.id],
+    queryFn: async () => provider('viewing') === 'real'
+      ? { count: (await viewingDependenciesService.notifications(false)).totalElements }
+      : notificationService.unread(),
     enabled: !!user,
     refetchInterval: 30000,
   })
   const assignments = useQuery({
     queryKey: ['manager-branches', user?.id],
-    queryFn: async () => {
-      try {
-        return await managerApi.branches()
-      } catch {
-        if (provider('utilities') === 'real') {
-          return [
-            {
-              id: 'e5cd734c-69e8-eb82-9e85-5c13541a5592',
-              name: 'Chi nhánh A (TroPro)',
-              address: 'DEMO ADDRESS',
-              ownerId: user!.id,
-              managerId: user!.id,
-              managerName: user!.fullName,
-              status: 'ACTIVE' as const,
-              zaloUrl: null,
-              zaloEnabled: false,
-            },
-            {
-              id: '0bb684b4-7f46-5900-17a7-d031f0453eec',
-              name: 'Chi nhánh A2 (TroPro)',
-              address: 'DEMO ADDRESS',
-              ownerId: user!.id,
-              managerId: user!.id,
-              managerName: user!.fullName,
-              status: 'ACTIVE' as const,
-              zaloUrl: null,
-              zaloEnabled: false,
-            },
-            {
-              id: '41c46e64-a04d-f91c-3f9f-42698a1c8a43',
-              name: 'Chi nhánh B (TroPro)',
-              address: 'DEMO ADDRESS',
-              ownerId: user!.id,
-              managerId: user!.id,
-              managerName: user!.fullName,
-              status: 'ACTIVE' as const,
-              zaloUrl: null,
-              zaloEnabled: false,
-            },
-          ]
-        }
-        const { branches } = await import('@/mocks/fixtures')
-        return branches.map((b) => ({
-          id: b.id,
-          name: b.name,
-          address: b.address,
-          ownerId: user!.id,
-          managerId: user!.id,
-          managerName: user!.fullName,
-          status: 'ACTIVE' as const,
-          zaloUrl: null,
-          zaloEnabled: false,
-        }))
-      }
-    },
+    queryFn: managerApi.branches,
     enabled: !!user && user.roles.some((r) => r === 'MANAGER' || r === 'OWNER'),
     retry: false,
     refetchInterval: 5000,
@@ -174,7 +118,7 @@ export function SiteHeader() {
                   variant={overlay ? 'overlay' : 'outline'}
                   className="hidden sm:inline-flex"
                 >
-                  <Link to="/user/dashboard">{user.fullName.split(' ').at(-1)}</Link>
+                  <Link to={dashboardPath(user.roles)}>{user.fullName.split(' ').at(-1)}</Link>
                 </Button>
               </>
             ) : (
@@ -209,13 +153,13 @@ export function SiteHeader() {
         <nav aria-label="Menu" className="grid gap-1">
           {(user
             ? [
-                ['Tổng quan', '/user/dashboard'],
+                ['Tổng quan', dashboardPath(user.roles)],
                 ...(assignments.data?.length ? [['Quản lý chi nhánh', '/manager/dashboard']] : []),
                 ...(user?.roles.includes('OWNER') ? [['Không gian chủ trọ', '/owner/dashboard']] : []),
                 ...(user?.roles.includes('ADMIN') ? [['Quản trị hệ thống', '/admin/dashboard']] : []),
                 ...(tenancies.data?.length ? [['Không gian thuê', '/tenant/dashboard']] : []),
                 ['Tìm phòng', '/rooms'],
-                ['Lịch xem phòng', '/user/appointments'],
+                ['Lịch xem phòng', viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id })],
                 ['Yêu cầu giữ chỗ', '/user/bookings'],
                 ['Thông báo', '/notifications'],
                 ['Hồ sơ', '/profile'],

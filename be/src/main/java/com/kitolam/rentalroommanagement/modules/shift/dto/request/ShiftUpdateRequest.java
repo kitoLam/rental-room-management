@@ -1,19 +1,32 @@
 package com.kitolam.rentalroommanagement.modules.shift.dto.request;
 
-import jakarta.validation.constraints.Min;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
-import java.time.DayOfWeek;
-import java.util.Set;
-
-/** PATCH semantics: null fields are left unchanged. */
 public record ShiftUpdateRequest(
-        @Pattern(regexp = ".*\\S.*", message = "không được để trống") String name,
-        @Size(min = 1) Set<DayOfWeek> daysOfWeek,
-        @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "định dạng HH:mm") String startTime,
-        @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "định dạng HH:mm") String endTime,
-        @Min(1) Integer maxAppointments,
-        Boolean isActive
+        @NotNull @PositiveOrZero Long version,
+        @NotNull @Size(min = 3, max = 3) List<@NotNull @Valid PeriodInput> periods
 ) {
+    @JsonAnySetter
+    public void rejectUnknown(String field, Object value) {
+        throw new IllegalArgumentException("Trường không được phép: " + field);
+    }
+
+    public record PeriodInput(
+            @NotNull ShiftType type,
+            @NotNull @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "định dạng HH:mm") String startTime,
+            @NotNull @Pattern(regexp = "^([01]\\d|2[0-3]):[0-5]\\d$", message = "định dạng HH:mm") String endTime,
+            @NotNull Boolean isActive
+    ) {
+        @JsonAnySetter
+        public void rejectUnknown(String field, Object value) {
+            throw new IllegalArgumentException("Trường không được phép: " + field);
+        }
+    }
 }

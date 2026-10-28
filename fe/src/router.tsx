@@ -17,6 +17,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       {
+        path: 'notifications/viewing',
+        lazy: async () => ({
+          Component: (await import('@/features/leasing/viewing-notifications-page')).default,
+        }),
+      },
+      {
         path: 'preview',
         lazy: async () => ({ Component: (await import('@/pages/preview-page')).default }),
       },
@@ -45,9 +51,66 @@ export const router = createBrowserRouter([
         }),
       },
       {
+        path: 'rooms/:roomId/viewing',
+        lazy: async () => ({
+          Component: (await import('@/features/leasing/viewing-availability-page'))
+            .ViewingAvailabilityPage,
+        }),
+      },
+      {
+        path: 'rooms/:roomId/viewing-settings',
+        lazy: async () => ({
+          Component: (await import('@/features/manager/viewing-shift-settings-page'))
+            .ViewingShiftSettingsPage,
+        }),
+      },
+      {
+        path: 'rooms/:roomId/utility-rates',
+        lazy: async () => ({ Component: (await import('@/features/manager/utility-rates-page')).default }),
+      },
+      {
+        element: <UserLayout />,
+        children: [
+          {
+            path: 'user/appointments',
+            lazy: async () => ({
+              Component: (await import('@/features/leasing/appointments-page')).AppointmentsPage,
+            }),
+          },
+          {
+            path: 'user/appointments/:appointmentId',
+            lazy: async () => ({
+              Component: (await import('@/features/leasing/appointment-detail-page'))
+                .AppointmentDetailPage,
+            }),
+          },
+        ],
+      },
+      {
+        path: 'manager/appointments',
+        lazy: async () => ({
+          Component: (await import('@/features/manager/manager-appointments-page'))
+            .ManagerAppointments,
+        }),
+      },
+      {
+        path: 'manager/appointments/:appointmentId',
+        lazy: async () => ({
+          Component: (await import('@/features/manager/manager-appointment-detail-page'))
+            .ManagerAppointmentDetail,
+        }),
+      },
+      {
         path: 'branches/:branchId',
         lazy: async () => ({
           Component: (await import('@/features/rooms/branch-detail-page')).default,
+        }),
+      },
+      {
+        path: 'branches/:branchId/viewing-settings',
+        lazy: async () => ({
+          Component: (await import('@/features/manager/branch-viewing-settings-page'))
+            .BranchViewingSettingsPage,
         }),
       },
       {
@@ -376,20 +439,6 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'appointments',
-                lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-appointments-page'))
-                    .ManagerAppointments,
-                }),
-              },
-              {
-                path: 'appointments/:appointmentId',
-                lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-appointment-detail-page'))
-                    .ManagerAppointmentDetail,
-                }),
-              },
-              {
                 path: 'bookings',
                 lazy: async () => ({
                   Component: (await import('@/features/manager/manager-bookings-page'))
@@ -668,20 +717,6 @@ export const router = createBrowserRouter([
                 path: 'user/dashboard',
                 lazy: async () => ({
                   Component: (await import('@/features/user/dashboard-page')).default,
-                }),
-              },
-              {
-                path: 'user/appointments',
-                lazy: async () => ({
-                  Component: (await import('@/features/leasing/appointments-page'))
-                    .AppointmentsPage,
-                }),
-              },
-              {
-                path: 'user/appointments/:appointmentId',
-                lazy: async () => ({
-                  Component: (await import('@/features/leasing/appointment-detail-page'))
-                    .AppointmentDetailPage,
                 }),
               },
               {

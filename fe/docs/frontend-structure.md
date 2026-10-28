@@ -32,7 +32,6 @@ fe/
     router.tsx                # Ánh xạ URL tới từng view
   tests/e2e/                  # Kiểm tra trình duyệt
   docs/view-migration.json    # Bảng đối chiếu tên view và file mới
-  legacy/                    # Mã cũ của project, không được router sử dụng
 ```
 
 ## Tìm và sửa từng view

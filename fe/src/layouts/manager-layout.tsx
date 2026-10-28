@@ -87,95 +87,7 @@ export function ManagerLayout() {
     [demoMessage, setDemoMessage] = useState('')
   const list = useQuery({
       queryKey: ['manager-branches', user.id, params.get('demo'), params.get('workspace')],
-      queryFn: async () => {
-        try {
-          const assigned = await managerApi.branches()
-          queryClient.removeQueries({
-            predicate: (q) =>
-              q.queryKey[0] === 'manager' &&
-              q.queryKey[1] === user.id &&
-              !assigned.some((b) => b.id === q.queryKey[2]),
-          })
-          return assigned
-        } catch {
-          if (provider('utilities') === 'real') {
-            try {
-              const { catalogService, defaultFilters } = await import('@/services/guest-user')
-              const res = await catalogService.rooms(defaultFilters)
-              if (res.content && res.content.length > 0) {
-                const uniqueBranches = new Map<string, (typeof res.content)[0]>()
-                for (const r of res.content) {
-                  if (r.branchId && !uniqueBranches.has(r.branchId)) {
-                    uniqueBranches.set(r.branchId, r)
-                  }
-                }
-                if (uniqueBranches.size > 0) {
-                  return Array.from(uniqueBranches.values()).map((r) => ({
-                    id: r.branchId,
-                    name: r.branchName || 'Chi nhánh ' + r.branchId.slice(0, 8),
-                    address: r.address || 'Địa chỉ thực tế',
-                    ownerId: user.id,
-                    managerId: user.id,
-                    managerName: user.fullName,
-                    status: 'ACTIVE' as const,
-                    zaloUrl: null,
-                    zaloEnabled: false,
-                  }))
-                }
-              }
-            } catch {
-              // fallback to seed branches
-            }
-            return [
-              {
-                id: 'e5cd734c-69e8-eb82-9e85-5c13541a5592',
-                name: 'Chi nhánh A (TroPro)',
-                address: 'DEMO ADDRESS',
-                ownerId: user.id,
-                managerId: user.id,
-                managerName: user.fullName,
-                status: 'ACTIVE' as const,
-                zaloUrl: null,
-                zaloEnabled: false,
-              },
-              {
-                id: '0bb684b4-7f46-5900-17a7-d031f0453eec',
-                name: 'Chi nhánh A2 (TroPro)',
-                address: 'DEMO ADDRESS',
-                ownerId: user.id,
-                managerId: user.id,
-                managerName: user.fullName,
-                status: 'ACTIVE' as const,
-                zaloUrl: null,
-                zaloEnabled: false,
-              },
-              {
-                id: '41c46e64-a04d-f91c-3f9f-42698a1c8a43',
-                name: 'Chi nhánh B (TroPro)',
-                address: 'DEMO ADDRESS',
-                ownerId: user.id,
-                managerId: user.id,
-                managerName: user.fullName,
-                status: 'ACTIVE' as const,
-                zaloUrl: null,
-                zaloEnabled: false,
-              },
-            ]
-          }
-          const { branches } = await import('@/mocks/fixtures')
-          return branches.map((b) => ({
-            id: b.id,
-            name: b.name,
-            address: b.address,
-            ownerId: user.id,
-            managerId: user.id,
-            managerName: user.fullName,
-            status: 'ACTIVE' as const,
-            zaloUrl: null,
-            zaloEnabled: false,
-          }))
-        }
-      },
+      queryFn: managerApi.branches,
       staleTime: 0,
       refetchInterval: 2000,
       retry: false,
@@ -220,7 +132,7 @@ export function ManagerLayout() {
         emptyMessage="Bạn chưa có chi nhánh được phân công quản lý."
         emptyAction={
           <Button asChild>
-            <Link to="/user/dashboard">Về tài khoản</Link>
+            <Link to="/profile">Xem hồ sơ</Link>
           </Button>
         }
       >
@@ -274,7 +186,7 @@ export function ManagerLayout() {
                   ))}
                 </select>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{branch.address}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Quản lý: {branch.managerName}</p>
+                {branch.managerName && <p className="mt-1 text-xs text-muted-foreground">Quản lý: {branch.managerName}</p>}
               </div>
               <nav aria-label="Điều hướng quản lý" className="hidden lg:grid">
                 {groups.map((g) => (
@@ -328,12 +240,6 @@ export function ManagerLayout() {
                   className="inline-flex min-h-11 items-center text-xs text-muted-foreground"
                 >
                   Hồ sơ
-                </Link>
-                <Link
-                  to="/user/dashboard"
-                  className="inline-flex min-h-11 items-center text-xs text-muted-foreground"
-                >
-                  Về tài khoản
                 </Link>
               </div>
             </aside>
