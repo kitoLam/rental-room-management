@@ -2,8 +2,10 @@ import { z } from 'zod'
 
 export const roleSchema = z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN'])
 export type Role = z.infer<typeof roleSchema>
+// Backend Mongo ids are ObjectIds; the frontend also accepts UUID ids used by mock data.
+export const databaseIdSchema = z.union([z.guid(), z.string().regex(/^[0-9a-f]{24}$/i)])
 export const userSchema = z.object({
-  id: z.string().uuid(),
+  id: databaseIdSchema,
   email: z.string().email(),
   fullName: z.string(),
   roles: z.array(roleSchema),
@@ -21,8 +23,6 @@ export const sessionSchema = z.object({
 export type Session = z.infer<typeof sessionSchema>
 export const modeSchema = z.enum(['ROOM', 'SLOT'])
 export type RentalMode = z.infer<typeof modeSchema>
-// Java/PostgreSQL UUIDs may contain legacy IDs without RFC version/variant bits.
-export const databaseIdSchema = z.guid()
 export const roomSchema = z.object({
   id: databaseIdSchema,
   code: z.string(),
@@ -81,12 +81,12 @@ export const branchSchema = z.object({
 })
 export type Branch = z.infer<typeof branchSchema>
 export const availabilitySchema = z.object({
-  roomId: z.string().uuid(),
+  roomId: databaseIdSchema,
   startDate: z.string(),
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
-  slots: z.array(z.object({ id: z.string().uuid(), label: z.string(), available: z.boolean() })),
+  slots: z.array(z.object({ id: databaseIdSchema, label: z.string(), available: z.boolean() })),
 })
 export type Availability = z.infer<typeof availabilitySchema>
 export const appointmentStatuses = [
@@ -125,13 +125,16 @@ export const appointmentSchema = z.object({
 })
 export type Appointment = z.infer<typeof appointmentSchema>
 export const bookingSchema = z.object({
-  id: z.string().uuid(),
-  requesterUserId: z.string().uuid(),
-  roomId: z.string().uuid(),
+  id: databaseIdSchema,
+  requesterUserId: databaseIdSchema,
+  requesterName: z.string().optional(),
+  requesterEmail: z.string().optional(),
+  requesterPhone: z.string().nullable().optional(),
+  roomId: databaseIdSchema,
   roomTitle: z.string(),
-  branchId: z.string().uuid(),
+  branchId: databaseIdSchema,
   branchName: z.string(),
-  roomSlotId: z.string().uuid().nullable(),
+  roomSlotId: databaseIdSchema.nullable(),
   slotLabel: z.string().nullable(),
   rentalMode: modeSchema,
   startDate: z.string(),
@@ -142,15 +145,18 @@ export const bookingSchema = z.object({
   confirmedHoldUntil: z.string().nullable(),
   status: z.enum(bookingStatuses),
   policySnapshot: policySchema,
+  cancellationPolicy: z.string().nullable().optional(),
+  termsAcceptedAt: z.string().nullable().optional(),
+  depositStatus: z.enum(['UNPAID', 'PROCESSING', 'PAID', 'REFUNDED', 'FORFEITED']).optional(),
   paymentEnvironment: z.enum(['SANDBOX', 'PRODUCTION']),
   createdAt: z.string(),
   timeline: timelineSchema,
-  contractId: z.string().uuid().nullable(),
+  contractId: databaseIdSchema.nullable(),
 })
 export type Booking = z.infer<typeof bookingSchema>
 export const paymentSchema = z.object({
-  id: z.string().uuid(),
-  bookingId: z.string().uuid(),
+  id: databaseIdSchema,
+  bookingId: databaseIdSchema,
   amount: z.number(),
   reference: z.string(),
   status: z.enum(['PENDING', 'VERIFIED', 'FAILED', 'REVIEW']),
@@ -206,11 +212,11 @@ export type AppointmentInput = { roomId: string; startAt: string; endAt: string;
 export type BookingInput = {
   roomId: string
   roomSlotId?: string
-  rentalMode: RentalMode
+  rentalMode?: RentalMode
   startDate: string
   endDate: string
-  policyId: string
-  policyVersion: number
-  acknowledged: boolean
+  policyId?: string
+  policyVersion?: number
+  acknowledged?: boolean
 }
 export type PaymentScenario = 'success' | 'failure' | 'pending' | 'late'

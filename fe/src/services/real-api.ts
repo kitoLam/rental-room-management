@@ -6,7 +6,7 @@ import type { Feature } from './config'
 export function realApiIssue(feature: Feature, path: string, method = 'GET'): string | null {
   const pathname = path.split('?')[0]
   const verb = method.toUpperCase()
-  const id = '[0-9a-fA-F-]{36}'
+  const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (
     feature === 'auth' &&
@@ -33,6 +33,28 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     return null
 
   if (feature === 'catalog' && verb === 'GET' && matches(`/api/v1/public/rooms(/${id})?`))
+    return null
+
+  if (
+    feature === 'leasing' &&
+    ((matches('/api/v1/bookings') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/availability`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/(cancel|terms|payments)`) && ['POST', 'GET'].includes(verb)) ||
+      (matches(`/api/v1/bookings/${id}/payments/${id}/(reconcile)`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
+  )
+    return null
+
+  if (
+    feature === 'manager' &&
+    ((matches('/api/v1/bookings') && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/payments`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/payments/${id}/reconcile`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
+  )
     return null
 
   if (feature === 'adminUsers') {

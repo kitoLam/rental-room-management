@@ -42,8 +42,9 @@ export default function PaymentPage() {
   })
   const initiate = useMutation({
     mutationFn: () => bookingService.initiate(bookingId, scenario),
-    onSuccess: async () => {
+    onSuccess: async (payment) => {
       await invalidateActivity()
+      if (provider('leasing') === 'real' && payment.qrUrl) window.location.assign(payment.qrUrl)
     },
   })
   const paymentState = payments.data?.map((p) => `${p.id}-${p.status}`).join(',') || ''
@@ -82,6 +83,7 @@ export default function PaymentPage() {
   const canPay =
     b?.status === 'AWAITING_PAYMENT' &&
     seconds > 0 &&
+    !!b?.termsAcceptedAt &&
     !payments.data?.some((p) => ['PENDING', 'VERIFIED'].includes(p.status))
   const mock = provider('leasing') === 'mock'
   return (
@@ -115,7 +117,7 @@ export default function PaymentPage() {
               </p>
               <div className="my-7 rounded-xl bg-primary-soft p-5">
                 <p className="text-xs text-primary">
-                  KHOẢN GIỮ CHỖ THEO CHÍNH SÁCH V{b.policySnapshot.version}
+                  KHOẢN GIỮ CHỖ
                 </p>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-page-title font-bold text-primary">

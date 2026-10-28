@@ -5,15 +5,41 @@ import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingCreat
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingFilterRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingResponse;
+import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingReviewRequest;
+import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingTermsRequest;
+import com.kitolam.rentalroommanagement.modules.booking.dto.request.PaymentReconciliationRequest;
+import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingPaymentResponse;
+import com.kitolam.rentalroommanagement.modules.booking.dto.response.RoomAvailabilityResponse;
+import com.kitolam.rentalroommanagement.security.AuthPrincipal;
 import org.springframework.data.domain.Pageable;
 
 public interface BookingService {
 
-    BookingResponse create(BookingCreateRequest request);
+    BookingResponse create(BookingCreateRequest request, AuthPrincipal principal);
 
-    BookingResponse getById(String id);
+    RoomAvailabilityResponse checkAvailability(String roomId, java.time.LocalDate startDate, java.time.LocalDate endDate);
 
-    PagedResponse<BookingResponse> search(BookingFilterRequest filter, Pageable pageable);
+    BookingResponse getById(String id, AuthPrincipal principal);
+
+    PagedResponse<BookingResponse> search(BookingFilterRequest filter, Pageable pageable, AuthPrincipal principal);
+
+    BookingResponse review(String id, BookingReviewRequest request, AuthPrincipal principal);
+
+    BookingResponse acceptTerms(String id, BookingTermsRequest request, AuthPrincipal principal);
+
+    BookingResponse cancel(String id, AuthPrincipal principal);
+
+    BookingPaymentResponse createBankTransfer(String id, AuthPrincipal principal);
+
+    BookingPaymentResponse createVnPayPayment(String id, AuthPrincipal principal);
+
+    java.util.List<BookingPaymentResponse> payments(String id, AuthPrincipal principal);
+
+    BookingResponse reconcilePayment(String id, String paymentId, PaymentReconciliationRequest request, AuthPrincipal principal);
+
+    BookingResponse processPaymentResult(String id, boolean successful);
+
+    BookingResponse approveRefund(String id, AuthPrincipal principal);
 
     BookingResponse update(String id, BookingUpdateRequest request);
 
