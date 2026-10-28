@@ -88,7 +88,7 @@ export const branchSchema = z.object({
 })
 export type Branch = z.infer<typeof branchSchema>
 export const availabilitySchema = z.object({
-  roomId: databaseIdSchema,
+  roomId: databaseIdSchema.optional(),
   startDate: z.string(),
   endDate: z.string(),
   available: z.boolean(),
@@ -137,7 +137,6 @@ export const bookingSchema = z.object({
   requesterName: z.string().optional(),
   requesterEmail: z.string().optional(),
   requesterPhone: z.string().nullable().optional(),
-  roomId: databaseIdSchema,
   roomTitle: z.string(),
   branchId: databaseIdSchema,
   branchName: z.string(),
@@ -161,6 +160,8 @@ export const bookingSchema = z.object({
   contractId: databaseIdSchema.nullable(),
 })
 export type Booking = z.infer<typeof bookingSchema>
+export const mockBookingSchema = bookingSchema.extend({ roomId: databaseIdSchema })
+export type MockBooking = z.infer<typeof mockBookingSchema>
 export const paymentSchema = z.object({
   id: databaseIdSchema,
   bookingId: databaseIdSchema,
@@ -226,5 +227,8 @@ export type BookingInput = {
   policyId?: string
   policyVersion?: number
   acknowledged?: boolean
+}
+export type RoomSlotBookingInput = Omit<BookingInput, 'roomId' | 'rentalMode'> & {
+  roomSlotId: string
 }
 export type PaymentScenario = 'success' | 'failure' | 'pending' | 'late'

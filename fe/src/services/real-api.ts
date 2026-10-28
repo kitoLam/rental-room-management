@@ -69,9 +69,10 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
 
   if (
     feature === 'leasing' &&
-    ((matches('/api/v1/bookings') && ['GET', 'POST'].includes(verb)) ||
+    ((pathname === '/api/v1/room-slots' && verb === 'GET') ||
+      (matches('/api/v1/bookings') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
-      (matches(`/api/v1/bookings/availability`) && verb === 'GET') ||
+      (matches('/api/v1/bookings/availability(/batch)?') && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/(cancel|terms|payments)`) && ['POST', 'GET'].includes(verb)) ||
       (matches(`/api/v1/bookings/${id}/payments/${id}/(reconcile)`) && verb === 'POST') ||
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))

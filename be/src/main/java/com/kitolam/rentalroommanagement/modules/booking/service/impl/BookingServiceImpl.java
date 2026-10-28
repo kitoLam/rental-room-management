@@ -34,8 +34,12 @@ import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentMethod;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentStatus;
 import com.kitolam.rentalroommanagement.modules.payment.repository.PaymentRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
-import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
+import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
+import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
+import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
+import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
+import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import java.math.BigDecimal;
@@ -44,6 +48,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +57,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +67,8 @@ public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final RoomRepository roomRepository;
+    private final RoomSlotRepository roomSlotRepository;
+    private final RoomSlotOccupancyRepository roomSlotOccupancyRepository;
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
@@ -71,8 +79,8 @@ public class BookingServiceImpl implements BookingService {
     private final BranchService branchAccess;
 
     @Override
-    public EffectiveRoomHoldResponse currentRoomHold(String roomId) {
-        var active = bookingRepository.findByRoomIdAndStatusInAndIsDeletedFalse(roomId,
+    public EffectiveRoomHoldResponse currentRoomHold(String roomSlotId) {
+        var active = bookingRepository.findByRoomSlotIdAndStatusInAndIsDeletedFalse(roomSlotId,
                 List.of(BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.CONVERTED));
         var official = active.stream().filter(b -> (b.getStatus() == BookingStatus.CONFIRMED || b.getStatus() == BookingStatus.CONVERTED)
                 && b.getDepositStatus() == DepositStatus.PAID).map(b -> b.getId()).toList();
@@ -90,38 +98,68 @@ public class BookingServiceImpl implements BookingService {
         requireRole(principal, "TENANT");
         expireOverdueBookings();
         Tenant tenant = tenant(principal);
-        Room room = room(request.roomId());
+        RoomSlot roomSlot = claimSlot(request.roomSlotId());
         validateRange(request.expectedMoveInDate(), request.expectedMoveOutDate());
-        ensureRoomAcceptsBookings(room);
         Booking sameRequest = bookingRepository
-                .findByRoomIdAndTenantIdAndExpectedMoveInDateAndExpectedMoveOutDateAndStatusAndIsDeletedFalse(
-                        room.getId(), tenant.getId(), request.expectedMoveInDate(), request.expectedMoveOutDate(),
+                .findByRoomSlotIdAndTenantIdAndExpectedMoveInDateAndExpectedMoveOutDateAndStatusAndIsDeletedFalse(
+                        roomSlot.getId(), tenant.getId(), request.expectedMoveInDate(), request.expectedMoveOutDate(),
                         BookingStatus.REQUESTED)
                 .orElse(null);
         if (sameRequest != null) return response(sameRequest);
-        ensureNoOverlap(room.getId(), request.expectedMoveInDate(), request.expectedMoveOutDate(), null);
+        ensureNoOccupancyOverlap(roomSlot.getId(), request.expectedMoveInDate(), request.expectedMoveOutDate(), null);
 
         Booking booking = new Booking();
         booking.setTenantId(tenant.getId());
-        booking.setRoomId(room.getId());
+        booking.setRoomSlotId(roomSlot.getId());
         booking.setExpectedMoveInDate(request.expectedMoveInDate());
         booking.setExpectedMoveOutDate(request.expectedMoveOutDate());
         booking.setStatus(BookingStatus.REQUESTED);
         booking.setDepositStatus(DepositStatus.UNPAID);
-        return response(saveTransition(booking, null, "Tenant đã gửi yêu cầu đặt phòng."));
+        Booking saved = saveTransition(booking, null, "Tenant đã gửi yêu cầu đặt phòng.");
+        roomSlotOccupancyRepository.save(reservation(saved));
+        return response(saved);
     }
 
     @Override
     @Transactional
-    public RoomAvailabilityResponse checkAvailability(String roomId, LocalDate startDate, LocalDate endDate) {
+    public RoomAvailabilityResponse checkAvailability(String roomSlotId, LocalDate startDate, LocalDate endDate) {
         expireOverdueBookings();
         validateRange(startDate, endDate);
-        Room room = room(roomId);
-        boolean operational = room.getStatus() != RoomStatus.MAINTENANCE
-                && room.getStatus() != RoomStatus.INACTIVE && room.getStatus() != RoomStatus.OCCUPIED;
-        boolean available = operational && !hasOverlappingBooking(roomId, startDate, endDate, null);
-        return new RoomAvailabilityResponse(roomId, startDate, endDate, available,
-                available ? null : "Phòng đã có booking trùng hoặc hiện không nhận đặt.", List.of());
+        RoomSlot slot = roomSlot(roomSlotId);
+        boolean available = !hasOccupancyOverlap(roomSlotId, startDate, endDate, null);
+        return new RoomAvailabilityResponse(roomSlotId, slot.getSlotCode(), startDate, endDate, available,
+                available ? null : "Chỗ đã có lượt ở/giữ chỗ trùng hoặc hiện không nhận đặt.");
+    }
+
+    @Override
+    @Transactional
+    public List<RoomAvailabilityResponse> checkAvailability(List<String> roomSlotIds, LocalDate startDate, LocalDate endDate) {
+        expireOverdueBookings();
+        validateRange(startDate, endDate);
+        List<String> ids = roomSlotIds == null ? List.of() : roomSlotIds.stream().distinct().toList();
+        if (ids.isEmpty()) return List.of();
+        if (ids.stream().anyMatch(id -> id == null || !ObjectId.isValid(id)))
+            throw new BadRequestException("Danh sách RoomSlotId không hợp lệ");
+
+        Map<String, RoomSlot> slots = roomSlotRepository.findByIdInAndIsDeletedFalse(ids).stream()
+                .collect(Collectors.toMap(RoomSlot::getId, slot -> slot));
+        if (slots.size() != ids.size()) throw new NotFoundException("Không tìm thấy một hoặc nhiều slot");
+
+        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
+        List<RoomSlotOccupancy> overlapping = new ArrayList<>(roomSlotOccupancyRepository
+                .findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
+                        ids, blockingStatuses, endDate, startDate));
+        overlapping.addAll(roomSlotOccupancyRepository
+                .findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateIsNullAndIsDeletedFalse(
+                        ids, blockingStatuses, endDate));
+        var blockedSlotIds = overlapping.stream().map(RoomSlotOccupancy::getRoomSlotId).collect(Collectors.toSet());
+
+        return ids.stream().map(id -> {
+            RoomSlot slot = slots.get(id);
+            boolean available = !blockedSlotIds.contains(id);
+            return new RoomAvailabilityResponse(id, slot.getSlotCode(), startDate, endDate, available,
+                    available ? null : "Chỗ đã có lượt ở/giữ chỗ trùng trong khoảng ngày này.");
+        }).toList();
     }
 
     @Override
@@ -138,24 +176,28 @@ public class BookingServiceImpl implements BookingService {
     public PagedResponse<BookingResponse> search(BookingFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
         expireOverdueBookings();
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
+        criteria.add(Criteria.where("roomSlotId").exists(true));
         if (isRole(principal, "TENANT")) {
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", tenant(principal).getId());
         } else if (isRole(principal, "MANAGER")) {
             String branchId = managerBranch(principal);
-            List<ObjectId> roomIds = roomRepository.findByBranchIdAndIsDeletedFalse(branchId).stream()
-                    .map(Room::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
-            criteria.add(Criteria.where("roomId").in(roomIds));
+            List<String> roomIds = roomRepository.findByBranchIdAndIsDeletedFalse(branchId).stream().map(Room::getId).toList();
+            List<ObjectId> roomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(roomIds).stream()
+                    .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+            criteria.add(Criteria.where("roomSlotId").in(roomSlotIds));
         } else {
             requireRole(principal, "OWNER", "ADMIN");
             if (isRole(principal, "OWNER")) {
                 var branches = branchAccess.ownedBranchIds(principal.userId());
-                var ownedRooms = roomRepository.findByBranchIdInAndIsDeletedFalse(branches).stream()
-                        .map(r -> new ObjectId(r.getId())).toList();
-                criteria.add(Criteria.where("roomId").in(ownedRooms));
+                var ownedRoomIds = roomRepository.findByBranchIdInAndIsDeletedFalse(branches).stream()
+                        .map(Room::getId).toList();
+                var ownedRoomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(ownedRoomIds).stream()
+                        .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+                criteria.add(Criteria.where("roomSlotId").in(ownedRoomSlotIds));
             }
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", filter.tenantId());
         }
-        MongoQueryHelper.addObjectIdEquals(criteria, "roomId", filter.roomId());
+        MongoQueryHelper.addObjectIdEquals(criteria, "roomSlotId", filter.roomSlotId());
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addEquals(criteria, "depositStatus", filter.depositStatus());
         return PagedResponse.from(MongoQueryHelper.page(mongoTemplate, criteria, pageable, Booking.class), this::response);
@@ -180,7 +222,10 @@ public class BookingServiceImpl implements BookingService {
                 throw new BadRequestException("Cần nhập lý do từ chối");
             booking.setRejectReason(request.rejectReason().trim());
             booking.setStatus(BookingStatus.REJECTED);
-            return response(saveTransition(booking, previous, "Owner từ chối yêu cầu."));
+            claimSlot(booking.getRoomSlotId());
+            Booking saved = saveTransition(booking, previous, "Owner từ chối yêu cầu.");
+            releaseReservation(saved.getId());
+            return response(saved);
         }
 
         LocalDate start = request.expectedMoveInDate() == null ? booking.getExpectedMoveInDate() : request.expectedMoveInDate();
@@ -195,7 +240,8 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Hạn thanh toán và thời điểm hết hạn giữ chỗ phải ở tương lai");
         if (request.cancellationPolicy() == null || request.cancellationPolicy().isBlank())
             throw new BadRequestException("Cần xác nhận điều kiện hủy");
-        ensureNoOverlap(booking.getRoomId(), start, end, booking.getId());
+        claimSlot(booking.getRoomSlotId());
+        ensureNoOccupancyOverlap(booking.getRoomSlotId(), start, end, booking.getId());
 
         booking.setExpectedMoveInDate(start);
         booking.setExpectedMoveOutDate(end);
@@ -206,6 +252,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setRejectReason(null);
         booking.setStatus(BookingStatus.AWAITING_PAYMENT);
         booking.setDepositStatus(DepositStatus.UNPAID);
+        updateReservationRange(booking.getId(), start, end);
         return response(saveTransition(booking, previous, previous == BookingStatus.REQUESTED
                 ? "Owner duyệt yêu cầu và gửi điều khoản giữ chỗ."
                 : "Owner cập nhật và gửi lại điều khoản giữ chỗ."));
@@ -222,11 +269,13 @@ public class BookingServiceImpl implements BookingService {
             throw new ConflictException("Yêu cầu chưa có điều khoản chờ xác nhận");
         if (!request.accepted()) {
             booking.setStatus(BookingStatus.CANCELLED);
-            return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT, "Tenant không chấp nhận điều khoản."));
+            claimSlot(booking.getRoomSlotId());
+            Booking saved = saveTransition(booking, BookingStatus.AWAITING_PAYMENT, "Tenant không chấp nhận điều khoản.");
+            releaseReservation(saved.getId());
+            return response(saved);
         }
         ensureTermsCurrent(booking);
-        ensureRoomAcceptsBookings(room(booking.getRoomId()));
-        ensureNoOverlap(booking.getRoomId(), booking.getExpectedMoveInDate(), booking.getExpectedMoveOutDate(), booking.getId());
+        requireReservation(booking.getId());
         booking.setTermsAcceptedAt(clock.instant());
         return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT, "Tenant đã chấp nhận điều khoản giữ chỗ."));
     }
@@ -239,6 +288,7 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = find(id);
         if (isRole(principal, "TENANT")) ensureTenantOwns(booking, principal);
         else ensureCanManage(booking, principal);
+        claimSlot(booking.getRoomSlotId());
         if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.AWAITING_PAYMENT)
             throw new ConflictException("Trạng thái hiện tại không cho phép hủy yêu cầu");
         if (paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream().anyMatch(p -> p.getStatus() == PaymentStatus.SUCCESS))
@@ -247,7 +297,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setTermsAcceptedAt(null);
         Booking saved = saveTransition(booking, previous, "Tenant đã hủy yêu cầu.");
-        releaseRoomIfUnused(booking.getRoomId());
+        releaseReservation(saved.getId());
         return response(saved);
     }
 
@@ -323,47 +373,55 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = find(id);
         if (booking.getStatus() == BookingStatus.CONFIRMED)
             return response(booking);
-        if (booking.getStatus() == BookingStatus.EXPIRED && successful) {
-            if (!hasOverlappingBooking(booking.getRoomId(), booking.getExpectedMoveInDate(), booking.getExpectedMoveOutDate(), booking.getId())) {
-                booking.setStatus(BookingStatus.CONFIRMED);
-                booking.setDepositStatus(DepositStatus.PAID);
-                Room room = room(booking.getRoomId());
-                room.setStatus(RoomStatus.RESERVED);
-                roomRepository.save(room);
-                return response(saveTransition(booking, BookingStatus.EXPIRED, "Thanh toán đến muộn nhưng khoảng thuê vẫn còn trống."));
-            }
-            booking.setDepositStatus(DepositStatus.PAID);
-            Booking saved = bookingRepository.save(booking);
-            eventPublisher.publishEvent(new BookingStatusChangedEvent(saved.getId(), saved.getTenantId(),
-                    saved.getStatus(), saved.getDepositStatus(), "Khoản cọc đến muộn cần Owner xử lý hoàn tiền."));
-            return response(saved);
-        }
-        if (booking.getStatus() == BookingStatus.EXPIRED) return response(booking);
+        if (booking.getStatus() == BookingStatus.EXPIRED && !successful) return response(booking);
+        if (booking.getStatus() == BookingStatus.EXPIRED && successful)
+            return processLatePayment(booking);
         if (booking.getStatus() != BookingStatus.AWAITING_PAYMENT || booking.getTermsAcceptedAt() == null)
             throw new ConflictException("Booking không chờ kết quả thanh toán");
         boolean holdValid = clock.instant().isBefore(booking.getPaymentDeadline())
                 && clock.instant().isBefore(booking.getHoldExpiresAt());
         if (!successful) {
             if (!holdValid) {
+                claimSlot(booking.getRoomSlotId());
                 expireBooking(booking);
-                return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT, "Thanh toán thất bại sau khi hết hạn giữ chỗ."));
+                Booking saved = saveTransition(booking, BookingStatus.AWAITING_PAYMENT, "Thanh toán thất bại sau khi hết hạn giữ chỗ.");
+                releaseReservation(saved.getId());
+                return response(saved);
             }
             return response(bookingRepository.save(booking));
         }
-        boolean roomStillAvailable = !hasOverlappingBooking(booking.getRoomId(), booking.getExpectedMoveInDate(),
-                booking.getExpectedMoveOutDate(), booking.getId());
-        if (holdValid || roomStillAvailable) {
+        claimSlot(booking.getRoomSlotId());
+        if (holdValid && hasReservation(booking.getId())) {
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setDepositStatus(DepositStatus.PAID);
-            Room room = room(booking.getRoomId());
-            room.setStatus(RoomStatus.RESERVED);
-            roomRepository.save(room);
         } else {
-            booking.setStatus(BookingStatus.EXPIRED);
+            releaseReservation(booking.getId());
+            if (!hasOccupancyOverlap(booking.getRoomSlotId(), booking.getExpectedMoveInDate(), booking.getExpectedMoveOutDate(), booking.getId())) {
+                roomSlotOccupancyRepository.save(reservation(booking));
+                booking.setStatus(BookingStatus.CONFIRMED);
+            } else {
+                booking.setStatus(BookingStatus.EXPIRED);
+            }
             booking.setDepositStatus(DepositStatus.PAID);
         }
         return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT,
-                booking.getStatus() == BookingStatus.CONFIRMED ? "Đã xác minh cọc; booking được xác nhận." : "Phòng đã được giữ; chờ Owner duyệt hoàn cọc."));
+                booking.getStatus() == BookingStatus.CONFIRMED ? "Đã xác minh cọc; booking được xác nhận."
+                        : "Slot đã được giữ; chờ Owner duyệt hoàn cọc."));
+    }
+
+    private BookingResponse processLatePayment(Booking booking) {
+        claimSlot(booking.getRoomSlotId());
+        releaseReservation(booking.getId());
+        booking.setDepositStatus(DepositStatus.PAID);
+        if (!hasOccupancyOverlap(booking.getRoomSlotId(), booking.getExpectedMoveInDate(), booking.getExpectedMoveOutDate(), booking.getId())) {
+            roomSlotOccupancyRepository.save(reservation(booking));
+            booking.setStatus(BookingStatus.CONFIRMED);
+            return response(saveTransition(booking, BookingStatus.EXPIRED, "Thanh toán đến muộn nhưng slot vẫn còn trống."));
+        }
+        Booking saved = bookingRepository.save(booking);
+        eventPublisher.publishEvent(new BookingStatusChangedEvent(saved.getId(), saved.getTenantId(),
+                saved.getStatus(), saved.getDepositStatus(), "Khoản cọc đến muộn cần Owner xử lý hoàn tiền."));
+        return response(saved);
     }
 
     @Override
@@ -392,14 +450,17 @@ public class BookingServiceImpl implements BookingService {
 
     private void expireOverdueBookings() {
         Instant now = clock.instant();
-        List<Booking> overdue = new ArrayList<>(bookingRepository.findByStatusAndHoldExpiresAtLessThanEqualAndIsDeletedFalse(BookingStatus.AWAITING_PAYMENT, now));
+        List<Booking> overdue = new ArrayList<>(bookingRepository.findByStatusAndHoldExpiresAtLessThanEqualAndIsDeletedFalse(BookingStatus.AWAITING_PAYMENT, now)
+                .stream().filter(b -> b.getRoomSlotId() != null).toList());
         bookingRepository.findByStatusAndPaymentDeadlineLessThanEqualAndIsDeletedFalse(BookingStatus.AWAITING_PAYMENT, now)
+                .stream().filter(b -> b.getRoomSlotId() != null)
                 .forEach(b -> { if (overdue.stream().noneMatch(x -> x.getId().equals(b.getId()))) overdue.add(b); });
         for (Booking booking : overdue) {
             BookingStatus previous = booking.getStatus();
+            claimSlot(booking.getRoomSlotId());
             expireBooking(booking);
             saveTransition(booking, previous, "Đã hết hạn thanh toán/giữ chỗ.");
-            releaseRoomIfUnused(booking.getRoomId());
+            releaseReservation(booking.getId());
         }
     }
 
@@ -412,11 +473,8 @@ public class BookingServiceImpl implements BookingService {
     private void ensureTermsCurrent(Booking booking) {
         Instant now = clock.instant();
         if (booking.getPaymentDeadline() == null || !booking.getPaymentDeadline().isAfter(now)
-                || booking.getHoldExpiresAt() == null || !booking.getHoldExpiresAt().isAfter(now)) {
-            expireBooking(booking);
-            bookingRepository.save(booking);
+                || booking.getHoldExpiresAt() == null || !booking.getHoldExpiresAt().isAfter(now))
             throw new ConflictException("Thời hạn giữ chỗ đã hết");
-        }
         if (booking.getHoldingDepositAmount() == null || booking.getCancellationPolicy() == null)
             throw new ConflictException("Điều khoản giữ chỗ chưa đầy đủ");
     }
@@ -425,37 +483,73 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.AWAITING_PAYMENT || booking.getTermsAcceptedAt() == null)
             throw new ConflictException("Chỉ booking đã chấp nhận điều khoản mới được thanh toán");
         ensureTermsCurrent(booking);
+        requireReservation(booking.getId());
     }
 
-    private void ensureNoOverlap(String roomId, LocalDate start, LocalDate end, String excludeId) {
-        if (hasOverlappingBooking(roomId, start, end, excludeId))
-            throw new ConflictException("Phòng đã có booking được giữ trong khoảng ngày này");
+    private void ensureNoOccupancyOverlap(String roomSlotId, LocalDate start, LocalDate end, String excludeBookingId) {
+        if (hasOccupancyOverlap(roomSlotId, start, end, excludeBookingId))
+            throw new ConflictException("Slot đã có lượt ở/giữ chỗ trùng trong khoảng ngày này");
     }
 
-    private boolean hasOverlappingBooking(String roomId, LocalDate start, LocalDate end, String excludeId) {
-        return bookingRepository.findByRoomIdAndStatusInAndExpectedMoveInDateLessThanAndExpectedMoveOutDateGreaterThanAndIsDeletedFalse(
-                        roomId, List.of(BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED), end, start).stream()
-                .anyMatch(b -> !b.getId().equals(excludeId)
-                        && (b.getStatus() == BookingStatus.CONFIRMED
-                        || (b.getTermsAcceptedAt() != null && b.getHoldExpiresAt() != null && b.getHoldExpiresAt().isAfter(clock.instant()))));
+    private boolean hasOccupancyOverlap(String roomSlotId, LocalDate start, LocalDate end, String excludeBookingId) {
+        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
+        List<RoomSlotOccupancy> overlapping = new ArrayList<>(roomSlotOccupancyRepository
+                .findByRoomSlotIdAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
+                        roomSlotId, blockingStatuses, end, start));
+        overlapping.addAll(roomSlotOccupancyRepository
+                .findByRoomSlotIdAndStatusInAndStartDateLessThanAndEndDateIsNullAndIsDeletedFalse(
+                        roomSlotId, blockingStatuses, end));
+        return overlapping.stream().anyMatch(occupancy -> excludeBookingId == null
+                || !excludeBookingId.equals(occupancy.getBookingId()));
     }
 
-    private void releaseRoomIfUnused(String roomId) {
-        Room room = room(roomId);
-        if (room.getStatus() != RoomStatus.RESERVED) return;
-        boolean reserved = bookingRepository.findByRoomIdAndStatusInAndIsDeletedFalse(
-                        roomId, List.of(BookingStatus.AWAITING_PAYMENT, BookingStatus.CONFIRMED)).stream()
-                .anyMatch(b -> b.getStatus() == BookingStatus.CONFIRMED
-                        || (b.getTermsAcceptedAt() != null && b.getHoldExpiresAt() != null && b.getHoldExpiresAt().isAfter(clock.instant())));
-        if (!reserved) {
-            room.setStatus(RoomStatus.AVAILABLE);
-            roomRepository.save(room);
+    private RoomSlot claimSlot(String roomSlotId) {
+        RoomSlot slot = roomSlot(roomSlotId);
+        try {
+            return roomSlotRepository.save(slot);
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Slot vừa được cập nhật bởi yêu cầu khác; vui lòng thử lại");
         }
     }
 
-    private void ensureRoomAcceptsBookings(Room room) {
-        if (room.getStatus() == RoomStatus.MAINTENANCE || room.getStatus() == RoomStatus.INACTIVE || room.getStatus() == RoomStatus.OCCUPIED)
-            throw new ConflictException("Phòng hiện không nhận yêu cầu đặt");
+    private RoomSlotOccupancy reservation(Booking booking) {
+        RoomSlotOccupancy occupancy = new RoomSlotOccupancy();
+        occupancy.setRoomSlotId(booking.getRoomSlotId());
+        occupancy.setBookingId(booking.getId());
+        occupancy.setStartDate(booking.getExpectedMoveInDate());
+        occupancy.setEndDate(booking.getExpectedMoveOutDate());
+        occupancy.setStatus(OccupancyStatus.RESERVED);
+        return occupancy;
+    }
+
+    private boolean hasReservation(String bookingId) {
+        return roomSlotOccupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
+                .anyMatch(occupancy -> occupancy.getStatus() == OccupancyStatus.RESERVED);
+    }
+
+    private void requireReservation(String bookingId) {
+        if (!hasReservation(bookingId))
+            throw new ConflictException("Không tìm thấy reservation của booking trong RoomSlotOccupancy");
+    }
+
+    private void updateReservationRange(String bookingId, LocalDate start, LocalDate end) {
+        List<RoomSlotOccupancy> reservations = roomSlotOccupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
+                .filter(occupancy -> occupancy.getStatus() == OccupancyStatus.RESERVED).toList();
+        if (reservations.isEmpty()) throw new ConflictException("Không tìm thấy reservation của booking trong RoomSlotOccupancy");
+        reservations.forEach(occupancy -> {
+            occupancy.setStartDate(start);
+            occupancy.setEndDate(end);
+            roomSlotOccupancyRepository.save(occupancy);
+        });
+    }
+
+    private void releaseReservation(String bookingId) {
+        roomSlotOccupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
+                .filter(occupancy -> occupancy.getStatus() == OccupancyStatus.RESERVED)
+                .forEach(occupancy -> {
+                    occupancy.setStatus(OccupancyStatus.ENDED);
+                    roomSlotOccupancyRepository.save(occupancy);
+                });
     }
 
     private Booking saveTransition(Booking booking, BookingStatus previous, String note) {
@@ -479,6 +573,13 @@ public class BookingServiceImpl implements BookingService {
     private Room room(String id) {
         return roomRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
+    }
+
+    private RoomSlot roomSlot(String id) {
+        if (id == null || id.isBlank())
+            throw new ConflictException("Booking cũ chưa được liên kết RoomSlotId và cần migration");
+        return roomSlotRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy slot"));
     }
 
     private Tenant tenant(AuthPrincipal principal) {
@@ -507,7 +608,7 @@ public class BookingServiceImpl implements BookingService {
     private void ensureCanManage(Booking booking, AuthPrincipal principal) {
         if (isRole(principal, "ADMIN")) return;
         requireRole(principal, "OWNER", "MANAGER");
-        branchAccess.requireManagementAccess(room(booking.getRoomId()).getBranchId(), principal);
+        branchAccess.requireManagementAccess(room(roomSlot(booking.getRoomSlotId()).getRoomId()).getBranchId(), principal);
     }
 
     private String managerBranch(AuthPrincipal principal) {
@@ -526,11 +627,12 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse response(Booking b) {
-        Room room = room(b.getRoomId());
+        RoomSlot slot = roomSlot(b.getRoomSlotId());
+        Room room = room(slot.getRoomId());
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(b.getTenantId()).orElse(null);
         User user = tenant == null ? null : userRepository.findByEmailAndIsDeletedFalse(tenant.getEmail()).orElse(null);
-        return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomId(), b.getExpectedMoveInDate(),
+        return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), b.getExpectedMoveInDate(),
                 b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(),
                 b.getCancellationPolicy(), b.getDepositStatus(), b.getRejectReason(), b.getStatus(),
                 b.getTermsAcceptedAt(), b.getCreatedAt(), b.getUpdatedAt(), user == null ? b.getTenantId() : user.getId(),

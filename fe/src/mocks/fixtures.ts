@@ -1,6 +1,6 @@
 import type {
   Appointment,
-  Booking,
+  MockBooking,
   Branch,
   BranchPolicy,
   Notification,
@@ -207,7 +207,7 @@ export function seedActivity() {
       },
     ],
   }
-  const booking = (index: number, status: Booking['status']): Booking => {
+  const booking = (index: number, status: MockBooking['status']): MockBooking => {
     const room = rooms[index]
     const selectedPolicy = policies[index % 3]
     const due = new Date(Date.now() + (status === 'EXPIRED' ? -60000 : 30 * 60000)).toISOString()
@@ -243,7 +243,7 @@ export function seedActivity() {
       contractId: null,
     }
   }
-  const bookings: Booking[] = [
+  const bookings: MockBooking[] = [
     booking(4, 'AWAITING_PAYMENT'),
     booking(5, 'CONFIRMED'),
     booking(7, 'EXPIRED'),
