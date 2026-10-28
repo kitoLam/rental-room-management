@@ -29,7 +29,7 @@ public class Booking extends BaseDocument {
 
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
-    private String roomId;
+    private String roomSlotId;
 
     private LocalDate expectedMoveInDate;
 

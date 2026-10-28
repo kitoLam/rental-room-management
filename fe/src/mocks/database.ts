@@ -2,7 +2,7 @@ import type {
   Appointment,
   AppointmentInput,
   Availability,
-  Booking,
+  MockBooking,
   BookingInput,
   Notification,
   Payment,
@@ -40,7 +40,7 @@ export class MockDatabase {
   state: DbState
   inventory: MockInventory
   occupancyProvider: () => Allocation[] = () => []
-  bookingAllocationActive: (booking: Booking) => boolean = () => true
+  bookingAllocationActive: (booking: MockBooking) => boolean = () => true
   policyProvider: () => BranchPolicy[] = () => policies
   branchProvider: () => Branch[] = () => branches
   branchVisible: (id: string) => boolean = () => true
@@ -407,31 +407,31 @@ export class MockDatabase {
   createBooking(input: BookingInput, userId: string) {
     const parsed = bookingInputSchema.safeParse(input)
     if (!parsed.success) throw new MockError(parsed.error.issues[0].message)
-    const room = this.room(input.roomId)
+    const room = this.room(parsed.data.roomId)
     if (!room.isPublic || !this.branchVisible(room.branchId)) throw new MockError('Phòng không còn được công khai.', 404)
     const policy = this.policy(room.branchId)
     if (input.policyId !== policy.id || input.policyVersion !== policy.version)
       throw new MockError('Chính sách đã thay đổi. Tải lại và xác nhận chính sách mới.', 409)
     if (input.rentalMode !== room.rentalMode)
       throw new MockError('Hình thức thuê không khớp phòng.')
-    const availability = this.availability(room.id, input.startDate, input.endDate)
+    const availability = this.availability(room.id, parsed.data.startDate, parsed.data.endDate)
     if (
       !availability.available ||
       (room.rentalMode === 'SLOT' &&
-        !availability.slots.some((s) => s.id === input.roomSlotId && s.available))
+        !availability.slots.some((s) => s.id === parsed.data.roomSlotId && s.available))
     )
       throw new MockError('Phòng hoặc chỗ ở vừa được giữ/thuê. Vui lòng chọn lại.', 409)
     const createdAt = new Date().toISOString()
     const paymentDueAt = new Date(Date.now() + policy.paymentWindowMinutes * 60000).toISOString()
-    const record: Booking = {
+    const record: MockBooking = {
       id: crypto.randomUUID(),
       requesterUserId: userId,
       roomId: room.id,
       roomTitle: room.title,
       branchId: room.branchId,
       branchName: room.branchName,
-      roomSlotId: input.roomSlotId || null,
-      slotLabel: availability.slots.find((s) => s.id === input.roomSlotId)?.label || null,
+      roomSlotId: parsed.data.roomSlotId || null,
+      slotLabel: availability.slots.find((s) => s.id === parsed.data.roomSlotId)?.label || null,
       rentalMode: room.rentalMode,
       startDate: input.startDate,
       endDate: input.endDate,

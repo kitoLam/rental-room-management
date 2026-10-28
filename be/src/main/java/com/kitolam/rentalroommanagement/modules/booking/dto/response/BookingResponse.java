@@ -12,7 +12,8 @@ import java.util.List;
 public record BookingResponse(
         String id,
         String tenantId,
-        String roomId,
+        String roomSlotId,
+        String slotCode,
         LocalDate expectedMoveInDate,
         LocalDate expectedMoveOutDate,
         BigDecimal holdingDepositAmount,

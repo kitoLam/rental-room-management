@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BookingRepository extends BaseRepository<Booking> {
-    List<Booking> findByRoomIdAndStatusInAndExpectedMoveInDateLessThanAndExpectedMoveOutDateGreaterThanAndIsDeletedFalse(
-            String roomId, Collection<BookingStatus> statuses, LocalDate requestedEnd, LocalDate requestedStart);
+    List<Booking> findByRoomSlotIdAndStatusInAndExpectedMoveInDateLessThanAndExpectedMoveOutDateGreaterThanAndIsDeletedFalse(
+            String roomSlotId, Collection<BookingStatus> statuses, LocalDate requestedEnd, LocalDate requestedStart);
 
-    List<Booking> findByRoomIdAndStatusInAndIsDeletedFalse(String roomId, Collection<BookingStatus> statuses);
+    List<Booking> findByRoomSlotIdAndStatusInAndIsDeletedFalse(String roomSlotId, Collection<BookingStatus> statuses);
 
     List<Booking> findByStatusAndHoldExpiresAtLessThanEqualAndIsDeletedFalse(BookingStatus status, java.time.Instant now);
 
@@ -21,6 +21,6 @@ public interface BookingRepository extends BaseRepository<Booking> {
 
     Optional<Booking> findByIdAndTenantIdAndIsDeletedFalse(String id, String tenantId);
 
-    Optional<Booking> findByRoomIdAndTenantIdAndExpectedMoveInDateAndExpectedMoveOutDateAndStatusAndIsDeletedFalse(
-            String roomId, String tenantId, LocalDate startDate, LocalDate endDate, BookingStatus status);
+    Optional<Booking> findByRoomSlotIdAndTenantIdAndExpectedMoveInDateAndExpectedMoveOutDateAndStatusAndIsDeletedFalse(
+            String roomSlotId, String tenantId, LocalDate startDate, LocalDate endDate, BookingStatus status);
 }

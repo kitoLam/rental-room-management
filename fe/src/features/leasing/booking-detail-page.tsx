@@ -12,7 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
-import { uuid } from '@/lib/validation'
+import { bookingReviewTimeErrors, uuid } from '@/lib/validation'
+import { useNow } from '@/hooks/use-now'
 import { bookingService } from '@/services/guest-user'
 import { useSession } from '@/features/auth/session-store'
 import { invalidateActivity } from '@/services/query-client'
@@ -34,6 +35,9 @@ export function BookingDetailPage() {
   const [reviewDraft, setReviewDraft] = useState({
     startDate: '', endDate: '', amount: '', paymentDeadline: '', holdExpiresAt: '', cancellationPolicy: '',
   })
+  const now = useNow(reviewOpen ? 1000 : 30000)
+  const reviewTimeErrors = bookingReviewTimeErrors(reviewDraft, now)
+  const hasReviewTimeError = Object.keys(reviewTimeErrors).length > 0
   const result = useQuery({
     queryKey: ['bookings', bookingId],
     queryFn: () => bookingService.get(bookingId),
@@ -55,15 +59,20 @@ export function BookingDetailPage() {
     },
   })
   const review = useMutation({
-    mutationFn: () => bookingService.review(bookingId, {
-      accepted: true,
-      expectedMoveInDate: reviewDraft.startDate,
-      expectedMoveOutDate: reviewDraft.endDate,
-      holdingDepositAmount: Number(reviewDraft.amount),
-      paymentDeadline: new Date(reviewDraft.paymentDeadline).toISOString(),
-      holdExpiresAt: new Date(reviewDraft.holdExpiresAt).toISOString(),
-      cancellationPolicy: reviewDraft.cancellationPolicy,
-    }),
+    mutationFn: () => {
+      const errors = bookingReviewTimeErrors(reviewDraft)
+      if (errors.paymentDeadline || errors.holdExpiresAt)
+        throw new Error(errors.paymentDeadline || errors.holdExpiresAt)
+      return bookingService.review(bookingId, {
+        accepted: true,
+        expectedMoveInDate: reviewDraft.startDate,
+        expectedMoveOutDate: reviewDraft.endDate,
+        holdingDepositAmount: Number(reviewDraft.amount),
+        paymentDeadline: new Date(reviewDraft.paymentDeadline).toISOString(),
+        holdExpiresAt: new Date(reviewDraft.holdExpiresAt).toISOString(),
+        cancellationPolicy: reviewDraft.cancellationPolicy,
+      })
+    },
     onSuccess: async () => {
       setReviewOpen(false)
       await invalidateActivity()
@@ -146,10 +155,10 @@ export function BookingDetailPage() {
               </Notice>
             )}
             <InlineError error={cancel.error} />
-            <InlineError error={review.error} />
             <div className="mt-6 flex flex-wrap gap-3">
               {canManage && (record.status === 'REQUESTED' || (record.status === 'AWAITING_PAYMENT' && !record.termsAcceptedAt)) && (
                 <Button onClick={() => {
+                  review.reset()
                   setReviewDraft({
                     startDate: record.startDate,
                     endDate: record.endDate,
@@ -171,9 +180,6 @@ export function BookingDetailPage() {
               ) : !canManage && record.status === 'AWAITING_PAYMENT' && record.termsAcceptedAt ? (
                 <Button asChild><Link to={`/user/bookings/${record.id}/payment`}>Thanh toán giữ chỗ</Link></Button>
               ) : null}
-              <Button asChild variant="outline">
-                <Link to={`/rooms/${record.roomId}`}>Xem phòng</Link>
-              </Button>
               {['REQUESTED', 'AWAITING_PAYMENT'].includes(record.status) && (
                 <ConfirmAction
                   label="Hủy yêu cầu"
@@ -197,7 +203,7 @@ export function BookingDetailPage() {
         open={reviewOpen}
         onOpenChange={setReviewOpen}
       >
-        <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); review.mutate() }}>
+        <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); if (!hasReviewTimeError) review.mutate() }}>
           <Field id="review-start" label="Ngày bắt đầu thuê">
             <input id="review-start" className="input" type="date" required value={reviewDraft.startDate} onChange={(event) => setReviewDraft({ ...reviewDraft, startDate: event.target.value })} />
           </Field>
@@ -207,16 +213,17 @@ export function BookingDetailPage() {
           <Field id="review-amount" label="Khoản cọc giữ chỗ (VND)">
             <input id="review-amount" className="input" type="number" min="0" step="1" required value={reviewDraft.amount} onChange={(event) => setReviewDraft({ ...reviewDraft, amount: event.target.value })} />
           </Field>
-          <Field id="review-payment-deadline" label="Hạn thanh toán">
+          <Field id="review-payment-deadline" label="Hạn thanh toán" error={reviewTimeErrors.paymentDeadline}>
             <input id="review-payment-deadline" className="input" type="datetime-local" required value={reviewDraft.paymentDeadline} onChange={(event) => setReviewDraft({ ...reviewDraft, paymentDeadline: event.target.value })} />
           </Field>
-          <Field id="review-hold-expiry" label="Thời điểm hết hạn giữ chỗ">
+          <Field id="review-hold-expiry" label="Thời điểm hết hạn giữ chỗ" error={reviewTimeErrors.holdExpiresAt}>
             <input id="review-hold-expiry" className="input" type="datetime-local" required value={reviewDraft.holdExpiresAt} onChange={(event) => setReviewDraft({ ...reviewDraft, holdExpiresAt: event.target.value })} />
           </Field>
           <Field id="review-cancellation-policy" label="Điều kiện hủy">
             <textarea id="review-cancellation-policy" className="input min-h-24" required value={reviewDraft.cancellationPolicy} onChange={(event) => setReviewDraft({ ...reviewDraft, cancellationPolicy: event.target.value })} />
           </Field>
-          <Button type="submit" loading={review.isPending}>Gửi điều khoản cho khách</Button>
+          <InlineError error={review.error} />
+          <Button type="submit" loading={review.isPending} disabled={hasReviewTimeError}>Gửi điều khoản cho khách</Button>
         </form>
       </Modal>
     </Page>

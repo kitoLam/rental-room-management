@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/bookings")
@@ -50,9 +51,16 @@ public class BookingController {
 
     @GetMapping("/availability")
     public StandardResponse<RoomAvailabilityResponse> checkAvailability(
-            @RequestParam String roomId, @RequestParam java.time.LocalDate startDate,
+            @RequestParam String roomSlotId, @RequestParam java.time.LocalDate startDate,
             @RequestParam java.time.LocalDate endDate) {
-        return StandardResponse.success(bookingService.checkAvailability(roomId, startDate, endDate));
+        return StandardResponse.success(bookingService.checkAvailability(roomSlotId, startDate, endDate));
+    }
+
+    @GetMapping("/availability/batch")
+    public StandardResponse<java.util.List<RoomAvailabilityResponse>> checkAvailabilityBatch(
+            @RequestParam List<String> roomSlotIds, @RequestParam java.time.LocalDate startDate,
+            @RequestParam java.time.LocalDate endDate) {
+        return StandardResponse.success(bookingService.checkAvailability(roomSlotIds, startDate, endDate));
     }
 
     @PostMapping

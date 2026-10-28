@@ -18,7 +18,7 @@ export class ApiError extends Error {
 const envelope = z.object({
   status: z.number().optional(),
   code: z.number().optional(),
-  errorCode: z.string().optional(),
+  errorCode: z.string().nullish(),
   message: z
     .union([z.string(), z.array(z.string())])
     .optional()
@@ -139,7 +139,7 @@ export async function request<T>(
                 : 'Không thể thực hiện yêu cầu.'),
       response.status,
       body?.code,
-      body?.errorCode,
+      body?.errorCode ?? undefined,
     )
   }
   const payload =

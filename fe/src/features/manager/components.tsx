@@ -358,7 +358,9 @@ export function ManagerForm({
             const name = issue.path[0]
             if (typeof name === 'string')
               form.setError(name, {
-                message: 'Kiểm tra giá trị, định dạng hoặc độ dài của mục này.',
+                message: issue.code === 'custom'
+                  ? issue.message
+                  : 'Kiểm tra giá trị, định dạng hoặc độ dài của mục này.',
               })
           }
           return

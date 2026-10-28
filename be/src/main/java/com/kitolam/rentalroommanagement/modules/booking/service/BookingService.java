@@ -13,14 +13,17 @@ import com.kitolam.rentalroommanagement.modules.booking.dto.response.BookingResp
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.EffectiveRoomHoldResponse;
 import com.kitolam.rentalroommanagement.modules.booking.dto.response.RoomAvailabilityResponse;
 import java.util.List;
+import java.time.LocalDate;
 import org.springframework.data.domain.Pageable;
 
 public interface BookingService {
-    EffectiveRoomHoldResponse currentRoomHold(String roomId);
+    EffectiveRoomHoldResponse currentRoomHold(String roomSlotId);
 
     BookingResponse create(BookingCreateRequest request, AuthPrincipal principal);
 
-    RoomAvailabilityResponse checkAvailability(String roomId, java.time.LocalDate startDate, java.time.LocalDate endDate);
+    RoomAvailabilityResponse checkAvailability(String roomSlotId, java.time.LocalDate startDate, java.time.LocalDate endDate);
+
+    List<RoomAvailabilityResponse> checkAvailability(List<String> roomSlotIds, LocalDate startDate, LocalDate endDate);
 
     BookingResponse getById(String id, AuthPrincipal principal);
 

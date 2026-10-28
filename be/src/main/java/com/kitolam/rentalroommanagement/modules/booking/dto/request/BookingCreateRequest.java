@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 
 public record BookingCreateRequest(
-        @jakarta.validation.constraints.NotBlank @ValidObjectId String roomId,
+        @jakarta.validation.constraints.NotBlank @ValidObjectId String roomSlotId,
         @NotNull LocalDate expectedMoveInDate,
         @NotNull LocalDate expectedMoveOutDate
 ) {

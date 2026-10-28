@@ -58,7 +58,7 @@ export default function RoomDetailPage() {
     queryKey: ['availability', roomId, startDate, endDate],
     queryFn: () => provider('catalog') === 'mock'
       ? catalogService.availability(roomId, startDate, endDate)
-      : bookingService.availability(roomId, startDate, endDate),
+      : bookingService.availabilityForRoom(roomId, startDate, endDate),
     enabled: validRoomId && range.success && bookingAvailabilityEnabled,
   })
   if (!validRoomId)
@@ -73,7 +73,7 @@ export default function RoomDetailPage() {
     r &&
     range.success &&
     available.data?.available &&
-    (r.rentalMode === 'ROOM' || available.data.slots.some((s) => s.id === slot && s.available))
+    available.data.slots.some((s) => s.id === slot && s.available)
   const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ startDate, endDate, ...(slot ? { slot } : {}) })}`
   return (
     <Page
@@ -287,7 +287,7 @@ export default function RoomDetailPage() {
                       <InlineError error={new Error(range.error.issues[0].message)} />
                     </div>
                   )}
-                  {r.rentalMode === 'SLOT' && available.data && (
+                  {available.data && (
                     <fieldset className="mt-5">
                       <legend className="mb-3 text-sm font-bold">Chọn chỗ ở</legend>
                       <div className="grid grid-cols-2 gap-2">
@@ -351,7 +351,7 @@ export default function RoomDetailPage() {
                       </Button>
                     )}
                   </div>
-                  {!bookable && r.rentalMode === 'SLOT' && available.data?.available && (
+                  {!bookable && available.data?.available && (
                     <p className="mt-3 text-xs text-muted-foreground">
                       Chọn một chỗ còn trống để tiếp tục.
                     </p>
