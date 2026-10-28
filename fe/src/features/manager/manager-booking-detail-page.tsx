@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { z } from 'zod'
+import { bookingReviewTimeErrors } from '@/lib/validation'
 import {
   ActionDialog,
   ManagerForm,
@@ -165,7 +166,14 @@ export function ManagerBookingDetail() {
               paymentDeadline: z.iso.datetime(),
               holdExpiresAt: z.iso.datetime(),
               cancellationPolicy: z.string().trim().min(1).max(2000),
-            }).refine((v) => v.expectedMoveOutDate > v.expectedMoveInDate && Date.parse(v.holdExpiresAt) > Date.parse(v.paymentDeadline), 'Kiểm tra khoảng thuê và hai mốc thời gian.')}
+            }).refine((v) => v.expectedMoveOutDate > v.expectedMoveInDate, {
+              path: ['expectedMoveOutDate'],
+              message: 'Ngày kết thúc thuê phải sau ngày bắt đầu thuê.',
+            }).superRefine((value, context) => {
+              for (const [field, message] of Object.entries(bookingReviewTimeErrors(value))) {
+                context.addIssue({ code: 'custom', path: [field], message })
+              }
+            })}
             defaults={{
               expectedMoveInDate: query.data?.startDate || '',
               expectedMoveOutDate: query.data?.endDate || '',
@@ -179,7 +187,7 @@ export function ManagerBookingDetail() {
               { name: 'expectedMoveOutDate', label: 'Ngày kết thúc thuê', kind: 'date' },
               { name: 'holdingDepositAmount', label: 'Số tiền cọc giữ chỗ (VND)', kind: 'number', min: 1 },
               { name: 'paymentDeadline', label: 'Hạn thanh toán', kind: 'datetime-local' },
-              { name: 'holdExpiresAt', label: 'Hạn giữ chỗ', kind: 'datetime-local' },
+              { name: 'holdExpiresAt', label: 'Thời điểm hết hạn giữ chỗ', kind: 'datetime-local' },
               { name: 'cancellationPolicy', label: 'Chính sách hủy', kind: 'textarea' },
             ]}
             pending={mutation.isPending}

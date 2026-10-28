@@ -68,6 +68,21 @@ export function addDays(days: number) {
   date.setDate(date.getDate() + days)
   return localDate(date)
 }
+export function bookingReviewTimeErrors(
+  value: { paymentDeadline: string; holdExpiresAt: string },
+  now = Date.now(),
+) {
+  const payment = Date.parse(value.paymentDeadline)
+  const hold = Date.parse(value.holdExpiresAt)
+  const errors: { paymentDeadline?: string; holdExpiresAt?: string } = {}
+  if (Number.isFinite(payment) && payment <= now)
+    errors.paymentDeadline = 'Hạn thanh toán phải ở tương lai.'
+  if (Number.isFinite(hold) && hold <= now)
+    errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải ở tương lai.'
+  else if (Number.isFinite(hold) && Number.isFinite(payment) && hold <= payment)
+    errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải lớn hơn hạn thanh toán.'
+  return errors
+}
 export const dateRangeSchema = z
   .object({
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Chọn ngày bắt đầu.'),
