@@ -10,11 +10,12 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (
     feature === 'auth' &&
-    ((pathname === '/auth/signup' && verb === 'POST') ||
-      (pathname === '/auth/login' && verb === 'POST') ||
-      (pathname === '/auth/refresh' && verb === 'POST') ||
-      (pathname === '/auth/logout' && verb === 'POST') ||
-      (pathname === '/auth/verify-email' && verb === 'GET'))
+    ((['/api/v1/auth/signup', '/auth/signup'].includes(pathname) && verb === 'POST') ||
+      (['/api/v1/auth/login', '/auth/login'].includes(pathname) && verb === 'POST') ||
+      (['/api/v1/auth/refresh', '/auth/refresh'].includes(pathname) && verb === 'POST') ||
+      (['/api/v1/auth/logout', '/auth/logout'].includes(pathname) && verb === 'POST') ||
+      (['/api/v1/auth/resend-verification', '/auth/resend-verification'].includes(pathname) && verb === 'POST') ||
+      (['/api/v1/auth/verify-email', '/auth/verify-email'].includes(pathname) && ['GET', 'POST'].includes(verb)))
   )
     return null
   if (
@@ -28,7 +29,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   if (
     feature === 'auth' &&
     verb === 'POST' &&
-    matches('/api/auth/(login|register|verify-email|refresh|logout)')
+    matches('/(?:api/v1/auth|api/auth)/(login|register|signup|verify-email|refresh|logout)')
   )
     return null
 
