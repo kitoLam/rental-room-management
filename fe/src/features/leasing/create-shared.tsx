@@ -41,7 +41,9 @@ export function BookingForm({ room }: { room: Room }) {
     }
     setErrors({})
     if (selectedSlotAvailable && !available.isFetching)
-      create.mutate({ ...input.data, roomId: room.id, rentalMode: 'SLOT' })
+      create.mutate(provider('leasing') === 'real'
+        ? input.data
+        : { ...input.data, roomId: room.id, rentalMode: 'SLOT' })
   }
   return (
     <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">

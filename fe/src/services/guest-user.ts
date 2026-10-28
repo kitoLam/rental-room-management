@@ -3,6 +3,7 @@ import {
   appointmentSchema,
   availabilitySchema,
   bookingSchema,
+  mockBookingSchema,
   branchSchema,
   databaseIdSchema,
   notificationSchema,
@@ -14,6 +15,7 @@ import {
   utilityRatesSchema,
   type AppointmentInput,
   type BookingInput,
+  type RoomSlotBookingInput,
   type PaymentScenario,
   type RoomFilters,
 } from '@/interfaces/domain'
@@ -295,7 +297,6 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     requesterName: b.requesterName || undefined,
     requesterEmail: b.requesterEmail || undefined,
     requesterPhone: b.requesterPhone,
-    roomId: '',
     roomTitle: b.roomTitle || 'Phòng thuê',
     branchId: b.branchId,
     branchName: b.branchName || '',
@@ -356,13 +357,13 @@ export const bookingService = {
     return request(
       'leasing',
       `/api/bookings?${new URLSearchParams({ status, page: String(page - 1), size: '8' })}`,
-      pageSchema(bookingSchema),
+      pageSchema(mockBookingSchema),
     )
   },
   get: async (id: string) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}`, backendBookingSchema))
-    : request('leasing', `/api/bookings/${id}`, bookingSchema),
-  create: async (input: BookingInput) => {
+    : request('leasing', `/api/bookings/${id}`, mockBookingSchema),
+  create: async (input: BookingInput | RoomSlotBookingInput) => {
     if (provider('leasing') === 'real') {
       if (!input.roomSlotId) throw new ApiError('Chọn một slot trước khi gửi yêu cầu.', 400)
       return adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
@@ -371,14 +372,15 @@ export const bookingService = {
         expectedMoveOutDate: input.endDate,
       })))
     }
-    return request('leasing', '/api/bookings', bookingSchema, write('POST', input))
+    if (!('roomId' in input)) throw new ApiError('Thiếu roomId cho dữ liệu mô phỏng.', 400)
+    return request('leasing', '/api/bookings', mockBookingSchema, write('POST', input))
   },
   cancel: async (id: string) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}/cancel`, backendBookingSchema, write('POST')))
-    : request('leasing', `/api/bookings/${id}/cancel`, bookingSchema, write('POST')),
+    : request('leasing', `/api/bookings/${id}/cancel`, mockBookingSchema, write('POST')),
   acceptTerms: async (id: string, accepted: boolean) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}/terms`, backendBookingSchema, write('POST', { accepted })))
-    : request('leasing', `/api/bookings/${id}/terms`, bookingSchema, write('POST', { accepted })),
+    : request('leasing', `/api/bookings/${id}/terms`, mockBookingSchema, write('POST', { accepted })),
   availability: async (id: string, startDate: string, endDate: string) => {
     if (provider('leasing') !== 'real') return catalogService.availability(id, startDate, endDate)
     const result = await request('leasing', `/api/v1/bookings/availability?${new URLSearchParams({ roomSlotId: id, startDate, endDate })}`, backendSlotAvailabilitySchema)
