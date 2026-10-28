@@ -171,9 +171,11 @@ export function BookingDetailPage() {
               ) : !canManage && record.status === 'AWAITING_PAYMENT' && record.termsAcceptedAt ? (
                 <Button asChild><Link to={`/user/bookings/${record.id}/payment`}>Thanh toán giữ chỗ</Link></Button>
               ) : null}
-              <Button asChild variant="outline">
-                <Link to={`/rooms/${record.roomId}`}>Xem phòng</Link>
-              </Button>
+              {record.roomId && (
+                <Button asChild variant="outline">
+                  <Link to={`/rooms/${record.roomId}`}>Xem phòng</Link>
+                </Button>
+              )}
               {['REQUESTED', 'AWAITING_PAYMENT'].includes(record.status) && (
                 <ConfirmAction
                   label="Hủy yêu cầu"

@@ -203,6 +203,14 @@ export const catalogService = {
   branch: (id: string) => request('catalog', `/api/v1/public/branches/${id}`, branchSchema),
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }
+export const roomSlotService = {
+  list: (roomId: string) =>
+    request(
+      'leasing',
+      `/api/v1/room-slots?${new URLSearchParams({ roomId, page: '0', size: '100' })}`,
+      pageSchema(backendRoomSlotSchema),
+    ),
+}
 export const appointmentService = {
   list: (status = '', page = 1) =>
     request(
@@ -226,7 +234,8 @@ export const appointmentService = {
 const backendBookingSchema = z.object({
   id: databaseIdSchema,
   tenantId: databaseIdSchema,
-  roomId: databaseIdSchema,
+  roomSlotId: databaseIdSchema,
+  slotCode: z.string(),
   expectedMoveInDate: z.string().nullable(),
   expectedMoveOutDate: z.string().nullable(),
   holdingDepositAmount: z.number().nullable(),
@@ -244,9 +253,26 @@ const backendBookingSchema = z.object({
   requesterEmail: z.string().nullable(),
   requesterPhone: z.string().nullable(),
   roomTitle: z.string().nullable(),
-  branchId: databaseIdSchema.nullable(),
+  branchId: databaseIdSchema,
   branchName: z.string().nullable(),
   timeline: z.array(z.object({ status: z.string(), at: z.string(), note: z.string() })),
+})
+const backendSlotAvailabilitySchema = z.object({
+  roomSlotId: databaseIdSchema,
+  slotCode: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  available: z.boolean(),
+  reason: z.string().nullable(),
+})
+const backendRoomSlotSchema = z.object({
+  id: databaseIdSchema,
+  roomId: databaseIdSchema,
+  slotCode: z.string(),
+  slotNumber: z.number().nullable(),
+  status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
+  createdAt: z.string().nullable(),
+  updatedAt: z.string().nullable(),
 })
 const backendPaymentSchema = z.object({
   id: databaseIdSchema,
@@ -269,13 +295,13 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     requesterName: b.requesterName || undefined,
     requesterEmail: b.requesterEmail || undefined,
     requesterPhone: b.requesterPhone,
-    roomId: b.roomId,
+    roomId: '',
     roomTitle: b.roomTitle || 'Phòng thuê',
-    branchId: b.branchId || b.roomId,
+    branchId: b.branchId,
     branchName: b.branchName || '',
-    roomSlotId: null,
-    slotLabel: null,
-    rentalMode: 'ROOM',
+    roomSlotId: b.roomSlotId,
+    slotLabel: b.slotCode,
+    rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
     holdAmount: b.holdingDepositAmount || 0,
@@ -336,23 +362,53 @@ export const bookingService = {
   get: async (id: string) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}`, backendBookingSchema))
     : request('leasing', `/api/bookings/${id}`, bookingSchema),
-  create: async (input: BookingInput) => provider('leasing') === 'real'
-    ? adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
-        roomId: input.roomId,
+  create: async (input: BookingInput) => {
+    if (provider('leasing') === 'real') {
+      if (!input.roomSlotId) throw new ApiError('Chọn một slot trước khi gửi yêu cầu.', 400)
+      return adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
+        roomSlotId: input.roomSlotId,
         expectedMoveInDate: input.startDate,
         expectedMoveOutDate: input.endDate,
       })))
-    : request('leasing', '/api/bookings', bookingSchema, write('POST', input)),
+    }
+    return request('leasing', '/api/bookings', bookingSchema, write('POST', input))
+  },
   cancel: async (id: string) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}/cancel`, backendBookingSchema, write('POST')))
     : request('leasing', `/api/bookings/${id}/cancel`, bookingSchema, write('POST')),
   acceptTerms: async (id: string, accepted: boolean) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}/terms`, backendBookingSchema, write('POST', { accepted })))
     : request('leasing', `/api/bookings/${id}/terms`, bookingSchema, write('POST', { accepted })),
-  availability: (id: string, startDate: string, endDate: string) =>
-    provider('leasing') === 'real'
-      ? request('leasing', `/api/v1/bookings/availability?${new URLSearchParams({ roomId: id, startDate, endDate })}`, availabilitySchema)
-      : catalogService.availability(id, startDate, endDate),
+  availability: async (id: string, startDate: string, endDate: string) => {
+    if (provider('leasing') !== 'real') return catalogService.availability(id, startDate, endDate)
+    const result = await request('leasing', `/api/v1/bookings/availability?${new URLSearchParams({ roomSlotId: id, startDate, endDate })}`, backendSlotAvailabilitySchema)
+    return {
+      startDate: result.startDate,
+      endDate: result.endDate,
+      available: result.available,
+      reason: result.reason,
+      slots: [{ id: result.roomSlotId, label: result.slotCode, available: result.available }],
+    }
+  },
+  availabilityForRoom: async (roomId: string, startDate: string, endDate: string) => {
+    if (provider('leasing') !== 'real') return catalogService.availability(roomId, startDate, endDate)
+    const slots = await roomSlotService.list(roomId)
+    const params = new URLSearchParams({ startDate, endDate })
+    slots.content.forEach((slot) => params.append('roomSlotIds', slot.id))
+    const checked = slots.content.length
+      ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
+      : []
+    const slotAvailability = checked.map((slot) => ({ id: slot.roomSlotId, label: slot.slotCode, available: slot.available }))
+    const available = slotAvailability.some((slot) => slot.available)
+    return {
+      roomId,
+      startDate,
+      endDate,
+      available,
+      reason: available ? null : slotAvailability.length ? 'Không có slot trống trong khoảng ngày đã chọn.' : 'Phòng chưa có slot được cấu hình.',
+      slots: slotAvailability,
+    }
+  },
   payments: async (id: string) => {
     if (provider('leasing') !== 'real')
       return request('leasing', `/api/bookings/${id}/payments`, z.array(paymentSchema))

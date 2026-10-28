@@ -114,7 +114,7 @@ export const appointmentInputSchema = z
         message: 'Giờ kết thúc phải sau giờ bắt đầu.',
       })
   })
-export const bookingRequestSchema = dateRangeSchema.safeExtend({ roomId: databaseIdSchema })
+export const bookingRequestSchema = dateRangeSchema.safeExtend({ roomSlotId: databaseIdSchema })
 export const bookingInputSchema = dateRangeSchema
   .safeExtend({
     roomId: databaseIdSchema,

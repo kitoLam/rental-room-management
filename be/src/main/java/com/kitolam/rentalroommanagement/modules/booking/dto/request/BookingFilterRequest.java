@@ -7,7 +7,7 @@ import com.kitolam.rentalroommanagement.modules.booking.enums.DepositStatus;
 /** Query parameters for search; all optional. */
 public record BookingFilterRequest(
         @ValidObjectId String tenantId,
-        @ValidObjectId String roomId,
+        @ValidObjectId String roomSlotId,
         DepositStatus depositStatus,
         BookingStatus status
 ) {

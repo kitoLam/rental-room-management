@@ -88,7 +88,7 @@ export const branchSchema = z.object({
 })
 export type Branch = z.infer<typeof branchSchema>
 export const availabilitySchema = z.object({
-  roomId: databaseIdSchema,
+  roomId: databaseIdSchema.optional(),
   startDate: z.string(),
   endDate: z.string(),
   available: z.boolean(),
