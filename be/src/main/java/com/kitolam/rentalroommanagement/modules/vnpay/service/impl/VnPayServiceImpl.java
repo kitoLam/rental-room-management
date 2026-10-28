@@ -6,6 +6,7 @@ import com.kitolam.rentalroommanagement.modules.payment.document.Payment;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentMethod;
 import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentStatus;
 import com.kitolam.rentalroommanagement.modules.payment.repository.PaymentRepository;
+import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
 import com.kitolam.rentalroommanagement.common.config.VnPayProperties;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.request.VnPayCreatePaymentRequest;
 import com.kitolam.rentalroommanagement.modules.vnpay.dto.response.VnPayCreatePaymentResponse;
@@ -35,6 +36,7 @@ public class VnPayServiceImpl implements VnPayService {
     private final VnPayProperties properties;
     private final PaymentRepository paymentRepository;
     private final InvoiceRepository invoiceRepository;
+    private final BookingService bookingService;
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -42,18 +44,27 @@ public class VnPayServiceImpl implements VnPayService {
     @Override
     @Transactional
     public VnPayCreatePaymentResponse createPaymentUrl(VnPayCreatePaymentRequest request, HttpServletRequest httpRequest) {
-        String txnRef = VnPayUtil.getRandomNumber(8);
+        String txnRef = request.getTransactionCode() == null || request.getTransactionCode().isBlank()
+                ? VnPayUtil.getRandomNumber(8) : request.getTransactionCode();
         String clientIp = VnPayUtil.getIpAddress(httpRequest);
 
         // Lưu bản ghi Payment trạng thái PENDING
-        Payment payment = new Payment();
-        payment.setTransactionCode(txnRef);
-        payment.setAmount(request.getAmount());
-        payment.setInvoiceId(request.getInvoiceId());
-        payment.setContractTenantId(request.getContractTenantId());
-        payment.setMethod(PaymentMethod.VNPAY);
-        payment.setStatus(PaymentStatus.PENDING);
-        paymentRepository.save(payment);
+        Payment payment = paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef).orElse(null);
+        if (payment == null) {
+            payment = new Payment();
+            payment.setTransactionCode(txnRef);
+            payment.setAmount(request.getAmount());
+            payment.setInvoiceId(request.getInvoiceId());
+            payment.setContractTenantId(request.getContractTenantId());
+            payment.setBookingId(request.getBookingId());
+            payment.setMethod(PaymentMethod.VNPAY);
+            payment.setStatus(PaymentStatus.PENDING);
+            paymentRepository.save(payment);
+        } else if (!PaymentMethod.VNPAY.equals(payment.getMethod())
+                || !request.getAmount().equals(payment.getAmount())
+                || (request.getBookingId() != null && !request.getBookingId().equals(payment.getBookingId()))) {
+            throw new IllegalArgumentException("Thông tin giao dịch VNPay không khớp booking đã tạo");
+        }
 
         ZonedDateTime now = ZonedDateTime.now(VIETNAM_ZONE);
         String vnpCreateDate = now.format(VNPAY_DATE_FORMAT);
@@ -131,6 +142,7 @@ public class VnPayServiceImpl implements VnPayService {
         if (rawAmount != null && !rawAmount.isBlank()) {
             amount = new BigDecimal(rawAmount).divide(BigDecimal.valueOf(100));
         }
+        BigDecimal verifiedAmount = amount;
 
         if (!validSignature) {
             log.warn("VNPay Return: Chữ ký không hợp lệ! txnRef={}", txnRef);
@@ -153,6 +165,7 @@ public class VnPayServiceImpl implements VnPayService {
         // Cập nhật trạng thái Payment trong Database nếu đang PENDING
         paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef).ifPresent(payment -> {
             if (payment.getStatus() == PaymentStatus.PENDING) {
+                if (payment.getAmount().compareTo(verifiedAmount) != 0) return;
                 if (isSuccess) {
                     payment.setStatus(PaymentStatus.SUCCESS);
                     payment.setPaidAt(Instant.now());
@@ -161,6 +174,7 @@ public class VnPayServiceImpl implements VnPayService {
                     payment.setStatus(PaymentStatus.FAILED);
                 }
                 paymentRepository.save(payment);
+                if (payment.getBookingId() != null) bookingService.processPaymentResult(payment.getBookingId(), isSuccess);
                 log.info("VNPay Return: Cập nhật Payment [{}] -> {}", txnRef, payment.getStatus());
             }
         });
@@ -241,6 +255,7 @@ public class VnPayServiceImpl implements VnPayService {
         }
 
         paymentRepository.save(payment);
+        if (payment.getBookingId() != null) bookingService.processPaymentResult(payment.getBookingId(), isSuccess);
         return VnPayIpnResponse.success();
     }
 

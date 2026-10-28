@@ -30,6 +30,12 @@ public class VnPayCreatePaymentRequest {
     @Schema(description = "Mã hợp đồng khách thuê (nếu có)", example = "60c72b2f9b1d8b2bad000002")
     private String contractTenantId;
 
+    @Schema(description = "Mã booking giữ chỗ (nếu giao dịch là tiền cọc)")
+    private String bookingId;
+
+    @Schema(description = "Mã giao dịch đã tạo cho booking")
+    private String transactionCode;
+
     @Schema(description = "Mã ngân hàng (ví dụ: NCB, VNPAYQR, VISA...). Bỏ trống nếu muốn khách tự chọn trên cổng VNPay", example = "NCB")
     private String bankCode;
 

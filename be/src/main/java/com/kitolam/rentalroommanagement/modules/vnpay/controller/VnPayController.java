@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.Map;
 
@@ -27,6 +28,7 @@ public class VnPayController {
     @PostMapping("/create-payment")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Tạo URL thanh toán VNPay", description = "Tạo liên kết thanh toán VNPay và lưu thông tin giao dịch khởi tạo")
+    @PreAuthorize("isAuthenticated()")
     public StandardResponse<VnPayCreatePaymentResponse> createPayment(
             @Valid @RequestBody VnPayCreatePaymentRequest request,
             HttpServletRequest httpRequest) {

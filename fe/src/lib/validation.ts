@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { databaseIdSchema } from '@/interfaces/domain'
 
 export const emailField = z.string().trim().email('Nhập địa chỉ email hợp lệ.').max(255)
 export const passwordField = z
@@ -94,7 +95,7 @@ export const dateRangeSchema = z
   })
 export const appointmentInputSchema = z
   .object({
-    roomId: z.string().uuid(),
+    roomId: databaseIdSchema,
     startAt: z.string(),
     endAt: z.string(),
     note: z.string().max(1000),
@@ -113,10 +114,11 @@ export const appointmentInputSchema = z
         message: 'Giờ kết thúc phải sau giờ bắt đầu.',
       })
   })
+export const bookingRequestSchema = dateRangeSchema.safeExtend({ roomId: databaseIdSchema })
 export const bookingInputSchema = dateRangeSchema
   .safeExtend({
-    roomId: z.string().uuid(),
-    roomSlotId: z.string().uuid().optional(),
+    roomId: databaseIdSchema,
+    roomSlotId: databaseIdSchema.optional(),
     rentalMode: z.enum(['ROOM', 'SLOT']),
     policyId: z.string().uuid(),
     policyVersion: z.number().int().positive(),
@@ -126,10 +128,6 @@ export const bookingInputSchema = dateRangeSchema
     if (v.rentalMode === 'SLOT' && !v.roomSlotId)
       ctx.addIssue({ code: 'custom', path: ['roomSlotId'], message: 'Chọn một chỗ ở còn trống.' })
     if (v.rentalMode === 'ROOM' && v.roomSlotId)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['roomSlotId'],
-        message: 'Thuê nguyên phòng không chọn slot.',
-      })
+      ctx.addIssue({ code: 'custom', path: ['roomSlotId'], message: 'Thuê nguyên phòng không chọn slot.' })
   })
-export const uuid = (value?: string) => z.string().uuid().safeParse(value).success
+export const uuid = (value?: string) => databaseIdSchema.safeParse(value).success

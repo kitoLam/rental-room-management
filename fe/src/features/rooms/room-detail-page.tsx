@@ -23,7 +23,7 @@ import {
   QueryState,
 } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
-import { catalogService } from '@/services/guest-user'
+import { bookingService, catalogService } from '@/services/guest-user'
 import { provider } from '@/services/config'
 import { addDays, dateRangeSchema } from '@/lib/validation'
 import { databaseIdSchema } from '@/interfaces/domain'
@@ -47,10 +47,14 @@ export default function RoomDetailPage() {
     enabled: validRoomId,
   })
   const range = dateRangeSchema.safeParse({ startDate, endDate })
+  const bookingAvailabilityEnabled =
+    provider('catalog') === 'mock' || provider('leasing') === 'real'
   const available = useQuery({
     queryKey: ['availability', roomId, startDate, endDate],
-    queryFn: () => catalogService.availability(roomId, startDate, endDate),
-    enabled: validRoomId && range.success && provider('catalog') === 'mock',
+    queryFn: () => provider('catalog') === 'mock'
+      ? catalogService.availability(roomId, startDate, endDate)
+      : bookingService.availability(roomId, startDate, endDate),
+    enabled: validRoomId && range.success && bookingAvailabilityEnabled,
   })
   if (!validRoomId)
     return (
@@ -301,13 +305,15 @@ export default function RoomDetailPage() {
                     </fieldset>
                   )}
                   <div className="my-4 text-xs text-muted-foreground" role="status">
-                    {provider('catalog') === 'real'
-                      ? 'Lịch trống theo ngày chưa được cập nhật. Tính năng giữ chỗ hiện chưa khả dụng.'
+                    {!bookingAvailabilityEnabled
+                      ? 'Tính năng kiểm tra lịch trống chưa được bật trong cấu hình API này.'
                       : available.isFetching
                         ? 'Đang kiểm tra lịch trống…'
                         : available.error
                           ? available.error.message
-                          : available.data?.reason || 'Lịch trống phù hợp với khoảng ngày đã chọn.'}
+                          : available.data?.available
+                            ? 'Phòng còn trống trong khoảng ngày đã chọn.'
+                            : available.data?.reason || 'Không có lịch trống phù hợp với khoảng ngày đã chọn.'}
                   </div>
                   <div className="grid gap-3">
                     {bookable && !available.isFetching ? (

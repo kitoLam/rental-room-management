@@ -28,6 +28,10 @@ public class Payment extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String contractTenantId;
 
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String bookingId;
+
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal amount;
 
