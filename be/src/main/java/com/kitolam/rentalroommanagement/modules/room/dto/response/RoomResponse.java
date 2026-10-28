@@ -1,5 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.room.dto.response;
 
+import com.kitolam.rentalroommanagement.modules.room.enums.RoomMode;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ public record RoomResponse(
         BigDecimal area,
         BigDecimal listedRentPrice,
         BigDecimal listedDepositAmount,
+        RoomMode roomMode,
         Integer maxOccupants,
         List<String> amenities,
         List<String> images,

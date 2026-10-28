@@ -6,7 +6,6 @@ public record RoomTypeResponse(
         String id,
         String name,
         String description,
-        Integer maxOccupants,
         Instant createdAt,
         Instant updatedAt
 ) {

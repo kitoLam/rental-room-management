@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.room.dto.request;
 
 import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
+import com.kitolam.rentalroommanagement.modules.room.enums.RoomMode;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -19,6 +20,7 @@ public record RoomUpdateRequest(
         @Positive BigDecimal area,
         @PositiveOrZero BigDecimal listedRentPrice,
         @PositiveOrZero BigDecimal listedDepositAmount,
+        RoomMode roomMode,
         @Min(1) Integer maxOccupants,
         List<String> amenities,
         List<String> images,
