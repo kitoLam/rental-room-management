@@ -91,7 +91,7 @@ export async function request<T>(
   } finally {
     clearTimeout(timer)
   }
-  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/') && !path.startsWith('/api/v1/auth/')) {
     if (useSession.getState().accessToken !== token)
       throw new ApiError('Phiên của yêu cầu đã thay đổi.', 401)
     try {
@@ -180,7 +180,7 @@ let recovery: Promise<void> | null = null
 export function recoverSession() {
   const previousToken = useSession.getState().accessToken
   if (!recovery)
-    recovery = authRequest(provider('auth') === 'real' ? '/auth/refresh' : '/api/auth/refresh')
+    recovery = authRequest('/api/v1/auth/refresh')
       .then((s) => {
         if (useSession.getState().accessToken === previousToken) useSession.getState().setSession(s)
       })

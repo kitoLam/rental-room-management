@@ -64,7 +64,7 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers("/auth/**", "/api/auth/**").permitAll();
+                    auth.requestMatchers("/api/v1/auth/**").permitAll();
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
                     auth.requestMatchers("/api/v1/**").hasAnyRole("TENANT", "MANAGER", "ADMIN", "OWNER");
                     auth.anyRequest().authenticated();

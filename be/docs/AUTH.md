@@ -1,6 +1,6 @@
 # Đăng ký, đăng nhập JWT và xác thực email
 
-Triển khai trực tiếp trên backend hiện có: **Java 21, Spring Boot 4.1.2, Spring Security, MongoDB**. Sáu API sử dụng đúng prefix `/auth`, không có `/api/v1`.
+Triển khai trực tiếp trên backend hiện có: **Java 21, Spring Boot 4.1.2, Spring Security, MongoDB**. Sáu API sử dụng prefix `/api/v1/auth` đồng bộ với các module `/api/v1/**` khác.
 
 ## 1. Cây thư mục
 
@@ -138,7 +138,7 @@ Production phục vụ API và frontend qua HTTPS. Nếu TLS kết thúc ở rev
 
 Các ví dụ dùng `Content-Type: application/json`. Giá trị `<...>` là placeholder; token thực tế phải lấy từ response hoặc email, không dùng nguyên placeholder để gọi API.
 
-**POST /auth/signup**
+**POST /api/v1/auth/signup**
 
 ```json
 {
@@ -161,7 +161,7 @@ HTTP 201:
 
 Không có access token ở bước này. Request không khai báo role; nếu gửi thêm `role`, `enabled`, `emailVerified` hoặc trường ngoài DTO, server bỏ qua hoàn toàn. Trùng email/phone trả 409, validation sai trả 400.
 
-**GET /auth/verify-email?token=<token-trong-email>**
+**GET /api/v1/auth/verify-email?token=<token-trong-email>**
 
 Không có JSON request body. Link gửi tới frontend có dạng `{FRONTEND_URL}/verify-email?token=...`; trang frontend cần đọc token và gọi GET API này. Trang frontend chưa nằm trong phạm vi thay đổi backend.
 
@@ -183,7 +183,7 @@ Token sai/hết hạn/đã dùng trả 400, ví dụ:
 }
 ```
 
-**POST /auth/resend-verification**
+**POST /api/v1/auth/resend-verification**
 
 ```json
 {
@@ -209,7 +209,7 @@ Response giống nhau cho email không tồn tại hoặc đã xác thực. Vớ
 }
 ```
 
-**POST /auth/login**
+**POST /api/v1/auth/login**
 
 ```json
 {
@@ -252,7 +252,7 @@ Chỉ khi mật khẩu đúng mới trả lỗi chưa xác thực HTTP 403:
 }
 ```
 
-**POST /auth/refresh**
+**POST /api/v1/auth/refresh**
 
 ```json
 {
@@ -274,7 +274,7 @@ HTTP 200:
 
 Client thay cả hai token sau mỗi lần refresh, chỉ cho một request refresh chạy tại một thời điểm. Token cũ bị thu hồi và không dùng lại được. Mỗi token mới có hạn 7 ngày kể từ lúc cấp; đây là thời hạn trượt, chưa có giới hạn tuyệt đối của cả phiên đăng nhập. Token hợp lệ về cấu trúc nhưng hết hạn/bị thu hồi/không tồn tại trả 401; sai cấu trúc DTO trả 400.
 
-**POST /auth/logout**
+**POST /api/v1/auth/logout**
 
 ```json
 {

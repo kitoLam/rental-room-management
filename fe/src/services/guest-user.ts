@@ -22,7 +22,7 @@ import { provider } from './config'
 const nullable = z.unknown()
 export const authService = {
   login: async (input: { email: string; password: string }) =>
-    authRequest(provider('auth') === 'real' ? '/auth/login' : '/api/auth/login', input),
+    authRequest('/api/v1/auth/login', input),
   register: (input: {
     fullName: string
     email: string
@@ -33,7 +33,7 @@ export const authService = {
   }) =>
     request(
       'auth',
-      provider('auth') === 'real' ? '/auth/signup' : '/api/auth/register',
+      '/api/v1/auth/signup',
       nullable,
       write('POST', input),
       false,
@@ -42,16 +42,16 @@ export const authService = {
     provider('auth') === 'real'
       ? request(
           'auth',
-          `/auth/verify-email?${new URLSearchParams({ token })}`,
+          `/api/v1/auth/verify-email?${new URLSearchParams({ token })}`,
           nullable,
           { method: 'GET' },
           false,
         )
-      : request('auth', '/api/auth/verify-email', nullable, write('POST', { token }), false),
+      : request('auth', '/api/v1/auth/verify-email', nullable, write('POST', { token }), false),
   logout: () =>
     request(
       'auth',
-      provider('auth') === 'real' ? '/auth/logout' : '/api/auth/logout',
+      '/api/v1/auth/logout',
       nullable,
       write('POST'),
     ),
