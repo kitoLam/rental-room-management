@@ -52,6 +52,8 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/auth/login' && verb === 'POST') ||
       (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
       (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/me' && ['GET', 'PATCH'].includes(verb)) ||
       (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
       (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
   )

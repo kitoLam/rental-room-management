@@ -4,6 +4,8 @@ import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.UnauthorizedException;
 import com.kitolam.rentalroommanagement.modules.auth.dto.request.*;
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.kitolam.rentalroommanagement.modules.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -99,5 +101,33 @@ public class AuthController {
                 .sameSite("Lax")
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    @GetMapping("/me")
+    public StandardResponse<UserProfileResponse> getProfile(@AuthenticationPrincipal AuthPrincipal principal) {
+        if (principal == null || principal.userId() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        return StandardResponse.success(auth.getProfile(principal.userId()));
+    }
+
+    @PatchMapping("/me")
+    public StandardResponse<UserProfileResponse> updateProfile(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        if (principal == null || principal.userId() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        return StandardResponse.success("Cập nhật thông tin thành công", auth.updateProfile(principal.userId(), request));
+    }
+
+    @PostMapping("/change-password")
+    public StandardResponse<MessageResponse> changePassword(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        if (principal == null || principal.userId() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        return StandardResponse.success(auth.changePassword(principal.userId(), request));
     }
 }
