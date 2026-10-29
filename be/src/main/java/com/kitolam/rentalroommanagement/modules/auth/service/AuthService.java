@@ -14,4 +14,7 @@ public interface AuthService {
     TokenResponse login(LoginRequest request);
     TokenResponse refresh(RefreshTokenRequest request);
     MessageResponse logout(RefreshTokenRequest request);
+    MessageResponse changePassword(String userId, ChangePasswordRequest request);
+    UserProfileResponse getProfile(String userId);
+    UserProfileResponse updateProfile(String userId, UpdateProfileRequest request);
 }

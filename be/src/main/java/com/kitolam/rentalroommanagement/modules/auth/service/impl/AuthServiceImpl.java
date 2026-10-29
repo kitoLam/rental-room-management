@@ -212,6 +212,81 @@ public class AuthServiceImpl implements AuthService {
         refreshTokens.insert(token);
         return new TokenResponse(jwt.createAccessToken(user), raw, "Bearer",
                 security.accessTokenTtl().toSeconds(), security.refreshTokenTtl().toSeconds(),
-                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name());
+                user.getId(), user.getEmail(), user.getFullName(), user.getRole().name(), user.getPhone());
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse changePassword(String userId, ChangePasswordRequest request) {
+        if (userId == null || userId.isBlank()) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        User user = users.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy thông tin tài khoản"));
+
+        if (!passwords.matches(request.oldPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Mật khẩu cũ không chính xác");
+        }
+        if (passwords.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu cũ");
+        }
+
+        user.setPasswordHash(passwords.encode(request.newPassword()));
+        users.save(user);
+        return new MessageResponse("Đổi mật khẩu thành công");
+    }
+
+    @Override
+    public UserProfileResponse getProfile(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        User user = users.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy thông tin tài khoản"));
+        return toProfileResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public UserProfileResponse updateProfile(String userId, UpdateProfileRequest request) {
+        if (userId == null || userId.isBlank()) {
+            throw new UnauthorizedException("Vui lòng đăng nhập lại");
+        }
+        User user = users.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy thông tin tài khoản"));
+
+        if (request.phone() != null && !request.phone().isBlank()) {
+            Optional<User> existingPhone = users.findByPhoneAndIsDeletedFalse(request.phone());
+            if (existingPhone.isPresent() && !existingPhone.get().getId().equals(userId)) {
+                throw new ConflictException("Số điện thoại này đã được sử dụng bởi tài khoản khác");
+            }
+            user.setPhone(request.phone());
+        } else {
+            user.setPhone(null);
+        }
+
+        user.setFullName(request.fullName().trim());
+        if (request.dateOfBirth() != null) {
+            user.setDateOfBirth(request.dateOfBirth());
+        }
+        if (request.gender() != null) {
+            user.setGender(request.gender());
+        }
+
+        users.save(user);
+        return toProfileResponse(user);
+    }
+
+    private UserProfileResponse toProfileResponse(User user) {
+        return new UserProfileResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                List.of(user.getRole().name()),
+                user.getPhone(),
+                user.getDateOfBirth(),
+                user.getGender(),
+                user.isEnabled() ? "ACTIVE" : "DISABLED"
+        );
     }
 }

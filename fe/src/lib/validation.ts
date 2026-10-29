@@ -38,6 +38,25 @@ export const resetSchema = z
     path: ['confirmPassword'],
     message: 'Mật khẩu xác nhận chưa khớp.',
   })
+export const changePasswordSchema = z
+  .object({
+    oldPassword: z.string().min(1, 'Mật khẩu cũ là bắt buộc.'),
+    newPassword: passwordField
+      .regex(/\p{Lu}/u, 'Mật khẩu cần có ít nhất một chữ hoa.')
+      .regex(/\p{Ll}/u, 'Mật khẩu cần có ít nhất một chữ thường.')
+      .regex(/\p{Nd}/u, 'Mật khẩu cần có ít nhất một chữ số.')
+      .regex(/[^\p{L}\p{N}\s]/u, 'Mật khẩu cần có ít nhất một ký tự đặc biệt.')
+      .refine((value) => !/\p{Cc}/u.test(value), 'Mật khẩu không được chứa ký tự điều khiển.'),
+    confirmPassword: z.string().min(1, 'Vui lòng xác nhận mật khẩu mới.'),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Mật khẩu xác nhận không khớp.',
+  })
+  .refine((v) => v.oldPassword !== v.newPassword, {
+    path: ['newPassword'],
+    message: 'Mật khẩu mới không được trùng với mật khẩu cũ.',
+  })
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
   phone: z.string().regex(/^(?:\+?[0-9 ]{9,15})?$/, 'Số điện thoại chưa hợp lệ.'),

@@ -22,4 +22,6 @@ public class User extends BaseDocument {
     private boolean emailVerified;
     private Instant termsAcceptedAt;
     private Instant lastVerificationSentAt;
+    private String dateOfBirth;
+    private String gender;
 }

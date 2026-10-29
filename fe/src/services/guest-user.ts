@@ -1,3 +1,4 @@
+import { useSession } from '@/features/auth/session-store'
 import { z } from 'zod'
 import {
   appointmentSchema,
@@ -12,6 +13,7 @@ import {
   policySchema,
   roomSchema,
   userSchema,
+  type User,
   utilityRatesSchema,
   type AppointmentInput,
   type BookingInput,
@@ -57,6 +59,14 @@ export const authService = {
       '/api/v1/auth/logout',
       nullable,
       write('POST'),
+    ),
+  changePassword: (input: { oldPassword: string; newPassword: string; confirmPassword?: string }) =>
+    request(
+      'auth',
+      '/api/v1/auth/change-password',
+      nullable,
+      write('POST', input),
+      true,
     ),
   forgot: (email: string) =>
     request('recovery', '/api/auth/forgot-password', nullable, write('POST', { email }), false),
@@ -442,8 +452,28 @@ export const bookingService = {
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/refund/approve`, backendBookingSchema, write('POST'))),
 }
 export const profileService = {
-  get: () => request('profile', '/api/me', userSchema),
-  update: (value: unknown) => request('profile', '/api/me', userSchema, write('PATCH', value)),
+  get: async (): Promise<User> => {
+    if (provider('auth') === 'real' || provider('profile') === 'real') {
+      try {
+        return await request('auth', '/api/v1/auth/me', userSchema)
+      } catch {
+        const currentUser = useSession.getState().user
+        if (currentUser) return currentUser
+        throw new ApiError('Không thể tải thông tin hồ sơ.', 500)
+      }
+    }
+    return request('profile', '/api/me', userSchema)
+  },
+  update: async (value: unknown): Promise<User> => {
+    if (provider('auth') === 'real' || provider('profile') === 'real') {
+      const updated = await request('auth', '/api/v1/auth/me', userSchema, write('PATCH', value))
+      useSession.getState().updateUser(updated)
+      return updated
+    }
+    const updated = await request('profile', '/api/me', userSchema, write('PATCH', value))
+    useSession.getState().updateUser(updated)
+    return updated
+  },
 }
 export const notificationService = {
   list: (read = '', page = 1, type = '') =>

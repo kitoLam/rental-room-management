@@ -32,9 +32,6 @@ export function provider(feature: Feature): 'mock' | 'real' {
     feature === 'notifications' ||
     feature === 'adminUsers' ||
     feature === 'utilities' ||
-    feature === 'catalog' ||
-    feature === 'leasing' ||
-    feature === 'manager' ||
     feature === 'viewing'
     ? 'real'
     : 'mock'

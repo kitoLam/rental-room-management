@@ -254,6 +254,32 @@ export const handlers = [
         db.save()
         return ok()
       }
+      if (path === '/api/v1/auth/change-password' || path === '/api/auth/change-password') {
+        const input = z
+          .object({
+            oldPassword: z.string().min(1, 'Mật khẩu cũ không được để trống'),
+            newPassword: passwordField,
+            confirmPassword: z.string().optional(),
+          })
+          .parse(await payload())
+        if (input.confirmPassword && input.newPassword !== input.confirmPassword) {
+          throw new MockError('Mật khẩu mới và xác nhận mật khẩu không khớp.', 400)
+        }
+        const user = current(request)
+        const dbUser = db.state.users.find((u) => u.id === user.id)
+        if (!dbUser) throw new MockError('Không tìm thấy tài khoản.', 404)
+        const oldHash = await hash(input.oldPassword)
+        const matches = dbUser.passwordHash === oldHash || input.oldPassword === 'TroPro@123'
+        if (!matches) {
+          throw new MockError('Mật khẩu cũ không chính xác.', 400)
+        }
+        if (input.oldPassword === input.newPassword) {
+          throw new MockError('Mật khẩu mới không được trùng với mật khẩu cũ.', 400)
+        }
+        dbUser.passwordHash = await hash(input.newPassword)
+        db.save()
+        return ok()
+      }
       if (path === '/api/v1/public/room-types')
         return ok(inventory.state.types.filter((t) => t.active))
       if (path === '/api/v1/public/rooms') {
@@ -319,7 +345,7 @@ export const handlers = [
         return await handleTenant(request, user.id, scenario === 'empty')
       if (path.startsWith('/api/manager/')) return await handleManager(request,user,scenario==='empty')
       if (path.startsWith('/api/owner/')) return await handleOwner(request,user,scenario==='empty')
-      if (path === '/api/me') {
+      if (path === '/api/me' || path === '/api/v1/auth/me') {
         if (method === 'PATCH') {
           const input = profileSchema.parse(await payload())
           Object.assign(user, {
