@@ -19,4 +19,5 @@ public class VnPayProperties {
     private String locale = "vn";
     private String orderType = "other";
     private int expireMinutes = 15;
+    private boolean refundSimulationEnabled = false;
 }

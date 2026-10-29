@@ -115,4 +115,40 @@ public class VnPayUtil {
         }
         return sb.toString();
     }
+
+    /**
+     * Ghép chuỗi hash data phục vụ tạo chữ ký API hoàn tiền (vnp_Command = refund) theo chuẩn VNPAY 2.1.0:
+     * vnp_RequestId|vnp_Version|vnp_Command|vnp_TmnCode|vnp_TransactionType|vnp_TxnRef|vnp_Amount|vnp_TransactionNo|vnp_TransactionDate|vnp_CreateBy|vnp_CreateDate|vnp_IpAddr|vnp_OrderInfo
+     */
+    public static String buildRefundHashData(
+            String requestId,
+            String version,
+            String command,
+            String tmnCode,
+            String transactionType,
+            String txnRef,
+            String amount,
+            String transactionNo,
+            String transactionDate,
+            String createBy,
+            String createDate,
+            String ipAddr,
+            String orderInfo
+    ) {
+        return String.join("|",
+                requestId != null ? requestId : "",
+                version != null ? version : "",
+                command != null ? command : "",
+                tmnCode != null ? tmnCode : "",
+                transactionType != null ? transactionType : "",
+                txnRef != null ? txnRef : "",
+                amount != null ? amount : "",
+                transactionNo != null && !transactionNo.isBlank() ? transactionNo : "0",
+                transactionDate != null ? transactionDate : "",
+                createBy != null ? createBy : "",
+                createDate != null ? createDate : "",
+                ipAddr != null ? ipAddr : "",
+                orderInfo != null ? orderInfo : ""
+        );
+    }
 }

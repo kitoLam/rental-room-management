@@ -39,6 +39,7 @@ public class Payment extends BaseDocument {
 
     @Indexed
     private String transactionCode;
+    private String gatewayTransactionNo;
 
     private Instant paidAt;
 
