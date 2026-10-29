@@ -1,7 +1,7 @@
 import { delay, http, HttpResponse } from 'msw'
 import { z } from 'zod'
 import { db, MockError } from './database'
-import { demoUser } from './fixtures'
+import { demoUser, branches } from './fixtures'
 import { tenantUser, roommateUser } from './tenant-fixtures'
 import { handleTenant } from './tenant-handler'
 import { provider } from '@/services/config'
@@ -282,13 +282,17 @@ export const handlers = [
       }
       if (path === '/api/v1/public/room-types')
         return ok(inventory.state.types.filter((t) => t.active))
+      if (path === '/api/v1/public/branches')
+        return ok(branches)
       if (path === '/api/v1/public/rooms') {
         const filters: RoomFilters = {
-          q: params.get('address') || '',
+          q: params.get('q') || params.get('keyword') || params.get('address') || '',
           area: params.get('area') || '',
-          mode: (params.get('rentalMode') || 'ALL') as RoomFilters['mode'],
+          mode: (params.get('rentalMode') || (params.get('roomMode') === 'WHOLE_ROOM' ? 'ROOM' : params.get('roomMode') === 'PER_SLOT' ? 'SLOT' : undefined) || 'ALL') as RoomFilters['mode'],
           minPrice: params.has('minPrice') ? Number(params.get('minPrice')) : undefined,
           maxPrice: params.has('maxPrice') ? Number(params.get('maxPrice')) : undefined,
+          minArea: params.has('minArea') ? Number(params.get('minArea')) : undefined,
+          maxArea: params.has('maxArea') ? Number(params.get('maxArea')) : undefined,
           minCapacity: params.has('minCapacity') ? Number(params.get('minCapacity')) : undefined,
           roomTypeId: params.get('roomTypeId') || '',
           availableOnly: params.get('availableOnly') === 'true',

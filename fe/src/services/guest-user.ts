@@ -106,6 +106,7 @@ const publicRoomSchema = z.object({
   branchName: z.string(),
   address: z.string(),
   roomTypeName: z.string(),
+  ownerName: z.string().nullish(),
 })
 type RealRoom = z.infer<typeof publicRoomSchema>
 function adaptRoom(data: RealRoom) {
@@ -149,6 +150,7 @@ function adaptRoom(data: RealRoom) {
     amenities: r.amenities || [],
     services: [],
     utilityRates: data.utilityRates,
+    ownerName: data.ownerName || undefined,
   })
 }
 export const defaultFilters: RoomFilters = {
@@ -162,10 +164,14 @@ export const defaultFilters: RoomFilters = {
 }
 function query(filters: RoomFilters) {
   const params = new URLSearchParams({ page: String(filters.page - 1), size: '6' })
-  if (filters.q) params.set('address', filters.q)
+  if (filters.q) {
+    params.set('q', filters.q)
+    params.set('keyword', filters.q)
+    params.set('address', filters.q)
+  }
   if (filters.branchId) params.set('branchId', filters.branchId)
   if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
-  for (const key of ['minPrice', 'maxPrice', 'minCapacity'] as const)
+  for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea', 'minCapacity'] as const)
     if (filters[key] !== undefined) params.set(key, String(filters[key]))
   if (provider('catalog') === 'mock') {
     params.set('rentalMode', filters.mode)
@@ -173,18 +179,17 @@ function query(filters: RoomFilters) {
     params.set('area', filters.area)
     params.set('sort', filters.sort)
   } else {
-    if (filters.mode !== 'ALL' || filters.availableOnly || filters.area)
-      throw new ApiError(
-        'Bộ lọc này chưa khả dụng. Vui lòng tìm theo địa chỉ, giá hoặc sức chứa.',
-        422,
-      )
+    if (filters.mode === 'ROOM') params.set('roomMode', 'WHOLE_ROOM')
+    if (filters.mode === 'SLOT') params.set('roomMode', 'PER_SLOT')
+    if (filters.area && !filters.q) params.set('address', filters.area)
     const sorts: Record<string, string> = {
-      recommended: 'code,asc',
+      recommended: 'roomNumber,asc',
       'price-asc': 'referencePrice,asc',
       'price-desc': 'referencePrice,desc',
+      'area-desc': 'area,desc',
+      'area-asc': 'area,asc',
+      newest: 'newest,desc',
     }
-    if (filters.sort === 'area-desc')
-      throw new ApiError('API phòng hiện chưa hỗ trợ sắp xếp theo diện tích.', 422)
     params.set('sort', sorts[filters.sort] || sorts.recommended)
   }
   return params.toString()
@@ -204,7 +209,13 @@ export const catalogService = {
     request(
       'catalog',
       '/api/v1/public/room-types',
-      z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+      z.array(z.object({ id: databaseIdSchema, name: z.string() })),
+    ),
+  branches: () =>
+    request(
+      'catalog',
+      '/api/v1/public/branches',
+      z.array(z.object({ id: databaseIdSchema, name: z.string(), address: z.string().optional() })),
     ),
   availability: (id: string, startDate: string, endDate: string) =>
     request(

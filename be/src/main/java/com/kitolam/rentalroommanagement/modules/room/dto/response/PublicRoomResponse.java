@@ -10,8 +10,20 @@ public record PublicRoomResponse(
         String branchName,
         String address,
         String roomTypeName,
+        String ownerName,
         UtilityRatesResponse utilityRates
 ) {
+    public PublicRoomResponse(
+            PublicRoom room,
+            String branchId,
+            String branchName,
+            String address,
+            String roomTypeName,
+            UtilityRatesResponse utilityRates
+    ) {
+        this(room, branchId, branchName, address, roomTypeName, null, utilityRates);
+    }
+
     public record PublicRoom(
             String id,
             String branchId,

@@ -7,7 +7,6 @@ import {
   Field,
   InlineError,
   Modal,
-  Notice,
   Page,
   Pagination,
   QueryState,
@@ -15,9 +14,10 @@ import {
 import { RoomCard } from './components/room-card'
 import { areaOptions } from './data/filter-options'
 import { catalogService, defaultFilters } from '@/services/guest-user'
-import { provider } from '@/services/config'
 import type { RoomFilters } from '@/interfaces/domain'
 import { filterParams, parseFilters } from './search-filters'
+
+const formatVndNumber = (num: number) => new Intl.NumberFormat('vi-VN').format(num)
 
 function Filters({
   filters,
@@ -28,12 +28,21 @@ function Filters({
 }) {
   const id = useId()
   const [error, setError] = useState('')
-  const real = provider('catalog') === 'real'
+  const [minPrice, setMinPrice] = useState<number>(filters.minPrice ?? 500000)
+  const [maxPrice, setMaxPrice] = useState<number>(filters.maxPrice ?? 20000000)
+  const [minArea, setMinArea] = useState<number>(filters.minArea ?? 10)
+  const [maxArea, setMaxArea] = useState<number>(filters.maxArea ?? 100)
+
   const types = useQuery({
     queryKey: ['room-types'],
     queryFn: catalogService.types,
-    enabled: !real,
   })
+
+  const branches = useQuery({
+    queryKey: ['public-branches'],
+    queryFn: catalogService.branches,
+  })
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -42,8 +51,12 @@ function Filters({
       if (value) params.set(key, String(value))
     })
     params.set('q', filters.q)
-    if (filters.branchId) params.set('branchId', filters.branchId)
     params.set('sort', filters.sort)
+    params.set('minPrice', String(minPrice))
+    params.set('maxPrice', String(maxPrice))
+    params.set('minArea', String(minArea))
+    params.set('maxArea', String(maxArea))
+
     const parsed = parseFilters(params)
     if (!parsed.success) {
       setError(parsed.error.issues[0].message)
@@ -52,25 +65,52 @@ function Filters({
     setError('')
     apply(parsed.data)
   }
+
+  function handleReset() {
+    setMinPrice(500000)
+    setMaxPrice(20000000)
+    setMinArea(10)
+    setMaxArea(100)
+    setError('')
+    apply({ ...defaultFilters, q: filters.q })
+  }
+
   return (
     <form onSubmit={submit} className="grid gap-5" key={JSON.stringify(filters)}>
       <div className="flex items-center justify-between">
-        <h2 className="font-bold">Bộ lọc</h2>
+        <h2 className="font-bold text-base">Bộ lọc tìm kiếm</h2>
         <button
           type="button"
-          className="min-h-11 text-sm text-primary underline"
-          onClick={() => apply({ ...defaultFilters, q: filters.q })}
+          className="min-h-11 text-sm text-primary underline hover:text-primary/80 transition-colors"
+          onClick={handleReset}
         >
           Xóa bộ lọc
         </button>
       </div>
+
+      <Field label="Vị trí / Chi nhánh" id={`${id}-branch`}>
+        <select
+          id={`${id}-branch`}
+          name="branchId"
+          className="input"
+          defaultValue={filters.branchId || ''}
+        >
+          <option value="">Tất cả vị trí / chi nhánh</option>
+          {branches.data?.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name} {b.address ? `(${b.address})` : ''}
+            </option>
+          ))}
+        </select>
+        {branches.error && <InlineError error={branches.error} />}
+      </Field>
+
       <Field label="Khu vực" id={`${id}-area`}>
         <select
           id={`${id}-area`}
           name="area"
           className="input"
           defaultValue={filters.area}
-          disabled={real}
         >
           <option value="">Tất cả khu vực</option>
           {areaOptions.map((o) => (
@@ -80,71 +120,201 @@ function Filters({
           ))}
         </select>
       </Field>
-      <Field label="Hình thức thuê" id={`${id}-mode`}>
+
+      <Field label="Loại hình (Nhà riêng hay Căn hộ)" id={`${id}-mode`}>
         <select
           id={`${id}-mode`}
           className="input"
           name="mode"
           defaultValue={filters.mode}
-          disabled={real}
         >
           <option value="ALL">Tất cả hình thức</option>
-          <option value="ROOM">Nguyên phòng</option>
-          <option value="SLOT">Ở ghép / theo chỗ</option>
+          <option value="ROOM">Nhà riêng / Căn hộ nguyên căn</option>
+          <option value="SLOT">Phòng ở ghép / Theo chỗ (Slot)</option>
         </select>
       </Field>
-      <fieldset>
-        <legend className="mb-2 text-sm font-bold">Giá tham khảo / tháng</legend>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-muted-foreground">
-            Từ (₫)
-            <input
-              aria-label="Giá tối thiểu"
-              className="input mt-2"
-              name="minPrice"
-              type="number"
-              min="0"
-              step="50000"
-              defaultValue={filters.minPrice}
-              placeholder="0"
-            />
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Đến (₫)
-            <input
-              aria-label="Giá tối đa"
-              className="input mt-2"
-              name="maxPrice"
-              type="number"
-              min="0"
-              step="50000"
-              defaultValue={filters.maxPrice}
-              placeholder="Không giới hạn"
-            />
-          </label>
+
+      <Field label="Loại phòng" id={`${id}-type`}>
+        <select
+          id={`${id}-type`}
+          className="input"
+          name="roomTypeId"
+          defaultValue={filters.roomTypeId}
+        >
+          <option value="">Tất cả loại phòng</option>
+          {types.data?.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {types.error && <InlineError error={types.error} />}
+      </Field>
+
+      {/* Kéo giá tiền từ 500.000 - 20.000.000 VNĐ */}
+      <fieldset className="rounded-lg border border-border/70 p-3.5 bg-surface/50 space-y-3">
+        <legend className="px-1 text-sm font-bold text-foreground">
+          Giá tiền (500.000 - 20.000.000 ₫)
+        </legend>
+        <div className="flex items-center justify-between text-xs font-semibold text-primary">
+          <span>{formatVndNumber(minPrice)} ₫</span>
+          <span className="text-muted-foreground">—</span>
+          <span>{formatVndNumber(maxPrice)} ₫</span>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Theo phòng hoặc theo chỗ, tùy hình thức thuê.
-        </p>
+        <div className="space-y-2">
+          <div>
+            <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+              <span>Từ:</span>
+              <span className="font-medium text-foreground">{formatVndNumber(minPrice)} ₫</span>
+            </div>
+            <input
+              type="range"
+              aria-label="Thanh trượt giá tối thiểu"
+              min={500000}
+              max={20000000}
+              step={500000}
+              value={minPrice}
+              onChange={(e) => {
+                const val = Number(e.target.value)
+                setMinPrice(Math.min(val, maxPrice))
+              }}
+              className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
+            />
+          </div>
+          <div>
+            <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+              <span>Đến:</span>
+              <span className="font-medium text-foreground">{formatVndNumber(maxPrice)} ₫</span>
+            </div>
+            <input
+              type="range"
+              aria-label="Thanh trượt giá tối đa"
+              min={500000}
+              max={20000000}
+              step={500000}
+              value={maxPrice}
+              onChange={(e) => {
+                const val = Number(e.target.value)
+                setMaxPrice(Math.max(val, minPrice))
+              }}
+              className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label className="text-[11px] text-muted-foreground">Nhập giá từ (₫)</label>
+            <input
+              type="number"
+              aria-label="Giá tối thiểu"
+              name="minPrice"
+              className="input mt-1 text-xs"
+              min={0}
+              max={20000000}
+              step={500000}
+              value={minPrice}
+              onChange={(e) => setMinPrice(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground">Nhập giá đến (₫)</label>
+            <input
+              type="number"
+              aria-label="Giá tối đa"
+              name="maxPrice"
+              className="input mt-1 text-xs"
+              min={0}
+              max={20000000}
+              step={500000}
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(Number(e.target.value))}
+            />
+          </div>
+        </div>
       </fieldset>
-      {!real && (
-        <Field label="Loại phòng" id={`${id}-type`}>
-          <select
-            id={`${id}-type`}
-            className="input"
-            name="roomTypeId"
-            defaultValue={filters.roomTypeId}
-          >
-            <option value="">Tất cả loại phòng</option>
-            {types.data?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          {types.error && <InlineError error={types.error} />}
-        </Field>
-      )}
+
+      {/* Kéo diện tích từ 10m2 - 100m2 */}
+      <fieldset className="rounded-lg border border-border/70 p-3.5 bg-surface/50 space-y-3">
+        <legend className="px-1 text-sm font-bold text-foreground">
+          Diện tích (10m² - 100m²)
+        </legend>
+        <div className="flex items-center justify-between text-xs font-semibold text-primary">
+          <span>{minArea} m²</span>
+          <span className="text-muted-foreground">—</span>
+          <span>{maxArea} m²</span>
+        </div>
+        <div className="space-y-2">
+          <div>
+            <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+              <span>Từ:</span>
+              <span className="font-medium text-foreground">{minArea} m²</span>
+            </div>
+            <input
+              type="range"
+              aria-label="Thanh trượt diện tích tối thiểu"
+              min={10}
+              max={100}
+              step={5}
+              value={minArea}
+              onChange={(e) => {
+                const val = Number(e.target.value)
+                setMinArea(Math.min(val, maxArea))
+              }}
+              className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
+            />
+          </div>
+          <div>
+            <div className="flex justify-between text-[11px] text-muted-foreground mb-1">
+              <span>Đến:</span>
+              <span className="font-medium text-foreground">{maxArea} m²</span>
+            </div>
+            <input
+              type="range"
+              aria-label="Thanh trượt diện tích tối đa"
+              min={10}
+              max={100}
+              step={5}
+              value={maxArea}
+              onChange={(e) => {
+                const val = Number(e.target.value)
+                setMaxArea(Math.max(val, minArea))
+              }}
+              className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label className="text-[11px] text-muted-foreground">Từ (m²)</label>
+            <input
+              type="number"
+              aria-label="Diện tích tối thiểu"
+              name="minArea"
+              className="input mt-1 text-xs"
+              min={10}
+              max={100}
+              step={5}
+              value={minArea}
+              onChange={(e) => setMinArea(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground">Đến (m²)</label>
+            <input
+              type="number"
+              aria-label="Diện tích tối đa"
+              name="maxArea"
+              className="input mt-1 text-xs"
+              min={10}
+              max={100}
+              step={5}
+              value={maxArea}
+              onChange={(e) => setMaxArea(Number(e.target.value))}
+            />
+          </div>
+        </div>
+      </fieldset>
+
       <Field label="Sức chứa tối thiểu" id={`${id}-capacity`}>
         <select
           id={`${id}-capacity`}
@@ -155,66 +325,72 @@ function Filters({
           <option value="">Không yêu cầu</option>
           {[1, 2, 3, 4, 5].map((n) => (
             <option key={n} value={n}>
-              {n} người
+              {n} người trở lên
             </option>
           ))}
         </select>
       </Field>
-      <label className="flex min-h-11 items-center gap-3 text-sm">
+
+      <label className="flex min-h-11 items-center gap-3 text-sm cursor-pointer select-none">
         <input
           type="checkbox"
           name="availableOnly"
           value="true"
           defaultChecked={filters.availableOnly}
-          disabled={real}
-          className="size-5 accent-primary"
+          className="size-5 accent-primary rounded cursor-pointer"
         />
-        Chỉ phòng còn chỗ hôm nay
+        <span>Chỉ phòng còn chỗ hôm nay</span>
       </label>
+
       <InlineError error={error ? new Error(error) : null} />
-      <Button type="submit">
+
+      <Button type="submit" className="w-full">
         <SlidersHorizontal />
         Áp dụng bộ lọc
       </Button>
     </form>
   )
 }
+
 export default function RoomSearchPage() {
-  const real = provider('catalog') === 'real'
   const [params, setParams] = useSearchParams()
   const parsed = parseFilters(params)
   const filters = parsed.success ? parsed.data : defaultFilters
   const [drawer, setDrawer] = useState(false)
   const [debounced, setDebounced] = useState(filters.q)
+
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(filters.q), 350)
     return () => clearTimeout(timer)
   }, [filters.q])
+
   const result = useQuery({
     queryKey: ['rooms', 'search', { ...filters, q: debounced }, params.get('demo')],
     queryFn: () => catalogService.rooms({ ...filters, q: debounced }),
     enabled: parsed.success,
   })
+
   function apply(next: RoomFilters) {
     const query = filterParams(next)
     if (params.get('demo')) query.set('demo', params.get('demo')!)
     setParams(query)
     setDrawer(false)
   }
+
   return (
     <Page
       wide
       eyebrow="TÌM MỘT NƠI THUỘC VỀ BẠN"
       title="Không gian vừa vặn với cuộc sống."
-      description="Chọn khu vực, mức giá và cách ở phù hợp. Lịch trống được kiểm tra lại theo ngày bạn muốn thuê."
+      description="Chọn khu vực, mức giá, diện tích và cách ở phù hợp. Tìm nhanh theo tên phòng, mã số phòng, chủ nhà hoặc địa chỉ."
     >
       <div role="search" className="mb-7 flex gap-3">
         <label className="relative min-w-0 flex-1">
           <Search className="absolute top-3.5 left-4 size-5 text-muted-foreground" />
-          <span className="sr-only">Tìm địa chỉ, khu vực</span>
+          <span className="sr-only">Tìm theo tên phòng, mã phòng, chủ nhà, địa chỉ</span>
           <input
             className="input h-12 pl-12"
-            placeholder="Tìm địa chỉ, khu vực…"
+            placeholder="Tìm theo tên phòng, mã số phòng, chủ nhà, địa chỉ…"
             value={filters.q}
             onChange={(e) => {
               const next = new URLSearchParams(params)
@@ -229,20 +405,13 @@ export default function RoomSearchPage() {
           Bộ lọc
         </Button>
       </div>
-      {provider('catalog') === 'real' && (
-        <div className="mb-6">
-          <Notice>
-            Bạn có thể tìm theo địa chỉ, giá, sức chứa và sắp xếp kết quả. Lọc theo hình thức thuê,
-            khu vực và lịch trống hiện chưa khả dụng.
-          </Notice>
-        </div>
-      )}
+
       {!parsed.success ? (
         <div className="grid gap-4">
           <InlineError
             error={
               new Error(
-                'Bộ lọc trong liên kết chưa hợp lệ. Kiểm tra khoảng giá, hình thức thuê và số trang.',
+                'Bộ lọc trong liên kết chưa hợp lệ. Vui lòng kiểm tra khoảng giá, diện tích và số trang.',
               )
             }
           />
@@ -251,7 +420,7 @@ export default function RoomSearchPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid items-start gap-8 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="sticky top-24 hidden rounded-xl bg-surface p-5 ring-1 ring-border/70 lg:block">
             <Filters filters={filters} apply={apply} />
           </aside>
@@ -262,48 +431,89 @@ export default function RoomSearchPage() {
                   ? 'Đang tìm phòng…'
                   : `${result.data?.totalElements || 0} không gian phù hợp`}
               </p>
-              <select
-                aria-label="Sắp xếp"
-                className="input w-auto max-w-full"
-                value={filters.sort}
-                onChange={(e) => apply({ ...filters, sort: e.target.value, page: 1 })}
-              >
-                <option value="recommended">Thứ tự mặc định</option>
-                <option value="price-asc">Giá thấp đến cao</option>
-                <option value="price-desc">Giá cao đến thấp</option>
-                <option value="area-desc" disabled={real}>
-                  Diện tích lớn trước
-                </option>
-              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground hidden sm:inline">Sắp xếp theo:</span>
+                <select
+                  aria-label="Sắp xếp"
+                  className="input w-auto max-w-full"
+                  value={filters.sort}
+                  onChange={(e) => apply({ ...filters, sort: e.target.value, page: 1 })}
+                >
+                  <option value="recommended">Thứ tự mặc định</option>
+                  <option value="price-asc">Giá thấp đến cao</option>
+                  <option value="price-desc">Giá cao đến thấp</option>
+                  <option value="area-desc">Diện tích lớn nhất</option>
+                  <option value="area-asc">Diện tích nhỏ nhất</option>
+                  <option value="newest">Mới nhất</option>
+                </select>
+              </div>
             </div>
+
+            {/* Chips lọc đang áp dụng */}
             {(filters.mode !== 'ALL' ||
               filters.area ||
+              filters.branchId ||
+              filters.roomTypeId ||
               filters.minPrice !== undefined ||
-              filters.maxPrice !== undefined) && (
-              <div className="mb-5 flex flex-wrap gap-2">
+              filters.maxPrice !== undefined ||
+              filters.minArea !== undefined ||
+              filters.maxArea !== undefined) && (
+              <div className="mb-5 flex flex-wrap gap-2 items-center">
                 {filters.mode !== 'ALL' && (
                   <button
-                    className="flex min-h-11 items-center gap-2 rounded-lg bg-primary-soft px-3 text-sm text-primary"
+                    className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"
                     onClick={() => apply({ ...filters, mode: 'ALL', page: 1 })}
                   >
-                    {filters.mode === 'ROOM' ? 'Nguyên phòng' : 'Ở ghép'}
-                    <X size={14} />
+                    {filters.mode === 'ROOM' ? 'Căn hộ / Nhà riêng' : 'Ở ghép'}
+                    <X size={12} />
+                  </button>
+                )}
+                {(filters.minPrice !== undefined || filters.maxPrice !== undefined) && (
+                  <button
+                    className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"
+                    onClick={() =>
+                      apply({ ...filters, minPrice: undefined, maxPrice: undefined, page: 1 })
+                    }
+                  >
+                    Giá: {formatVndNumber(filters.minPrice ?? 500000)}₫ — {formatVndNumber(filters.maxPrice ?? 20000000)}₫
+                    <X size={12} />
+                  </button>
+                )}
+                {(filters.minArea !== undefined || filters.maxArea !== undefined) && (
+                  <button
+                    className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"
+                    onClick={() =>
+                      apply({ ...filters, minArea: undefined, maxArea: undefined, page: 1 })
+                    }
+                  >
+                    Diện tích: {filters.minArea ?? 10}m² — {filters.maxArea ?? 100}m²
+                    <X size={12} />
+                  </button>
+                )}
+                {filters.area && (
+                  <button
+                    className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"
+                    onClick={() => apply({ ...filters, area: '', page: 1 })}
+                  >
+                    Khu vực: {areaOptions.find((a) => a.value === filters.area)?.label || filters.area}
+                    <X size={12} />
                   </button>
                 )}
                 <button
-                  className="min-h-11 text-sm text-muted-foreground underline"
+                  className="min-h-8 text-xs text-muted-foreground underline hover:text-foreground transition-colors ml-2"
                   onClick={() => apply(defaultFilters)}
                 >
                   Xóa tất cả
                 </button>
               </div>
             )}
+
             <QueryState
               pending={result.isPending}
               error={result.error}
               retry={result.refetch}
               empty={result.data?.content.length === 0}
-              emptyMessage="Chưa tìm thấy phòng phù hợp. Thử thay đổi khu vực, khoảng giá hoặc hình thức thuê."
+              emptyMessage="Chưa tìm thấy phòng phù hợp. Thử thay đổi từ khóa, khoảng giá, diện tích hoặc hình thức thuê."
               emptyAction={
                 <Button variant="outline" onClick={() => apply(defaultFilters)}>
                   Đặt lại bộ lọc
@@ -330,11 +540,12 @@ export default function RoomSearchPage() {
           </section>
         </div>
       )}
+
       <Modal
         open={drawer}
         onOpenChange={setDrawer}
         title="Tìm đúng không gian"
-        description="Lọc theo nhu cầu và ngân sách của bạn."
+        description="Lọc theo nhu cầu, khoảng giá và diện tích của bạn."
         drawer
       >
         <Filters filters={filters} apply={apply} />
