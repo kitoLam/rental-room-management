@@ -10,6 +10,19 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
   if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
+  // Đăng ký / ngừng dịch vụ (BE module servicerequest).
+  if (
+    feature === 'utilities' &&
+    ((verb === 'GET' &&
+      (matches('/api/v1/service-requests(/tenancy|/catalog|/mine)?') ||
+        matches('/api/v1/service-requests/[0-9a-fA-F]{24}'))) ||
+      (verb === 'POST' &&
+        (matches('/api/v1/service-requests/(registrations|terminations)') ||
+          matches(
+            '/api/v1/service-requests/[0-9a-fA-F]{24}/(cancellation|approval|rejection|installation-confirmation|termination-confirmation)',
+          ))))
+  )
+    return null
   if (
     feature === 'viewing' &&
     ((pathname === '/api/v1/appointments/notifications' && verb === 'GET') ||
