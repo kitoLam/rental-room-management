@@ -91,15 +91,30 @@ export function ManagerStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'APPROVED', 'VERIFIED', 'CONFIRMED', 'FINALIZED', 'PAID', 'COMPLETED'].includes(
-          value,
-        )
+        [
+          'ACTIVE',
+          'APPROVED',
+          'VERIFIED',
+          'CONFIRMED',
+          'FINALIZED',
+          'PAID',
+          'COMPLETED',
+          'RESOLVED',
+          'CLOSED',
+        ].includes(value)
           ? 'success'
-          : ['PENDING', 'REVIEW', 'HELD', 'OPEN', 'AWAITING_PAYMENT', 'CANCEL_REQUESTED'].includes(
-                value,
-              )
+          : [
+                'PENDING',
+                'REVIEW',
+                'HELD',
+                'OPEN',
+                'AWAITING_PAYMENT',
+                'CANCEL_REQUESTED',
+                'IN_PROGRESS',
+                'WAITING_INFO',
+              ].includes(value)
             ? 'warning'
-            : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
+            : ['REJECTED', 'FAILED', 'OVERDUE', 'ESCALATED_ADMIN'].includes(value)
               ? 'danger'
               : 'neutral'
       }

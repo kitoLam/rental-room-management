@@ -8,15 +8,65 @@ import {
   serviceSchema,
   chargeSchema,
   proposalSchema,
-  reportSchema,
   type ReportInput,
+  type MaintenanceReport,
 } from '@/interfaces/tenant'
 
 import { provider } from './config'
 import { utilitiesService } from './utilities'
+import { reportRequestService } from './report-request'
+import type { ReportRequestItem } from '@/interfaces/report-request'
 import type {
   CreateCostAllocationProposalInput,
 } from '@/interfaces/utilities'
+
+function adaptReportRequest(item: ReportRequestItem, tenancyId?: string): MaintenanceReport {
+  const assetNameMap: Record<string, string> = {
+    REPAIR: 'Sửa chữa',
+    MAINTENANCE: 'Bảo trì',
+    COMPLAINT: 'Khiếu nại',
+    FURNITURE: 'Nội thất',
+    SERVICE: 'Dịch vụ',
+    CONTRACT: 'Gia hạn / Hợp đồng',
+    OTHER: 'Yêu cầu hỗ trợ',
+  }
+  return {
+    id: item.id,
+    contractTenantId: tenancyId || item.tenantId,
+    assetId: item.roomId,
+    category: item.type as any,
+    title: item.title,
+    description: item.content,
+    priority: (item.priority === 'MEDIUM' ? 'NORMAL' : item.priority) as any,
+    attachments: (item.attachments || []).map((url, i) => ({
+      id: `${item.id}-att-${i}`,
+      name: `Ảnh ${i + 1}`,
+      mime: 'image/jpeg',
+      size: 100000,
+      url,
+    })),
+    assetName: assetNameMap[item.type] || item.type,
+    status: item.status as any,
+    createdAt: item.createdAt,
+    assignedTo: item.managerId ? 'Quản lý khu trọ' : null,
+    solutionResult: item.solutionResult,
+    rejectReason: item.rejectReason,
+    requestedInfoNote: item.requestedInfoNote,
+    disputeReason: item.disputeReason,
+    adminConclusion: item.adminConclusion,
+    records: (item.timeline || []).map((rec) => ({
+      id: rec.id,
+      at: rec.createdAt,
+      status: rec.statusTo || rec.action,
+      description: rec.note || rec.action,
+      performedBy: rec.actorName || rec.actorRole || 'Hệ thống',
+      evidence: rec.attachments || [],
+      cost: 0,
+      responsibleParty: null,
+      approvalStatus: null,
+    })),
+  }
+}
 
 const path = (id: string, resource: string) =>
   `/api/tenant/tenancies/${encodeURIComponent(id)}/${resource}`
@@ -24,8 +74,26 @@ export const tenantApi = {
   manualPay: (id: string, invoiceId: string, value: unknown) => request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}/manual-payments`), tenantPaymentSchema, write('POST', value)),
   prepay: (id: string, value: unknown) =>
     request('tenant', path(id, 'prepaid-payments'), tenantPaymentSchema, write('POST', value)),
-  tenancies: () => request('tenant', '/api/tenant/tenancies', z.array(tenancySchema)),
-  room: (id: string) => request('tenant', path(id, 'room'), tenantRoomSchema),
+  tenancies: async () => {
+    try {
+      return await request('tenant', '/api/tenant/tenancies', z.array(tenancySchema))
+    } catch {
+      const { tenantDb } = await import('@/mocks/tenant-engine')
+      const { useSession } = await import('@/features/auth/session-store')
+      const user = useSession.getState().user
+      const list = user ? tenantDb.state.tenancies.filter((t) => t.userId === user.id) : []
+      return list.length ? list : tenantDb.state.tenancies.slice(0, 1)
+    }
+  },
+  room: async (id: string) => {
+    try {
+      return await request('tenant', path(id, 'room'), tenantRoomSchema)
+    } catch {
+      const { tenantDb } = await import('@/mocks/tenant-engine')
+      const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+      return tenantDb.room(t)
+    }
+  },
   contract: (id: string, contractId: string) =>
     request('tenant', path(id, `contracts/${encodeURIComponent(contractId)}`), tenancySchema),
   invoices: (id: string) => request('tenant', path(id, 'invoices'), z.array(invoiceSchema)),
@@ -163,17 +231,122 @@ export const tenantApi = {
     }
     return request('tenant', path(id, 'allocations'), proposalSchema, write('POST', value))
   },
-  reports: (id: string) => request('tenant', path(id, 'maintenance'), z.array(reportSchema)),
-  report: (id: string, reportId: string) =>
-    request('tenant', path(id, `maintenance/${encodeURIComponent(reportId)}`), reportSchema),
-  createReport: (id: string, value: ReportInput) =>
-    request('tenant', path(id, 'maintenance'), reportSchema, write('POST', value)),
-  cancelReport: (id: string, reportId: string) =>
-    request(
-      'tenant',
-      path(id, `maintenance/${encodeURIComponent(reportId)}/cancel`),
-      reportSchema,
-      write('POST'),
-    ),
+  reports: async (id: string): Promise<MaintenanceReport[]> => {
+    if (provider('tenant') === 'real') {
+      try {
+        const p = await reportRequestService.search({ size: 100 })
+        if (p && Array.isArray(p.content)) {
+          const seen = new Set<string>()
+          return p.content
+            .filter((item) => {
+              if (!item.id || seen.has(item.id)) return false
+              seen.add(item.id)
+              return true
+            })
+            .map((item) => adaptReportRequest(item, id))
+        }
+      } catch (err) {
+        console.warn('Real report-requests search failed, falling back to mock:', err)
+      }
+    }
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+    const list = tenantDb.state.reports.filter(
+      (r) => !t || r.contractTenantId === t.id || r.contractTenantId === id || !r.contractTenantId,
+    )
+    return list.length ? list : tenantDb.state.reports
+  },
+  report: async (id: string, reportId: string): Promise<MaintenanceReport> => {
+    if (provider('tenant') === 'real') {
+      try {
+        const item = await reportRequestService.getById(reportId)
+        if (item) {
+          return adaptReportRequest(item, id)
+        }
+      } catch (err) {
+        console.warn('Real report-request getById failed, falling back to mock:', err)
+      }
+    }
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+    const found =
+      tenantDb.state.reports.find((x) => x.id === reportId && x.contractTenantId === t.id) ||
+      tenantDb.state.reports.find((x) => x.id === reportId)
+    if (!found) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
+    return found
+  },
+  createReport: async (
+    id: string,
+    value: ReportInput & { roomId?: string; type?: string; furnitureIds?: string[]; serviceIds?: string[] },
+  ): Promise<MaintenanceReport> => {
+    if (provider('tenant') === 'real') {
+      try {
+        const targetRoomId =
+          value.roomId ||
+          (value.category !== 'FURNITURE' && value.category !== 'SERVICE' ? value.assetId : undefined) ||
+          ''
+        const item = await reportRequestService.create({
+          roomId: targetRoomId,
+          type: (value.type || value.category || 'REPAIR') as any,
+          title: value.title,
+          content: value.description,
+          priority: (value.priority === 'NORMAL' ? 'MEDIUM' : value.priority) as any,
+          attachments: (value.attachments || []).map((a) => a.url),
+          furnitureIds:
+            value.furnitureIds ||
+            (value.category === 'FURNITURE' && value.assetId && value.assetId !== targetRoomId
+              ? [value.assetId]
+              : undefined),
+          serviceIds:
+            value.serviceIds ||
+            (value.category === 'SERVICE' && value.assetId && value.assetId !== targetRoomId
+              ? [value.assetId]
+              : undefined),
+        })
+        const adapted = adaptReportRequest(item, id)
+        try {
+          const { tenantDb } = await import('@/mocks/tenant-engine')
+          const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+          if (t && !tenantDb.state.reports.some((r) => r.id === adapted.id)) {
+            tenantDb.state.reports.unshift({
+              ...adapted,
+              workflowAt: Date.now() + 12000,
+            } as any)
+            tenantDb.save()
+          }
+        } catch {
+          // ignore sync error
+        }
+        return adapted
+      } catch (err) {
+        console.warn('Real report-requests create failed, falling back to direct mock:', err)
+      }
+    }
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+    return tenantDb.report(t, {
+      category: value.category || 'REPAIR',
+      assetId: value.assetId || t.roomId,
+      title: value.title,
+      description: value.description,
+      priority: value.priority || 'NORMAL',
+      attachments: value.attachments || [],
+    })
+  },
+  cancelReport: async (id: string, reportId: string): Promise<MaintenanceReport> => {
+    if (provider('tenant') === 'real') {
+      try {
+        const item = await reportRequestService.cancel(reportId)
+        if (item) {
+          return adaptReportRequest(item, id)
+        }
+      } catch (err) {
+        console.warn('Real report-request cancel failed, falling back to mock:', err)
+      }
+    }
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+    return tenantDb.cancelReport(t, reportId)
+  },
   reset: () => request('tenant', '/api/tenant/demo/reset', z.null(), write('POST')),
 }

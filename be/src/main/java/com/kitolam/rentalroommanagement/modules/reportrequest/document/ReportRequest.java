@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.FieldType;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,6 +30,18 @@ public class ReportRequest extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomId;
 
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String branchId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String contractId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String managerId;
+
     private ReportRequestType type;
 
     private String title;
@@ -41,5 +54,17 @@ public class ReportRequest extends BaseDocument {
 
     private String rejectReason;
 
+    private String requestedInfoNote;
+
+    private String solutionResult;
+
+    private String disputeReason;
+
+    private String adminConclusion;
+
     private ReportRequestStatus status = ReportRequestStatus.PENDING;
+
+    private Instant resolvedAt;
+
+    private Instant closedAt;
 }

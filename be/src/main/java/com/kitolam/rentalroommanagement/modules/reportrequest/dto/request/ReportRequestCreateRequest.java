@@ -9,13 +9,14 @@ import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public record ReportRequestCreateRequest(
-        @NotBlank @ValidObjectId String tenantId,
-        @NotBlank @ValidObjectId String roomId,
+        String tenantId,
+        @NotBlank String roomId,
         @NotNull ReportRequestType type,
         @NotBlank String title,
         @NotBlank String content,
         List<String> attachments,
         ReportRequestPriority priority,
-        String rejectReason
+        List<String> furnitureIds,
+        List<String> serviceIds
 ) {
 }

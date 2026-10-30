@@ -10,13 +10,21 @@ export function TenantStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'PAID', 'VERIFIED', 'APPROVED', 'COMPLETED'].includes(value)
+        ['ACTIVE', 'PAID', 'VERIFIED', 'APPROVED', 'COMPLETED', 'RESOLVED', 'CLOSED'].includes(
+          value,
+        )
           ? 'success'
-          : ['PENDING', 'PARTIAL', 'REVIEW', 'CANCEL_REQUESTED', 'OPEN', 'IN_PROGRESS'].includes(
-                value,
-              )
+          : [
+                'PENDING',
+                'PARTIAL',
+                'REVIEW',
+                'CANCEL_REQUESTED',
+                'OPEN',
+                'IN_PROGRESS',
+                'WAITING_INFO',
+              ].includes(value)
             ? 'warning'
-            : ['OVERDUE', 'FAILED', 'REJECTED', 'URGENT'].includes(value)
+            : ['OVERDUE', 'FAILED', 'REJECTED', 'URGENT', 'ESCALATED_ADMIN'].includes(value)
               ? 'danger'
               : 'neutral'
       }

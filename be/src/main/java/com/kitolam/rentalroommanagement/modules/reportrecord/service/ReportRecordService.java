@@ -6,11 +6,15 @@ import com.kitolam.rentalroommanagement.modules.reportrecord.dto.request.ReportR
 import com.kitolam.rentalroommanagement.modules.reportrecord.dto.response.ReportRecordResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+
 public interface ReportRecordService {
 
     ReportRecordResponse create(ReportRecordCreateRequest request);
 
     ReportRecordResponse getById(String id);
+
+    List<ReportRecordResponse> getByReportRequestId(String reportRequestId);
 
     PagedResponse<ReportRecordResponse> search(ReportRecordFilterRequest filter, Pageable pageable);
 

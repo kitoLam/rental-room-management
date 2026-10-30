@@ -274,7 +274,7 @@ export const assetSchema = assetInputSchema.extend({
 })
 export type ManagerAsset = z.infer<typeof assetSchema>
 export const managerReportSchema = reportSchema.extend({
-  roomId: uuid,
+  roomId: z.string(),
   roomName: z.string(),
   tenantName: z.string(),
 })

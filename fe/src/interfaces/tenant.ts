@@ -169,32 +169,57 @@ export const proposalSchema = z.object({
 })
 export type AllocationProposal = z.infer<typeof proposalSchema>
 export const attachmentSchema = z.object({
-  id,
+  id: z.string(),
   name: z.string().min(1).max(120),
-  mime: z.enum(['image/png', 'image/jpeg', 'image/webp']),
-  size: z.number().int().positive().max(1048576),
-  url: z.string().max(1400000),
+  mime: z.string(),
+  size: z.number().int().positive().max(10485760),
+  url: z.string(),
 })
 export type Attachment = z.infer<typeof attachmentSchema>
 export const reportInputSchema = z.object({
-  assetId: id,
-  category: z.enum(['FURNITURE', 'SERVICE']),
-  title: z.string().trim().min(5, 'Tiêu đề cần ít nhất 5 ký tự.').max(120),
-  description: z.string().trim().min(15, 'Mô tả cần ít nhất 15 ký tự.').max(2000),
-  priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
-  attachments: z.array(attachmentSchema).max(3),
+  assetId: z.string(),
+  category: z.enum([
+    'FURNITURE',
+    'SERVICE',
+    'REPAIR',
+    'MAINTENANCE',
+    'COMPLAINT',
+    'CONTRACT',
+    'OTHER',
+  ]),
+  title: z.string().trim().min(3, 'Tiêu đề cần ít nhất 3 ký tự.').max(120),
+  description: z.string().trim().min(5, 'Mô tả cần ít nhất 5 ký tự.').max(2000),
+  priority: z.enum(['LOW', 'MEDIUM', 'NORMAL', 'HIGH', 'URGENT']),
+  attachments: z.array(attachmentSchema).max(5),
 })
 export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
-  id,
-  contractTenantId: id,
+  id: z.string(),
+  contractTenantId: z.string(),
   assetName: z.string(),
-  status: z.enum(['OPEN', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']),
+  status: z.enum([
+    'OPEN',
+    'ACCEPTED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'REJECTED',
+    'CANCELLED',
+    'PENDING',
+    'WAITING_INFO',
+    'RESOLVED',
+    'CLOSED',
+    'ESCALATED_ADMIN',
+  ]),
   createdAt: z.string(),
   assignedTo: z.string().nullable(),
+  solutionResult: z.string().nullable().optional(),
+  rejectReason: z.string().nullable().optional(),
+  requestedInfoNote: z.string().nullable().optional(),
+  disputeReason: z.string().nullable().optional(),
+  adminConclusion: z.string().nullable().optional(),
   records: z.array(
     z.object({
-      id,
+      id: z.string(),
       at: z.string(),
       status: z.string(),
       description: z.string(),

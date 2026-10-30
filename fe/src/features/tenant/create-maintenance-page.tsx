@@ -21,7 +21,7 @@ export function CreateMaintenancePage() {
   const form = useForm<ReportInput>({
       resolver: zodResolver(reportInputSchema),
       defaultValues: {
-        category: 'FURNITURE',
+        category: 'REPAIR',
         assetId: '',
         title: '',
         description: '',
@@ -53,48 +53,106 @@ export function CreateMaintenancePage() {
   }
   return (
     <TenantPage
-      title="Báo hỏng"
-      description="Mô tả tình trạng để quản lý sắp xếp kiểm tra."
-      actions={<TenantLink to="/tenant/maintenance">Về bảo trì</TenantLink>}
+      title="Gửi yêu cầu hỗ trợ"
+      description="Gửi yêu cầu sửa chữa, bảo trì, khiếu nại hoặc gia hạn hợp đồng."
+      actions={<TenantLink to="/tenant/maintenance">Về danh sách yêu cầu</TenantLink>}
     >
       <QueryState pending={room.isPending} error={room.error} retry={room.refetch}>
         {room.data && (
           <Panel>
             <form
               className="grid min-w-0 grid-cols-1 gap-5"
-              onSubmit={form.handleSubmit((value) => mutation.mutate(value))}
+              onSubmit={form.handleSubmit(
+                (value) => {
+                  const targetRoomId = room.data?.tenancy.roomId || t.roomId || ''
+                  const assetId = value.assetId || targetRoomId
+                  const furnitureIds =
+                    value.category === 'FURNITURE' && value.assetId && value.assetId !== targetRoomId
+                      ? [value.assetId]
+                      : undefined
+                  const serviceIds =
+                    value.category === 'SERVICE' && value.assetId && value.assetId !== targetRoomId
+                      ? [value.assetId]
+                      : undefined
+
+                  mutation.mutate({
+                    ...value,
+                    roomId: targetRoomId,
+                    assetId,
+                    furnitureIds,
+                    serviceIds,
+                  })
+                },
+                (errors) => {
+                  console.warn('Form validation errors:', errors)
+                },
+              )}
             >
+              {!isActive(t) && (
+                <Notice tone="warning">
+                  Quan hệ thuê này hiện không ở trạng thái hoạt động hoặc đã hết hạn hợp đồng.
+                </Notice>
+              )}
               <Notice>
                 {t.branchName} · {t.roomName}
                 {t.slotName ? ` · ${t.slotName}` : ''}
               </Notice>
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field id="report-category" label="Loại báo hỏng">
+                <Field id="report-category" label="Loại yêu cầu">
                   <select
                     id="report-category"
                     className="input"
-                    {...form.register('category', { onChange: () => form.setValue('assetId', '') })}
+                    {...form.register('category', {
+                      onChange: (e) => {
+                        const val = e.target.value
+                        if (['FURNITURE', 'SERVICE'].includes(val)) {
+                          form.setValue('assetId', '')
+                        } else {
+                          form.setValue('assetId', room.data?.tenancy.roomId || t.roomId || '')
+                        }
+                      },
+                    })}
                   >
+                    <option value="REPAIR">Sửa chữa</option>
+                    <option value="MAINTENANCE">Bảo trì</option>
+                    <option value="COMPLAINT">Khiếu nại</option>
                     <option value="FURNITURE">Nội thất</option>
                     <option value="SERVICE">Dịch vụ</option>
+                    <option value="CONTRACT">Gia hạn / Hợp đồng</option>
+                    <option value="OTHER">Khác</option>
                   </select>
                 </Field>
-                <Field
-                  id="report-asset"
-                  label="Tài sản / dịch vụ"
-                  error={form.formState.errors.assetId ? 'Chọn tài sản hoặc dịch vụ.' : undefined}
-                >
-                  <select id="report-asset" className="input" {...form.register('assetId')}>
-                    <option value="">Chọn mục cần kiểm tra</option>
-                    {room.data.assets
-                      .filter((a) => a.category === category)
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
+                {['FURNITURE', 'SERVICE'].includes(category) ? (
+                  <Field
+                    id="report-asset"
+                    label="Tài sản / dịch vụ cụ thể"
+                    error={
+                      form.formState.errors.assetId
+                        ? 'Chọn tài sản hoặc dịch vụ.'
+                        : undefined
+                    }
+                  >
+                    <select id="report-asset" className="input" {...form.register('assetId')}>
+                      <option value="">Chọn mục cần kiểm tra</option>
+                      {room.data.assets
+                        .filter((a) => a.category === category)
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
+                ) : (
+                  <Field id="report-scope" label="Phạm vi hỗ trợ">
+                    <input
+                      id="report-scope"
+                      className="input bg-muted/20"
+                      readOnly
+                      value={`${t.roomName} (${t.branchName})`}
+                    />
+                  </Field>
+                )}
               </div>
               <Field id="report-title" label="Tiêu đề" error={form.formState.errors.title?.message}>
                 <input
@@ -185,14 +243,17 @@ export function CreateMaintenancePage() {
                   </div>
                 ))}
               </div>
+              {Object.keys(form.formState.errors).length > 0 && (
+                <InlineError error={new Error('Vui lòng kiểm tra lại các trường có báo lỗi bên trên.')} />
+              )}
               <InlineError error={mutation.error} />
               <div className="flex justify-end">
                 <Button
                   type="submit"
                   loading={mutation.isPending}
-                  disabled={!isActive(t) || uploading}
+                  disabled={uploading}
                 >
-                  Gửi yêu cầu bảo trì
+                  Gửi yêu cầu hỗ trợ
                 </Button>
               </div>
             </form>

@@ -26,6 +26,14 @@ public class ReportRecord extends BaseDocument {
 
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
+    private String actorId;
+
+    private String actorRole;
+
+    private String actorName;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
     private String managerId;
 
     private ReportRecordAction action;
