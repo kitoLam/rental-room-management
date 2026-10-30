@@ -2,6 +2,7 @@ package com.kitolam.rentalroommanagement.modules.roomservice.controller;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.RoomServiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.RoomServiceFilterRequest;
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.RoomServiceUpdateRequest;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -29,7 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/room-services")
 @RequiredArgsConstructor
-@Tag(name = "Room Services")
+@PreAuthorize("hasAnyRole('MANAGER', 'OWNER', 'ADMIN')")
+@Tag(name = "Room Services", description = "Dịch vụ đang dùng của phòng; tạo / ngừng qua /api/v1/service-requests")
 public class RoomServiceController {
 
     private final RoomServiceService roomServiceService;
@@ -43,7 +46,7 @@ public class RoomServiceController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Lấy dịch vụ phòng theo id")
-    public StandardResponse<RoomServiceResponse> getById(@PathVariable String id) {
+    public StandardResponse<RoomServiceResponse> getById(@PathVariable @ValidObjectId String id) {
         return StandardResponse.success(roomServiceService.getById(id));
     }
 
@@ -57,13 +60,13 @@ public class RoomServiceController {
 
     @PatchMapping("/{id}")
     @Operation(summary = "Cập nhật dịch vụ phòng")
-    public StandardResponse<RoomServiceResponse> update(@PathVariable String id, @Valid @RequestBody RoomServiceUpdateRequest request) {
+    public StandardResponse<RoomServiceResponse> update(@PathVariable @ValidObjectId String id, @Valid @RequestBody RoomServiceUpdateRequest request) {
         return StandardResponse.success("Cập nhật dịch vụ phòng thành công", roomServiceService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Xoá mềm dịch vụ phòng")
-    public StandardResponse<Void> delete(@PathVariable String id) {
+    public StandardResponse<Void> delete(@PathVariable @ValidObjectId String id) {
         roomServiceService.delete(id);
         return StandardResponse.success("Xoá dịch vụ phòng thành công", null);
     }

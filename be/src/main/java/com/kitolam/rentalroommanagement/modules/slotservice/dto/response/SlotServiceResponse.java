@@ -18,6 +18,7 @@ public record SlotServiceResponse(
         LocalDate endDate,
         SlotServiceStatus status,
         String stopReason,
+        String sourceRequestId,
         Instant createdAt,
         Instant updatedAt
 ) {

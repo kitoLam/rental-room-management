@@ -35,4 +35,10 @@ public class RoomService extends BaseDocument {
     private LocalDate endDate;
 
     private RoomServiceStatus status = RoomServiceStatus.ACTIVE;
+
+    private String stopReason;
+
+    /** Service request whose confirmed installation created this subscription. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String sourceRequestId;
 }

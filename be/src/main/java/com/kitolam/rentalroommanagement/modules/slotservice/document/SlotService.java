@@ -42,4 +42,8 @@ public class SlotService extends BaseDocument {
     private SlotServiceStatus status = SlotServiceStatus.ACTIVE;
 
     private String stopReason;
+
+    /** Service request whose confirmed installation created this subscription. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String sourceRequestId;
 }
