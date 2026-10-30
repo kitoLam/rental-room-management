@@ -71,3 +71,11 @@ vnpay:
   url: ${VNPAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
   return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/vnpay-return}
   api-url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+
+service-request:
+  # Local development only, until the contract module exposes a tenant's active tenancy:
+  # every tenant is treated as renting this room (and slot). Keep disabled elsewhere.
+  tenancy-stub:
+    enabled: ${SERVICE_REQUEST_TENANCY_STUB_ENABLED:false}
+    room-id: ${SERVICE_REQUEST_TENANCY_STUB_ROOM_ID:}
+    room-slot-id: ${SERVICE_REQUEST_TENANCY_STUB_ROOM_SLOT_ID:}

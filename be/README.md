@@ -72,7 +72,7 @@ src/main/java/com/kitolam/rentalroommanagement
     │       ├── request/            # RoomCreateRequest, RoomUpdateRequest, RoomFilterRequest
     │       └── response/           # RoomResponse
     ├── branch/  roomtype/  manager/  roomslot/  furniture/  shift/
-    ├── serviceitem/  roomservice/  slotservice/
+    ├── serviceitem/  roomservice/  slotservice/  servicerequest/
     ├── tenant/  booking/  contract/  contracttenant/  roomslotoccupancy/
     ├── roomservicecharge/  slotservicecharge/  invoice/  payment/
     ├── appointment/
@@ -93,6 +93,7 @@ src/main/java/com/kitolam/rentalroommanagement
 | serviceitem | ServiceItem | services | /api/v1/services |
 | roomservice | RoomService | room_services | /api/v1/room-services |
 | slotservice | SlotService | slot_services | /api/v1/slot-services |
+| servicerequest | ServiceRequest (+ HistoryEntry) | service_requests | /api/v1/service-requests |
 | tenant | Tenant | tenants | /api/v1/tenants |
 | booking | Booking | bookings | /api/v1/bookings |
 | contract | Contract | contracts | /api/v1/contracts |
@@ -109,6 +110,8 @@ src/main/java/com/kitolam/rentalroommanagement
 | reportrecord | ReportRecord | report_records | /api/v1/report-records |
 
 > `SERVICES` đặt tên class là `ServiceItem` để không trùng annotation `@Service` của Spring.
+
+> `servicerequest` là luồng đăng ký / ngừng dịch vụ. `room_services` / `slot_services` chỉ được tạo hoặc ngừng khi quản lý xác nhận ngày lắp đặt / kết thúc, nên phí luôn tính theo ngày đã xác nhận. Khi module hợp đồng chưa có API, bật `SERVICE_REQUEST_TENANCY_STUB_ENABLED` ở local (xem `.env.example`).
 
 ## 3. Quy ước code
 
