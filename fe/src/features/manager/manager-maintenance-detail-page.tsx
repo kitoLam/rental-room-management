@@ -30,6 +30,32 @@ export function ManagerMaintenanceDetail() {
       query.refetch()
     })
 
+  const getActionButtons = (status: string): [string, string][] => {
+    switch (status) {
+      case 'PENDING':
+      case 'OPEN':
+        return [
+          ['start', 'Bắt đầu xử lý'],
+          ['request-info', 'Yêu cầu bổ sung'],
+          ['reject', 'Từ chối'],
+        ]
+      case 'IN_PROGRESS':
+      case 'ACCEPTED':
+        return [
+          ['progress', 'Cập nhật tiến độ'],
+          ['resolve', 'Báo kết quả giải quyết'],
+          ['request-info', 'Yêu cầu bổ sung'],
+          ['reject', 'Từ chối'],
+        ]
+      case 'WAITING_INFO':
+        return [
+          ['reject', 'Từ chối'],
+        ]
+      default:
+        return []
+    }
+  }
+
   return (
     <ManagerPage
       title="Xử lý yêu cầu hỗ trợ"
@@ -47,7 +73,7 @@ export function ManagerMaintenanceDetail() {
                   ['Người gửi', query.data.tenantName],
                   ['Trạng thái', <ManagerStatus value={query.data.status} />],
                   ['Mức độ', <ManagerStatus value={query.data.priority} />],
-                  ['Phụ trách', query.data.assignedTo || 'Quản lý'],
+                  ['Phụ trách', query.data.assignedTo || 'Quản lý phụ trách'],
                 ]}
               />
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.description}</p>
@@ -85,49 +111,23 @@ export function ManagerMaintenanceDetail() {
               )}
               {query.data.disputeReason && query.data.status === 'ESCALATED_ADMIN' && (
                 <div className="mt-6 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
-                  <p className="font-bold">Hồ sơ đã chuyển lên Admin phân xử. Lý do:</p>
-                  <p className="mt-1 whitespace-pre-wrap">{query.data.disputeReason}</p>
-                  {query.data.adminConclusion && (
-                    <p className="mt-2 font-semibold text-emerald-800 dark:text-emerald-300">
-                      Kết luận Admin: {query.data.adminConclusion}
-                    </p>
-                  )}
+                  <p className="font-bold">Hồ sơ đã chuyển lên Admin phân xử. Đang chờ kết luận:</p>
+                  <p className="mt-1 whitespace-pre-wrap">Lý do khiếu nại: {query.data.disputeReason}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Các thao tác của Quản lý tạm khóa chờ Admin giải quyết.
+                  </p>
+                </div>
+              )}
+              {query.data.adminConclusion && query.data.status === 'CLOSED' && (
+                <div className="mt-6 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-900 dark:text-emerald-200">
+                  <p className="font-bold">Hồ sơ đã được Admin phân xử & đóng:</p>
+                  <p className="mt-1 whitespace-pre-wrap">Kết luận Admin: {query.data.adminConclusion}</p>
                 </div>
               )}
 
+              {/* Action buttons */}
               <div className="mt-6 flex flex-wrap gap-3">
-                {(['OPEN', 'PENDING'].includes(query.data.status)
-                  ? [
-                      ['start', 'Bắt đầu xử lý'],
-                      ['request-info', 'Yêu cầu bổ sung'],
-                      ['reject', 'Từ chối'],
-                    ]
-                  : query.data.status === 'WAITING_INFO'
-                    ? [
-                        ['start', 'Bắt đầu xử lý'],
-                        ['reject', 'Từ chối'],
-                      ]
-                    : query.data.status === 'ACCEPTED'
-                      ? [
-                          ['start', 'Bắt đầu xử lý'],
-                          ['request-info', 'Yêu cầu bổ sung'],
-                          ['reject', 'Từ chối'],
-                        ]
-                      : query.data.status === 'IN_PROGRESS'
-                        ? [
-                            ['progress', 'Cập nhật tiến độ'],
-                            ['resolve', 'Báo kết quả giải quyết'],
-                            ['request-info', 'Yêu cầu bổ sung'],
-                          ]
-                        : query.data.status === 'RESOLVED'
-                          ? [
-                              ['reopen', 'Mở lại xử lý'],
-                              ['escalate-admin', 'Chuyển Admin'],
-                            ]
-                          : query.data.status === 'ESCALATED_ADMIN'
-                            ? [['admin-resolve', 'Admin phân xử & đóng']]
-                            : []
-                ).map(([a, label]) => (
+                {getActionButtons(query.data.status).map(([a, label]) => (
                   <Button variant="outline" key={a} onClick={() => setAction(a)}>
                     {label}
                   </Button>
@@ -192,13 +192,14 @@ export function ManagerMaintenanceDetail() {
               </ol>
             </Panel>
             <Notice>
-              Tất cả các bước xử lý (bổ sung thông tin, cập nhật tiến độ, báo giải quyết, mở lại) đều
+              Tất cả các bước xử lý (bắt đầu xử lý, bổ sung thông tin, cập nhật tiến độ, báo giải quyết, từ chối) đều
               được lưu vết tự động vào lịch sử hệ thống.
             </Notice>
           </>
         )}
       </QueryState>
 
+      {/* Modal: Progress Update */}
       {action === 'record' || action === 'progress' ? (
         <Modal
           title={action === 'progress' ? 'Cập nhật tiến độ xử lý' : 'Thêm nhật ký xử lý'}
@@ -211,7 +212,7 @@ export function ManagerMaintenanceDetail() {
             schema={recordInputSchema.omit({ evidence: true })}
             defaults={{ description: '', cost: 0, responsibleParty: '' }}
             fields={[
-              { name: 'description', label: 'Công việc / Tiến độ thực hiện', kind: 'textarea' },
+              { name: 'description', label: 'Nội dung tiến độ xử lý (bắt buộc)', kind: 'textarea' },
               { name: 'cost', label: 'Chi phí phát sinh (VND, nếu có)', kind: 'number' },
               {
                 name: 'responsibleParty',
@@ -259,7 +260,7 @@ export function ManagerMaintenanceDetail() {
             fields={[
               {
                 name: 'solutionResult',
-                label: 'Kết quả giải quyết & bàn giao',
+                label: 'Kết quả giải quyết & bàn giao (bắt buộc)',
                 kind: 'textarea',
               },
             ]}
@@ -280,17 +281,13 @@ export function ManagerMaintenanceDetail() {
       ) : (
         <ActionDialog
           title={
-            action === 'request-info'
-              ? 'Yêu cầu khách thuê bổ sung thông tin'
-              : action === 'reject'
-                ? 'Từ chối yêu cầu hỗ trợ'
-                : action === 'reopen'
-                  ? 'Mở lại yêu cầu để tiếp tục xử lý'
-                  : action === 'escalate-admin'
-                    ? 'Chuyển tranh chấp lên Admin'
-                    : action === 'admin-resolve'
-                      ? 'Admin phân xử và đóng hồ sơ'
-                      : 'Xác nhận xử lý sửa chữa'
+            action === 'start'
+              ? 'Xác nhận bắt đầu tiếp nhận và xử lý yêu cầu'
+              : action === 'request-info'
+                ? 'Yêu cầu khách thuê bổ sung thông tin'
+                : action === 'reject'
+                  ? 'Từ chối yêu cầu hỗ trợ'
+                  : 'Xác nhận thao tác'
           }
           open={!!action}
           onOpenChange={(v) => {
@@ -298,18 +295,10 @@ export function ManagerMaintenanceDetail() {
           }}
           fields={
             action === 'request-info'
-              ? [{ name: 'note', label: 'Nội dung thông tin cần bổ sung' }]
+              ? [{ name: 'note', label: 'Nội dung thông tin cần bổ sung (bắt buộc)' }]
               : action === 'reject'
-                ? [{ name: 'reason', label: 'Lý do từ chối' }]
-                : action === 'reopen'
-                  ? [{ name: 'reason', label: 'Lý do mở lại xử lý' }]
-                  : action === 'escalate-admin'
-                    ? [{ name: 'reason', label: 'Lý do chuyển lên Admin' }]
-                    : action === 'admin-resolve'
-                      ? [{ name: 'adminConclusion', label: 'Kết luận phân xử của Admin' }]
-                      : ['accept', 'assign'].includes(action)
-                        ? [{ name: 'handler', label: 'Người được phân công' }]
-                        : []
+                ? [{ name: 'reason', label: 'Lý do từ chối (bắt buộc)' }]
+                : []
           }
           pending={mutation.isPending}
           error={mutation.error}

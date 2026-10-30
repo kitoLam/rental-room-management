@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { request, write } from './http'
 import { pageSchema, type Page } from '@/interfaces/domain'
+import type { Tenancy, MaintenanceReport } from '@/interfaces/tenant'
+import type { InternalReport } from '@/mocks/tenant-fixtures'
 import {
   reportRequestResponseSchema,
   reportRecordResponseSchema,
@@ -10,7 +12,15 @@ import {
   type ReportRequestFilter,
 } from '@/interfaces/report-request'
 
-function toItem(r: any, tenancy?: any): ReportRequestItem {
+type MockReportRecord = MaintenanceReport['records'][number]
+type MockReportLike = InternalReport & {
+  roomId?: string
+  branchId?: string
+  contractId?: string
+  content?: string
+}
+
+function toItem(r: MockReportLike, tenancy?: Tenancy): ReportRequestItem {
   const priorityMap: Record<string, 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'> = {
     LOW: 'LOW',
     MEDIUM: 'MEDIUM',
@@ -18,7 +28,7 @@ function toItem(r: any, tenancy?: any): ReportRequestItem {
     HIGH: 'HIGH',
     URGENT: 'URGENT',
   }
-  const statusMap: Record<string, any> = {
+  const statusMap: Record<string, ReportRequestItem['status']> = {
     OPEN: 'PENDING',
     ACCEPTED: 'IN_PROGRESS',
     COMPLETED: 'RESOLVED',
@@ -26,32 +36,32 @@ function toItem(r: any, tenancy?: any): ReportRequestItem {
   return {
     id: r.id,
     tenantId: tenancy?.userId || 'tenant-id',
-    roomId: (r as any).roomId || tenancy?.roomId || r.assetId || 'room-id',
-    branchId: (r as any).branchId || tenancy?.branchId || 'branch-id',
-    contractId: (r as any).contractId || tenancy?.contractId || 'contract-id',
+    roomId: r.roomId || tenancy?.roomId || r.assetId || 'room-id',
+    branchId: r.branchId || tenancy?.branchId || 'branch-id',
+    contractId: r.contractId || tenancy?.contractId || 'contract-id',
     managerId: r.assignedTo ? 'manager-1' : 'manager-id',
     type: r.category || 'REPAIR',
     title: r.title || '',
-    content: (r as any).content || r.description || '',
-    attachments: (r.attachments || []).map((a: any) => (typeof a === 'string' ? a : a.url)),
+    content: r.content || r.description || '',
+    attachments: (r.attachments || []).map((a) => (typeof a === 'string' ? a : a.url)),
     priority: priorityMap[r.priority] || 'MEDIUM',
-    status: statusMap[r.status] || r.status || 'PENDING',
+    status: statusMap[r.status] || (r.status as ReportRequestItem['status']) || 'PENDING',
     solutionResult: r.solutionResult || null,
     rejectReason: r.rejectReason || null,
     requestedInfoNote: r.requestedInfoNote || null,
     disputeReason: r.disputeReason || null,
     adminConclusion: r.adminConclusion || null,
     createdAt: r.createdAt || new Date().toISOString(),
-    timeline: (r.records || []).map((rec: any, idx: number): ReportRecordItem => ({
+    timeline: (r.records || []).map((rec: MockReportRecord, idx: number): ReportRecordItem => ({
       id: rec.id || `rec-${idx}`,
       reportRequestId: r.id,
       actorId: 'user-id',
       actorRole: rec.performedBy || 'Khách thuê',
       actorName: rec.performedBy || 'Khách thuê',
       managerId: 'manager-id',
-      action: rec.status || 'CREATED',
+      action: (rec.status as ReportRecordItem['action']) || 'CREATED',
       statusFrom: null,
-      statusTo: rec.status || 'PENDING',
+      statusTo: (rec.status as ReportRequestItem['status']) || 'PENDING',
       note: rec.description || '',
       attachments: rec.evidence || [],
       createdAt: rec.at || new Date().toISOString(),
@@ -61,7 +71,7 @@ function toItem(r: any, tenancy?: any): ReportRequestItem {
 
 async function findMockReport(id: string) {
   const { tenantDb } = await import('@/mocks/tenant-engine')
-  const r = tenantDb.state.reports.find((x) => x.id === id)
+  const r = tenantDb.state.reports.find((x) => x.id === id) as MockReportLike | undefined
   const tenancy = tenantDb.state.tenancies.find((t) => t.id === r?.contractTenantId) || tenantDb.state.tenancies[0]
   return { tenantDb, r, tenancy }
 }
@@ -90,7 +100,7 @@ export const reportRequestService = {
           url,
         })),
       })
-      return toItem(rep, tenancy)
+      return toItem(rep as MockReportLike, tenancy)
     }
   },
 
@@ -100,7 +110,7 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests getById failed, falling back to mock:', err)
       const { r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       return toItem(r, tenancy)
     }
   },
@@ -131,10 +141,11 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests search failed, falling back to mock:', err)
       const { tenantDb } = await import('@/mocks/tenant-engine')
-      const items = tenantDb.state.reports.map((r) => {
+      const items = tenantDb.state.reports.map((rawReport) => {
+        const r = rawReport as MockReportLike
         const t =
           tenantDb.state.tenancies.find((x) => x.id === r.contractTenantId) ||
-          tenantDb.state.tenancies.find((x) => x.roomId === (r as any).roomId || x.roomId === r.assetId) ||
+          tenantDb.state.tenancies.find((x) => x.roomId === r.roomId || x.roomId === r.assetId) ||
           tenantDb.state.tenancies[0]
         return toItem(r, t)
       })
@@ -176,8 +187,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests requestInfo failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'WAITING_INFO' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'WAITING_INFO'
       r.requestedInfoNote = note
       r.records.push({
         id: crypto.randomUUID(),
@@ -210,8 +221,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests supplementInfo failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'PENDING' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'PENDING'
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -239,14 +250,43 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests reject failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'REJECTED' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'REJECTED'
       r.rejectReason = reason
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         status: 'REJECTED',
         description: `Từ chối yêu cầu: ${reason}`,
+        performedBy: 'Quản lý',
+        evidence: [],
+        cost: 0,
+        responsibleParty: null,
+        approvalStatus: null,
+      })
+      tenantDb.save()
+      return toItem(r, tenancy)
+    }
+  },
+
+  startProcessing: async (id: string): Promise<ReportRequestItem> => {
+    try {
+      return await request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/start`,
+        reportRequestResponseSchema,
+        write('POST'),
+      )
+    } catch (err) {
+      console.warn('Real report-requests startProcessing failed, falling back to mock:', err)
+      const { tenantDb, r, tenancy } = await findMockReport(id)
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'IN_PROGRESS'
+      r.records.push({
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        status: 'IN_PROGRESS',
+        description: 'Quản lý bắt đầu tiếp nhận và xử lý yêu cầu',
         performedBy: 'Quản lý',
         evidence: [],
         cost: 0,
@@ -273,8 +313,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests updateProgress failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'IN_PROGRESS' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'IN_PROGRESS'
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -306,8 +346,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests resolve failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'RESOLVED' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'RESOLVED'
       r.solutionResult = solutionResult
       r.records.push({
         id: crypto.randomUUID(),
@@ -336,8 +376,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests confirmClose failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'CLOSED' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'CLOSED'
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -354,26 +394,30 @@ export const reportRequestService = {
     }
   },
 
-  reopen: async (id: string, reason: string): Promise<ReportRequestItem> => {
+  reopen: async (
+    id: string,
+    reason: string,
+    attachments: string[] = [],
+  ): Promise<ReportRequestItem> => {
     try {
       return await request(
         'tenant',
         `/api/v1/report-requests/${encodeURIComponent(id)}/reopen`,
         reportRequestResponseSchema,
-        write('POST', { reason }),
+        write('POST', { reason, attachments }),
       )
     } catch (err) {
       console.warn('Real report-requests reopen failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'IN_PROGRESS' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'IN_PROGRESS'
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         status: 'IN_PROGRESS',
         description: `Khách thuê yêu cầu mở lại xử lý: ${reason}`,
         performedBy: 'Khách thuê',
-        evidence: [],
+        evidence: attachments,
         cost: 0,
         responsibleParty: null,
         approvalStatus: null,
@@ -383,19 +427,23 @@ export const reportRequestService = {
     }
   },
 
-  escalateAdmin: async (id: string, disputeReason: string): Promise<ReportRequestItem> => {
+  escalateAdmin: async (
+    id: string,
+    disputeReason: string,
+    attachments: string[] = [],
+  ): Promise<ReportRequestItem> => {
     try {
       return await request(
         'tenant',
         `/api/v1/report-requests/${encodeURIComponent(id)}/escalate-admin`,
         reportRequestResponseSchema,
-        write('POST', { disputeReason }),
+        write('POST', { disputeReason, attachments }),
       )
     } catch (err) {
       console.warn('Real report-requests escalateAdmin failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'ESCALATED_ADMIN' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'ESCALATED_ADMIN'
       r.disputeReason = disputeReason
       r.records.push({
         id: crypto.randomUUID(),
@@ -403,7 +451,7 @@ export const reportRequestService = {
         status: 'ESCALATED_ADMIN',
         description: `Chuyển lên Admin giải quyết: ${disputeReason}`,
         performedBy: 'Khách thuê',
-        evidence: [],
+        evidence: attachments,
         cost: 0,
         responsibleParty: null,
         approvalStatus: null,
@@ -424,8 +472,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests adminResolve failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'CLOSED' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'CLOSED'
       r.adminConclusion = adminConclusion
       r.records.push({
         id: crypto.randomUUID(),
@@ -454,8 +502,8 @@ export const reportRequestService = {
     } catch (err) {
       console.warn('Real report-requests cancel failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-      r.status = 'CANCELLED' as any
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      r.status = 'CANCELLED'
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),

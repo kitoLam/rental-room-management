@@ -33,16 +33,19 @@ public interface ReportRequestService {
     /** Tìm kiếm / lọc danh sách theo quyền của vai trò (Tenant/Manager/Admin) */
     PagedResponse<ReportRequestResponse> search(ReportRequestFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
+    /** Manager bắt đầu tiếp nhận và xử lý (chuyển PENDING sang IN_PROGRESS) */
+    ReportRequestResponse startProcessing(String id, AuthPrincipal principal);
+
     /** Manager yêu cầu Tenant bổ sung thông tin (chuyển sang WAITING_INFO) */
     ReportRequestResponse requestInfo(String id, ReportRequestInfoRequest request, AuthPrincipal principal);
 
-    /** Tenant bổ sung thông tin (chuyển lại PENDING hoặc IN_PROGRESS) */
+    /** Tenant bổ sung thông tin (chuyển lại PENDING) */
     ReportRequestResponse supplementInfo(String id, ReportRequestSupplementRequest request, AuthPrincipal principal);
 
     /** Manager từ chối yêu cầu kèm lý do (chuyển sang REJECTED) */
     ReportRequestResponse reject(String id, ReportRequestRejectRequest request, AuthPrincipal principal);
 
-    /** Manager tiếp nhận / cập nhật tiến độ xử lý (chuyển sang IN_PROGRESS) */
+    /** Manager cập nhật tiến độ xử lý (giữ IN_PROGRESS) */
     ReportRequestResponse updateProgress(String id, ReportRequestProgressRequest request, AuthPrincipal principal);
 
     /** Manager hoàn thành xử lý, ghi kết quả (chuyển sang RESOLVED) */
@@ -51,7 +54,7 @@ public interface ReportRequestService {
     /** Tenant xem kết quả -> hài lòng -> Xác nhận đóng yêu cầu (chuyển sang CLOSED) */
     ReportRequestResponse confirmClose(String id, AuthPrincipal principal);
 
-    /** Hai bên thỏa thuận mở lại để tiếp tục xử lý (chuyển lại IN_PROGRESS) */
+    /** Tenant không hài lòng, mở lại để tiếp tục xử lý (chuyển lại IN_PROGRESS) */
     ReportRequestResponse reopen(String id, ReportRequestReopenRequest request, AuthPrincipal principal);
 
     /** Không giải quyết được -> Chuyển tranh chấp lên Admin xác minh (chuyển sang ESCALATED_ADMIN) */
@@ -60,7 +63,7 @@ public interface ReportRequestService {
     /** Admin tiếp nhận tranh chấp, xác minh và ghi nhận kết luận giải quyết (chuyển sang CLOSED) */
     ReportRequestResponse adminResolve(String id, ReportRequestAdminResolveRequest request, AuthPrincipal principal);
 
-    /** Tenant tự hủy yêu cầu khi chưa xử lý */
+    /** Tenant tự hủy yêu cầu khi chưa xử lý (từ PENDING hoặc WAITING_INFO sang CANCELLED) */
     ReportRequestResponse cancel(String id, AuthPrincipal principal);
 
     /** Cập nhật thông tin chung (PATCH) */

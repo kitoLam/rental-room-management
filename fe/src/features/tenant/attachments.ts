@@ -1,11 +1,16 @@
 import type { Attachment } from '@/interfaces/tenant'
+
+export const MAX_ATTACHMENT_COUNT = 5
+export const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
+export const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+
 export async function imageAttachment(file: File): Promise<Attachment> {
   if (
-    !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) ||
+    !ACCEPTED_IMAGE_TYPES.includes(file.type) ||
     file.size <= 0 ||
-    file.size > 1048576
+    file.size > MAX_ATTACHMENT_SIZE_BYTES
   )
-    throw new Error('Chọn ảnh JPG, PNG hoặc WebP, tối đa 1 MB mỗi ảnh.')
+    throw new Error('Chọn ảnh JPG, PNG hoặc WebP, tối đa 5 MB mỗi ảnh.')
   const bytes = new Uint8Array(await file.arrayBuffer())
   const valid =
     file.type === 'image/png'

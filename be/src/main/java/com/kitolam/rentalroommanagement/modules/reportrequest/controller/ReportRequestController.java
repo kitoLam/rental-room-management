@@ -74,6 +74,15 @@ public class ReportRequestController {
         return StandardResponse.success(reportRequestService.search(filter, pageable, principal));
     }
 
+    @PostMapping("/{id}/start")
+    @Operation(summary = "Manager bắt đầu xử lý yêu cầu (chuyển PENDING sang IN_PROGRESS)")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
+    public StandardResponse<ReportRequestResponse> start(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Bắt đầu xử lý yêu cầu", reportRequestService.startProcessing(id, principal));
+    }
+
     @PostMapping("/{id}/request-info")
     @Operation(summary = "Manager yêu cầu bổ sung thông tin (chuyển sang Chờ bổ sung)")
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
@@ -85,7 +94,7 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/supplement")
-    @Operation(summary = "Tenant bổ sung thông tin (quay lại tiếp nhận)")
+    @Operation(summary = "Tenant bổ sung thông tin (quay lại tiếp nhận PENDING)")
     @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
     public StandardResponse<ReportRequestResponse> supplementInfo(
             @PathVariable String id,
@@ -105,7 +114,7 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/progress")
-    @Operation(summary = "Manager cập nhật tiến độ xử lý (Đang xử lý)")
+    @Operation(summary = "Manager cập nhật tiến độ xử lý (giữ IN_PROGRESS)")
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
     public StandardResponse<ReportRequestResponse> updateProgress(
             @PathVariable String id,
@@ -134,8 +143,8 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/reopen")
-    @Operation(summary = "Hai bên thỏa thuận mở lại yêu cầu để tiếp tục xử lý")
-    @PreAuthorize("hasAnyRole('TENANT', 'MANAGER', 'ADMIN', 'OWNER')")
+    @Operation(summary = "Tenant không hài lòng, mở lại yêu cầu để tiếp tục xử lý")
+    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
     public StandardResponse<ReportRequestResponse> reopen(
             @PathVariable String id,
             @Valid @RequestBody ReportRequestReopenRequest request,
@@ -144,8 +153,8 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/escalate-admin")
-    @Operation(summary = "Không hòa giải được, chuyển tranh chấp lên Admin xác minh")
-    @PreAuthorize("hasAnyRole('TENANT', 'MANAGER', 'ADMIN', 'OWNER')")
+    @Operation(summary = "Tenant chuyển tranh chấp lên Admin phân xử")
+    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
     public StandardResponse<ReportRequestResponse> escalateAdmin(
             @PathVariable String id,
             @Valid @RequestBody ReportRequestEscalateAdminRequest request,

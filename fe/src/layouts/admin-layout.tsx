@@ -30,6 +30,7 @@ const groups: [string, [string, string][]][] = [
     [
       ['owners', 'Danh bạ chủ trọ'],
       ['branches', 'Danh bạ chi nhánh'],
+      ['maintenance', 'Phân xử yêu cầu'],
       ['activity', 'Nhật ký hoạt động'],
     ],
   ],

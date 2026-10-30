@@ -1,6 +1,6 @@
 import { Field, InlineError } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { imageAttachment } from '@/features/tenant/attachments'
+import { imageAttachment, MAX_ATTACHMENT_COUNT } from '@/features/tenant/attachments'
 import type { Attachment } from '@/interfaces/tenant'
 import { useState } from 'react'
 
@@ -20,7 +20,7 @@ export function EvidenceInput({
       <Field
         id="manager-evidence"
         label="Ảnh minh chứng"
-        hint="Tối đa 3 ảnh PNG, JPG hoặc WebP; mỗi ảnh 1 MB."
+        hint={`Tối đa ${MAX_ATTACHMENT_COUNT} ảnh PNG, JPG hoặc WebP; mỗi ảnh 5 MB.`}
       >
         <input
           id="manager-evidence"
@@ -32,8 +32,8 @@ export function EvidenceInput({
           onChange={async (e) => {
             const files = Array.from(e.target.files || [])
             e.target.value = ''
-            if (files.length + value.length > 3) {
-              setError(new Error('Tối đa 3 ảnh.'))
+            if (files.length + value.length > MAX_ATTACHMENT_COUNT) {
+              setError(new Error(`Tối đa ${MAX_ATTACHMENT_COUNT} ảnh.`))
               return
             }
             setLoading(true)
