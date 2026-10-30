@@ -4,7 +4,9 @@ import { pageSchema, type Page } from '@/interfaces/domain'
 import {
   serviceCatalogResponseSchema,
   roomServiceResponseSchema,
-  contractServiceResponseSchema,
+  serviceRequestResponseSchema,
+  tenantServiceOverviewSchema,
+  serviceTenancySchema,
   roomServiceChargeResponseSchema,
   chargeDetailResponseSchema,
   costAllocationProposalResponseSchema,
@@ -14,9 +16,12 @@ import {
   type CreateRoomServiceInput,
   type UpdateRoomServiceInput,
   type RoomServiceItem,
-  type ContractServiceRegistrationInput,
-  type ProcessContractServiceInput,
-  type ContractServiceItem,
+  type ServiceRegistrationInput,
+  type ServiceTerminationInput,
+  type ServiceDateConfirmationInput,
+  type ServiceRequestItem,
+  type TenantServiceOverview,
+  type ServiceTenancy,
   type CreateRoomServiceChargeInput,
   type RoomServiceChargeItem,
   type ChargeDetailItem,
@@ -133,76 +138,96 @@ export const utilitiesService = {
   },
 
   // ==========================================
-  // 3. CONTRACT SERVICES [P1-71][P1-72][P1-73]
+  // 3. SERVICE REQUESTS: đăng ký / ngừng dịch vụ
   // ==========================================
-  contractServices: {
+  serviceRequests: {
+    // Tenant: phòng / chỗ đang thuê và danh mục dịch vụ kèm trạng thái (BE tự xác định từ token).
+    tenancy: (): Promise<ServiceTenancy> =>
+      request('utilities', '/api/v1/service-requests/tenancy', serviceTenancySchema),
+
+    catalog: (): Promise<TenantServiceOverview[]> =>
+      request('utilities', '/api/v1/service-requests/catalog', z.array(tenantServiceOverviewSchema)),
+
+    register: (input: ServiceRegistrationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        '/api/v1/service-requests/registrations',
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
+
+    terminate: (input: ServiceTerminationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        '/api/v1/service-requests/terminations',
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
+
+    cancel: (id: string, note?: string): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/cancellation`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
+
+    // Manager / Owner / Admin
     list: (
       filters: {
-        contractId?: string
         branchId?: string
-        roomId?: string
         status?: string
+        action?: string
+        keyword?: string
+        page?: number
+        size?: number
       } = {},
-    ): Promise<ContractServiceItem[]> => {
+    ): Promise<Page<ServiceRequestItem>> => {
       const params = new URLSearchParams()
-      if (filters.contractId) params.set('contractId', filters.contractId)
       if (filters.branchId) params.set('branchId', filters.branchId)
-      if (filters.roomId) params.set('roomId', filters.roomId)
       if (filters.status) params.set('status', filters.status)
-      const q = params.toString() ? `?${params.toString()}` : ''
-
+      if (filters.action) params.set('action', filters.action)
+      if (filters.keyword) params.set('keyword', filters.keyword)
+      params.set('page', String(filters.page ?? 1))
+      params.set('size', String(filters.size ?? 8))
       return request(
         'utilities',
-        `/api/contract-services${q}`,
-        z.array(contractServiceResponseSchema),
+        `/api/v1/service-requests?${params.toString()}`,
+        pageSchema(serviceRequestResponseSchema),
       )
     },
 
-    listByContract: (
-      contractId: string,
-      status?: string,
-    ): Promise<ContractServiceItem[]> => {
-      const params = new URLSearchParams()
-      if (status) params.set('status', status)
-      const q = params.toString() ? `?${params.toString()}` : ''
-
-      return request(
+    approve: (id: string, note?: string): Promise<ServiceRequestItem> =>
+      request(
         'utilities',
-        `/api/contracts/${encodeURIComponent(contractId)}/services${q}`,
-        z.array(contractServiceResponseSchema),
-      )
-    },
+        `/api/v1/service-requests/${encodeURIComponent(id)}/approval`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
 
-    register: (input: ContractServiceRegistrationInput): Promise<ContractServiceItem> => {
-      return request(
+    reject: (id: string, note: string): Promise<ServiceRequestItem> =>
+      request(
         'utilities',
-        '/api/contract-services/register',
-        contractServiceResponseSchema,
+        `/api/v1/service-requests/${encodeURIComponent(id)}/rejection`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
+
+    confirmInstallation: (id: string, input: ServiceDateConfirmationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/installation-confirmation`,
+        serviceRequestResponseSchema,
         write('POST', input),
-      )
-    },
+      ),
 
-    cancel: (id: string, reason?: string): Promise<ContractServiceItem> => {
-      const params = new URLSearchParams()
-      if (reason) params.set('reason', reason)
-      const q = params.toString() ? `?${params.toString()}` : ''
-
-      return request(
+    confirmTermination: (id: string, input: ServiceDateConfirmationInput): Promise<ServiceRequestItem> =>
+      request(
         'utilities',
-        `/api/contract-services/${encodeURIComponent(id)}/cancel${q}`,
-        contractServiceResponseSchema,
-        write('PUT'),
-      )
-    },
-
-    process: (id: string, input: ProcessContractServiceInput): Promise<ContractServiceItem> => {
-      return request(
-        'utilities',
-        `/api/contract-services/${encodeURIComponent(id)}/process`,
-        contractServiceResponseSchema,
-        write('PUT', input),
-      )
-    },
+        `/api/v1/service-requests/${encodeURIComponent(id)}/termination-confirmation`,
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
   },
 
   // ==========================================

@@ -198,47 +198,51 @@ export const managerApi = {
       }
     }
     if (resource === 'service-requests' && provider('utilities') === 'real') {
-      const page = Number(filters.page || 0)
-      const size = Number(filters.size || 8)
-      const res = await utilitiesService.contractServices.list({
+      // BE phân trang từ 1, FE từ 0; lọc / tìm kiếm thực hiện ở server.
+      const res = await utilitiesService.serviceRequests.list({
         branchId,
         status: filters.status,
+        action: filters.action,
+        keyword: filters.q,
+        page: Number(filters.page || 0) + 1,
+        size: Number(filters.size || 8),
       })
-      const filtered = filters.q
-        ? res.filter((item) => item.serviceName.toLowerCase().includes(filters.q.toLowerCase()))
-        : res
-      const content = filtered.slice(page * size, (page + 1) * size).map((item) => ({
+      const items = filters.contractTenantId
+        ? res.content.filter((item) => item.contractTenantId === filters.contractTenantId)
+        : res.content
+      const content = items.map((item) => ({
         id: item.id,
-        serviceId: item.roomServiceId,
-        contractTenantId: item.contractTenantId || item.contractId,
+        serviceId: item.serviceId,
+        contractTenantId: item.contractTenantId ?? '',
         roomId: item.roomId,
-        tenantName: 'Khách thuê',
-        roomName: 'Phòng',
-        name: item.serviceName,
+        tenantName: item.tenantName || 'Người thuê',
+        roomName: item.slotCode ? `Chỗ ${item.slotCode}` : `Phòng ${item.roomNumber ?? ''}`,
+        name: item.serviceName || 'Dịch vụ',
         mandatory: false,
-        unit: 'tháng',
-        unitPrice: item.agreedUnitPrice,
-        subscriptionId: item.id,
+        unit: item.scope === 'SLOT' ? 'chỗ' : 'phòng',
+        unitPrice: item.unitPrice ?? 0,
+        subscriptionId: item.subscriptionId ?? null,
         status: item.status,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        note: item.reason || '',
-        history: item.processedAt
-          ? [
-              {
-                status: item.status,
-                at: item.processedAt,
-                note: item.reason || 'Đã xử lý',
-              },
-            ]
-          : [],
+        requestStatus: item.status,
+        action: item.action,
+        allowedActions: item.allowedActions,
+        proposedDate: item.proposedDate,
+        confirmedDate: item.confirmedDate ?? null,
+        startDate: item.confirmedDate ?? item.proposedDate,
+        endDate: null,
+        note: item.note || '',
+        history: item.history.map((h) => ({
+          status: h.statusTo,
+          at: h.at,
+          note: h.note || '',
+        })),
       }))
       return {
         content: content as unknown as ManagerRecord<K>[],
-        number: page,
-        size,
-        totalElements: filtered.length,
-        totalPages: Math.ceil(filtered.length / size) || (filtered.length ? 1 : 0),
+        number: res.number - 1,
+        size: res.size,
+        totalElements: res.totalElements,
+        totalPages: res.totalPages,
       }
     }
     if (resource === 'room-services' && provider('utilities') === 'real') {
@@ -474,17 +478,17 @@ export const managerApi = {
       }
     }
     if (resource === 'service-requests' && provider('utilities') === 'real' && id) {
-      const v = value as { decision: string; reason?: string }
-      const decision =
+      const v = value as { decision: string; reason?: string; effectiveDate?: string }
+      const note = v.reason?.trim() || undefined
+      const api = utilitiesService.serviceRequests
+      const updated =
         v.decision === 'approve'
-          ? 'APPROVED'
+          ? await api.approve(id, note)
           : v.decision === 'reject'
-            ? 'REJECTED'
-            : (v.decision as 'APPROVED' | 'REJECTED')
-      const updated = await utilitiesService.contractServices.process(id, {
-        decision,
-        reason: v.reason,
-      })
+            ? await api.reject(id, note ?? '')
+            : v.decision === 'confirm-installation'
+              ? await api.confirmInstallation(id, { effectiveDate: v.effectiveDate ?? '', note })
+              : await api.confirmTermination(id, { effectiveDate: v.effectiveDate ?? '', note })
       return { id: updated.id }
     }
     if (resource === 'utility-charges' && provider('utilities') === 'real') {

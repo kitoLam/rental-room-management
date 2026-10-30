@@ -7,21 +7,30 @@ import { tenantApi } from '@/services/tenant'
 import { useState } from 'react'
 import { Facts, TenantPage, TenantStatus } from './components'
 import { isActive, useTenant, useTenantMutation, useTenantQuery } from './context'
-import { RegisterService } from './service-shared'
+import { RegisterService, StopService } from './service-shared'
+import { serviceActions } from './status'
+
+// Khi còn chờ duyệt / chờ lắp đặt, ngày hiển thị là ngày người thuê đề nghị, chưa phải ngày tính phí.
+const proposalStatuses = ['PENDING', 'APPROVED']
+
 export function ServicesPage() {
   const { tenancy: t } = useTenant(),
-    query = useTenantQuery('services', (id) => tenantApi.services(id, t), [], true),
+    query = useTenantQuery('services', (id) => tenantApi.services(id), [], true),
     [selected, setSelected] = useState<TenantService | null>(null),
     [success, setSuccess] = useState('')
-  const cancel = useTenantMutation(tenantApi.cancelService, () => {
+  const done = (message: string) => {
     setSelected(null)
-    setSuccess('Đã gửi yêu cầu hủy. Dịch vụ chỉ ngừng sau khi quản lý duyệt.')
-  })
+    setSuccess(message)
+  }
+  const cancelRequest = useTenantMutation(tenantApi.cancelServiceRequest, () =>
+    done('Đã hủy yêu cầu dịch vụ.'),
+  )
   const current = query.data?.find((s) => s.id === selected?.id)
+  const actions = current ? serviceActions(current) : []
   return (
     <TenantPage
       title="Dịch vụ phòng"
-      description="Điện, nước luôn có sẵn. Dịch vụ bổ sung được quản lý duyệt riêng."
+      description="Điện, nước luôn có sẵn. Dịch vụ bổ sung được quản lý duyệt và xác nhận ngày lắp đặt."
     >
       {success && <Notice tone="success">{success}</Notice>}
       <QueryState
@@ -45,7 +54,9 @@ export function ServicesPage() {
                 </p>
                 {s.startDate && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {dateOnly(s.startDate)} – {dateOnly(s.endDate!)}
+                    {proposalStatuses.includes(s.status || '') ? 'Đề nghị từ ' : 'Từ '}
+                    {dateOnly(s.startDate)}
+                    {s.endDate && ` – ${dateOnly(s.endDate)}`}
                   </p>
                 )}
               </div>
@@ -55,13 +66,12 @@ export function ServicesPage() {
                   variant="outline"
                   disabled={!isActive(t) && !s.subscriptionId}
                   onClick={() => {
-                    cancel.reset()
+                    cancelRequest.reset()
+                    setSuccess('')
                     setSelected(s)
                   }}
                 >
-                  {!s.subscriptionId || ['REJECTED', 'CANCELLED'].includes(s.status || '')
-                    ? 'Đăng ký'
-                    : 'Chi tiết'}
+                  {serviceActions(s).includes('REGISTER') ? 'Đăng ký' : 'Chi tiết'}
                 </Button>
               </div>
             </div>
@@ -76,14 +86,10 @@ export function ServicesPage() {
         title={selected?.name || 'Dịch vụ'}
       >
         {current &&
-          ((!current.subscriptionId || ['REJECTED', 'CANCELLED'].includes(current.status || '')) &&
-          !current.mandatory ? (
+          (actions.includes('REGISTER') ? (
             <RegisterService
               service={current}
-              onSuccess={() => {
-                setSelected(null)
-                setSuccess('Đã gửi đăng ký dịch vụ, đang chờ quản lý duyệt.')
-              }}
+              onSuccess={() => done('Đã gửi đăng ký dịch vụ, đang chờ quản lý duyệt.')}
             />
           ) : (
             <div className="grid min-w-0 grid-cols-1 gap-5">
@@ -91,36 +97,51 @@ export function ServicesPage() {
                 items={[
                   ['Đơn giá', `${formatVnd(current.unitPrice)} / ${current.unit}`],
                   ['Trạng thái', current.status ? <TenantStatus value={current.status} /> : null],
-                  ['Bắt đầu', current.startDate ? dateOnly(current.startDate) : null],
+                  [
+                    proposalStatuses.includes(current.status || '') ? 'Ngày đề nghị' : 'Bắt đầu tính phí',
+                    current.startDate ? dateOnly(current.startDate) : null,
+                  ],
                   ['Kết thúc', current.endDate ? dateOnly(current.endDate) : null],
                 ]}
               />
-              {current.mandatory ? (
-                <Notice>Điện và nước là dịch vụ bắt buộc, không thể hủy.</Notice>
-              ) : (
+              {current.mandatory && <Notice>Điện và nước là dịch vụ bắt buộc, không thể hủy.</Notice>}
+              {current.status === 'APPROVED' && (
+                <Notice>Quản lý đã duyệt, đang chờ xác nhận ngày lắp đặt.</Notice>
+              )}
+              {current.status === 'STOP_PENDING' && (
+                <Notice>Yêu cầu ngừng đang chờ quản lý xác nhận ngày kết thúc.</Notice>
+              )}
+              {actions.includes('STOP') && (
+                <StopService
+                  service={current}
+                  onSuccess={() =>
+                    done('Đã gửi yêu cầu ngừng. Dịch vụ chỉ ngừng sau khi quản lý xác nhận ngày kết thúc.')
+                  }
+                />
+              )}
+              {actions.includes('CANCEL') && current.requestId && (
                 <>
-                  <InlineError error={cancel.error} />
+                  <InlineError error={cancelRequest.error} />
                   <Button
                     variant="outline"
-                    loading={cancel.isPending}
-                    disabled={!isActive(t) || current.status !== 'APPROVED'}
-                    onClick={() => cancel.mutate(current.subscriptionId || current.id)}
+                    loading={cancelRequest.isPending}
+                    onClick={() => cancelRequest.mutate(current.requestId!)}
                   >
-                    Yêu cầu ngừng dịch vụ
+                    Hủy yêu cầu đang chờ duyệt
                   </Button>
                 </>
               )}
-              <h3 className="font-bold">Lịch sử xử lý</h3>
-              {current.history.length ? (
-                current.history.map((h, i) => (
-                  <div key={i} className="border-l-2 border-border pl-4 text-sm">
-                    <TenantStatus value={h.status} />
-                    <p className="mt-2 leading-6 text-muted-foreground">{h.note}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{dateTime(h.at)}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Được cung cấp theo hợp đồng thuê.</p>
+              {current.history.length > 0 && (
+                <>
+                  <h3 className="font-bold">Lịch sử xử lý</h3>
+                  {current.history.map((h, i) => (
+                    <div key={i} className="border-l-2 border-border pl-4 text-sm">
+                      <TenantStatus value={h.status} />
+                      <p className="mt-2 leading-6 text-muted-foreground">{h.note}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{dateTime(h.at)}</p>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           ))}

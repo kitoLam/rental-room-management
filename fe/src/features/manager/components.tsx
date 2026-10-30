@@ -95,9 +95,15 @@ export function ManagerStatus({ value }: { value: string }) {
           value,
         )
           ? 'success'
-          : ['PENDING', 'REVIEW', 'HELD', 'OPEN', 'AWAITING_PAYMENT', 'CANCEL_REQUESTED'].includes(
-                value,
-              )
+          : [
+                'PENDING',
+                'REVIEW',
+                'HELD',
+                'OPEN',
+                'AWAITING_PAYMENT',
+                'CANCEL_REQUESTED',
+                'STOP_PENDING',
+              ].includes(value)
             ? 'warning'
             : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
               ? 'danger'

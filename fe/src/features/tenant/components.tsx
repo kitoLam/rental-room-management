@@ -12,9 +12,15 @@ export function TenantStatus({ value }: { value: string }) {
       tone={
         ['ACTIVE', 'PAID', 'VERIFIED', 'APPROVED', 'COMPLETED'].includes(value)
           ? 'success'
-          : ['PENDING', 'PARTIAL', 'REVIEW', 'CANCEL_REQUESTED', 'OPEN', 'IN_PROGRESS'].includes(
-                value,
-              )
+          : [
+                'PENDING',
+                'PARTIAL',
+                'REVIEW',
+                'CANCEL_REQUESTED',
+                'STOP_PENDING',
+                'OPEN',
+                'IN_PROGRESS',
+              ].includes(value)
             ? 'warning'
             : ['OVERDUE', 'FAILED', 'REJECTED', 'URGENT'].includes(value)
               ? 'danger'

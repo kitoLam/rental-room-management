@@ -109,11 +109,17 @@ export const serviceSchema = z.object({
   unit: z.string(),
   unitPrice: money,
   subscriptionId: id.nullable(),
-  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELLED']).nullable(),
+  // AVAILABLE / ACTIVE / STOP_PENDING đến từ API thật (/api/v1/service-requests/catalog); các giá trị cũ dùng cho mock.
+  status: z
+    .enum(['AVAILABLE', 'PENDING', 'APPROVED', 'ACTIVE', 'STOP_PENDING', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELLED'])
+    .nullable(),
   startDate: date.nullable(),
   endDate: date.nullable(),
   note: z.string(),
   history: z.array(z.object({ status: z.string(), at: z.string(), note: z.string() })),
+  // Chỉ có ở API thật: yêu cầu đang mở và thao tác người thuê được phép làm.
+  requestId: z.string().nullish(),
+  allowedActions: z.array(z.string()).optional(),
 })
 export type TenantService = z.infer<typeof serviceSchema>
 export const participantSchema = z.object({
@@ -220,6 +226,16 @@ export const serviceInputSchema = z.object({
   serviceId: id,
   startDate: date,
   endDate: date,
+  note: z.string().trim().max(500),
+})
+// Form đăng ký / ngừng dịch vụ: người thuê chỉ đề nghị ngày, quản lý xác nhận ngày chính thức.
+export const serviceRegistrationFormSchema = z.object({
+  serviceId: z.string().min(1),
+  proposedDate: date,
+  note: z.string().trim().max(500),
+})
+export const serviceStopFormSchema = z.object({
+  proposedDate: date,
   note: z.string().trim().max(500),
 })
 export const proposalInputSchema = z.object({

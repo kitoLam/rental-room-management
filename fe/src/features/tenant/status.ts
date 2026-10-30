@@ -1,4 +1,8 @@
+import type { TenantService } from '@/interfaces/tenant'
+
 const labels: Record<string, string> = {
+  AVAILABLE: 'Chưa đăng ký',
+  STOP_PENDING: 'Chờ ngừng',
   ACTIVE: 'Đang hiệu lực',
   LEFT: 'Đã rời đi',
   DRAFT: 'Bản nháp',
@@ -27,3 +31,11 @@ const labels: Record<string, string> = {
   URGENT: 'Khẩn cấp',
 }
 export const tenantStatusLabel = (s: string) => labels[s] || s
+
+/** Thao tác dịch vụ được phép: API thật trả allowedActions; dữ liệu mock suy ra từ trạng thái cũ. */
+export function serviceActions(s: TenantService): string[] {
+  if (s.allowedActions) return s.allowedActions
+  if (s.mandatory) return []
+  if (!s.subscriptionId || ['REJECTED', 'CANCELLED'].includes(s.status || '')) return ['REGISTER']
+  return s.status === 'APPROVED' ? ['STOP'] : []
+}

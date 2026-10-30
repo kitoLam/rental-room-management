@@ -144,6 +144,11 @@ export const managerServiceRequestSchema = serviceSchema.extend({
   roomId: uuid,
   tenantName: z.string(),
   roomName: z.string(),
+  // Chỉ có ở API thật (/api/v1/service-requests): loại yêu cầu, trạng thái yêu cầu và ngày.
+  action: z.enum(['REGISTER', 'STOP']).optional(),
+  requestStatus: z.enum(['PENDING', 'APPROVED', 'COMPLETED', 'REJECTED', 'CANCELLED']).optional(),
+  proposedDate: z.string().nullish(),
+  confirmedDate: z.string().nullish(),
 })
 export const managerChargeSchema = chargeSchema.extend({
   contractTenantId: uuid.nullable(),
