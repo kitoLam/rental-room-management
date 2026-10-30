@@ -2,6 +2,7 @@ package com.kitolam.rentalroommanagement.modules.serviceitem.controller;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
 import com.kitolam.rentalroommanagement.modules.serviceitem.dto.request.ServiceItemCreateRequest;
 import com.kitolam.rentalroommanagement.modules.serviceitem.dto.request.ServiceItemFilterRequest;
 import com.kitolam.rentalroommanagement.modules.serviceitem.dto.request.ServiceItemUpdateRequest;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,9 +34,12 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Services")
 public class ServiceItemController {
 
+    private static final String MANAGEMENT = "hasAnyRole('MANAGER', 'OWNER', 'ADMIN')";
+
     private final ServiceItemService serviceItemService;
 
     @PostMapping
+    @PreAuthorize(MANAGEMENT)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Tạo dịch vụ")
     public StandardResponse<ServiceItemResponse> create(@Valid @RequestBody ServiceItemCreateRequest request) {
@@ -43,7 +48,7 @@ public class ServiceItemController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Lấy dịch vụ theo id")
-    public StandardResponse<ServiceItemResponse> getById(@PathVariable String id) {
+    public StandardResponse<ServiceItemResponse> getById(@PathVariable @ValidObjectId String id) {
         return StandardResponse.success(serviceItemService.getById(id));
     }
 
@@ -56,14 +61,17 @@ public class ServiceItemController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Cập nhật dịch vụ")
-    public StandardResponse<ServiceItemResponse> update(@PathVariable String id, @Valid @RequestBody ServiceItemUpdateRequest request) {
+    @PreAuthorize(MANAGEMENT)
+    @Operation(summary = "Cập nhật dịch vụ; đổi status sang INACTIVE để ngừng nhận đăng ký mới")
+    public StandardResponse<ServiceItemResponse> update(@PathVariable @ValidObjectId String id,
+            @Valid @RequestBody ServiceItemUpdateRequest request) {
         return StandardResponse.success("Cập nhật dịch vụ thành công", serviceItemService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Xoá mềm dịch vụ")
-    public StandardResponse<Void> delete(@PathVariable String id) {
+    @PreAuthorize(MANAGEMENT)
+    @Operation(summary = "Xoá mềm dịch vụ chưa được sử dụng")
+    public StandardResponse<Void> delete(@PathVariable @ValidObjectId String id) {
         serviceItemService.delete(id);
         return StandardResponse.success("Xoá dịch vụ thành công", null);
     }
