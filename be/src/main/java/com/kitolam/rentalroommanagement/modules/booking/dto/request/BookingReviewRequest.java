@@ -15,6 +15,7 @@ public record BookingReviewRequest(
         @DecimalMin("0.0") BigDecimal holdingDepositAmount,
         Instant paymentDeadline,
         Instant holdExpiresAt,
+        Instant checkInDeadline,
         String cancellationPolicy,
         @Size(max = 500) String rejectReason
 ) {

@@ -82,15 +82,26 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
   )
     return null
+  if (
+    feature === 'leasing' &&
+    ((matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/services`) && verb === 'PATCH'))
+  )
+    return null
 
   if (
     feature === 'manager' &&
-    ((matches('/api/v1/bookings') && verb === 'GET') ||
+    ((matches('/api/v1/(rooms|room-types)') && verb === 'GET') ||
+      (matches('/api/v1/bookings') && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
       (matches(`/api/v1/bookings/${id}/payments`) && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/payments/${id}/reconcile`) && verb === 'POST') ||
-      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
+      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST') ||
+      (matches('/api/v1/contracts') && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/from-booking/${id}`) && verb === 'POST') ||
+      (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST'))
   )
     return null
 

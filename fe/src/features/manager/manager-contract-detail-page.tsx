@@ -1,11 +1,12 @@
-import { Notice, Panel, QueryState } from '@/components/common/page'
+import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
 import { dateOnly } from '@/lib/activity'
 import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { ActionDialog, ManagerLink, ManagerPage, ManagerStatus } from './components'
+import { z } from 'zod'
+import { ActionDialog, ManagerForm, ManagerLink, ManagerPage, ManagerStatus } from './components'
 import { useManagerAction, useManagerQuery } from './context'
 import { History } from './leasing-shared'
 export function ManagerContractDetail() {
@@ -33,6 +34,12 @@ export function ManagerContractDetail() {
                   ['Trạng thái', <ManagerStatus value={query.data.status} />],
                   ['Đại diện', query.data.representativeName],
                   ['Phòng', query.data.roomName],
+                  ['Địa chỉ thuê', query.data.roomAddress || '—'],
+                  ['Bên cho thuê', `${query.data.landlordName || '—'} · CCCD/CMND ${query.data.landlordIdNumber || '—'} · ${query.data.landlordAddress || '—'}`],
+                  ['Bên thuê', `${query.data.tenantName || query.data.representativeName || '—'} · CCCD/CMND ${query.data.tenantIdNumber || '—'} · ${query.data.tenantAddress || '—'}`],
+                  ['Giá thuê / tháng', query.data.rentPrice == null ? '—' : `${query.data.rentPrice.toLocaleString('vi-VN')} ₫`],
+                  ['Tiền cọc hợp đồng', query.data.contractDepositAmount == null ? '—' : `${query.data.contractDepositAmount.toLocaleString('vi-VN')} ₫`],
+                  ['Ngày thanh toán mỗi tháng', query.data.paymentDueDay ?? '—'],
                   [
                     'Thời hạn',
                     `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`,
@@ -41,6 +48,17 @@ export function ManagerContractDetail() {
                 ]}
               />
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.terms}</p>
+              <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+                <p>Chỉ số điện đầu kỳ: {query.data.electricityInitialReading ?? '—'} · {query.data.electricityRate ?? '—'} VND/kWh</p>
+                <p>Chỉ số nước đầu kỳ: {query.data.waterInitialReading ?? '—'} · {query.data.waterRate ?? '—'} VND/m³</p>
+                <p>Số người tối đa: {query.data.maxOccupants ?? '—'}</p>
+                {query.data.signedFileUrl && <a className="text-primary underline" href={query.data.signedFileUrl} target="_blank" rel="noreferrer">Mở hợp đồng đã ký</a>}
+              </div>
+              {!!query.data.services?.length && <div className="mt-4 space-y-2 text-sm">
+                <h3 className="font-semibold">Dịch vụ theo snapshot hợp đồng</h3>
+                {query.data.services.map((service: { serviceId: string; name: string; unit: string; unitPrice: number; mandatory: boolean; selected: boolean }) =>
+                  <p key={service.serviceId}>{service.name} · {service.unitPrice.toLocaleString('vi-VN')} đ/{service.unit} · {service.mandatory ? 'Bắt buộc' : 'Tùy chọn'} · {service.selected ? 'Đã chọn' : 'Chưa chọn'}</p>)}
+              </div>}
               <div className="mt-6 flex flex-wrap gap-3">
                 <ManagerLink to={`/manager/contracts/${contractId}/tenants`}>
                   Thành viên & nghĩa vụ cá nhân
@@ -53,11 +71,7 @@ export function ManagerContractDetail() {
                 )}
                 {query.data.status === 'DRAFT' && (
                   <>
-                    <ManagerLink to={`/manager/contracts/${contractId}/edit`}>Sửa nháp</ManagerLink>
-                    <Button onClick={() => setAction('activate')}>Kích hoạt hợp đồng</Button>
-                    <Button variant="outline" onClick={() => setAction('cancel')}>
-                      Hủy nháp
-                    </Button>
+                    <Button onClick={() => setAction('check-in')}>Ghi nhận bàn giao và ký giấy</Button>
                   </>
                 )}
                 {query.data.status === 'ACTIVE' && (
@@ -80,7 +94,17 @@ export function ManagerContractDetail() {
           </>
         )}
       </QueryState>
-      <ActionDialog
+      {action === 'check-in' ? <Modal title="Bàn giao và lưu hợp đồng đã ký" open onOpenChange={(open) => !open && setAction('')}>
+        <ManagerForm
+          schema={z.object({ signedFileUrl: z.string().url() })}
+          defaults={{ signedFileUrl: '' }}
+          fields={[{ name: 'signedFileUrl', label: 'URL bản hợp đồng giấy đã ký' }]}
+          pending={mutation.isPending}
+          error={mutation.error}
+          submitLabel="Xác nhận bàn giao"
+          onSubmit={(value) => mutation.mutate({ resource: 'contracts', id: contractId, action: 'check-in', value })}
+        />
+      </Modal> : <ActionDialog
         title="Xác nhận thay đổi trạng thái hợp đồng"
         open={!!action}
         onOpenChange={(v) => {
@@ -91,7 +115,7 @@ export function ManagerContractDetail() {
         onConfirm={(value) =>
           mutation.mutate({ resource: 'contracts', id: contractId, action, value })
         }
-      />
+      />}
     </ManagerPage>
   )
 }

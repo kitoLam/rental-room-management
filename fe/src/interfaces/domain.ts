@@ -149,6 +149,7 @@ export const bookingSchema = z.object({
   holdAmount: z.number(),
   paymentDueAt: z.string(),
   temporaryHoldUntil: z.string(),
+  checkInDeadline: z.string().nullable().optional(),
   confirmedHoldUntil: z.string().nullable(),
   status: z.enum(bookingStatuses),
   policySnapshot: policySchema,

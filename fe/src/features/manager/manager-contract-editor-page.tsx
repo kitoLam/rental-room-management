@@ -1,4 +1,4 @@
-import { Panel, QueryState } from '@/components/common/page'
+import { Notice, Panel, QueryState } from '@/components/common/page'
 import { contractInputSchema } from '@/interfaces/manager'
 import { managerApi } from '@/services/manager'
 import { useNavigate, useParams } from 'react-router'
@@ -29,7 +29,10 @@ export function ManagerContractEditor() {
       title={contractId ? 'Chỉnh sửa hợp đồng nháp' : 'Tạo hợp đồng thuê'}
       actions={<ManagerLink to="/manager/contracts">Danh sách hợp đồng</ManagerLink>}
     >
-      <QueryState
+      {!contractId ? <Panel>
+        <Notice>Hợp đồng phải được lập từ booking đã xác nhận và nộp cọc.</Notice>
+        <ManagerLink to="/manager/bookings" button>Mở danh sách booking</ManagerLink>
+      </Panel> : <QueryState
         pending={query.isPending || rooms.isPending}
         error={query.error || rooms.error}
         retry={() => {
@@ -71,7 +74,7 @@ export function ManagerContractEditor() {
             }
           />
         </Panel>
-      </QueryState>
+      </QueryState>}
     </ManagerPage>
   )
 }
