@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { request, write } from './http'
 import { provider } from './config'
-import { pageSchema, type Page } from '@/interfaces/domain'
+import { databaseIdSchema, pageSchema, type Page } from '@/interfaces/domain'
 import {
   branchAssignmentSchema,
   managerSchemas,
@@ -10,16 +10,17 @@ import {
   invoiceInputSchema,
   type ManagerResource,
   type ManagerRecord,
+  contractSchema,
 } from '@/interfaces/manager'
 import { utilitiesService } from './utilities'
-import { bookingService } from './guest-user'
+import { bookingService, contractService } from './guest-user'
 import { reportRequestService } from './report-request'
 const scope = (branchId: string) => `/api/manager/branches/${encodeURIComponent(branchId)}`
 const result = z.object({ id: z.string().uuid().optional() }).passthrough().nullable()
 const roomDto = z.object({
-  id: z.string().uuid(),
-  branchId: z.string().uuid(),
-  roomTypeId: z.string().uuid(),
+  id: databaseIdSchema,
+  branchId: databaseIdSchema,
+  roomTypeId: databaseIdSchema,
   code: z.string(),
   rentalMode: z.enum(['ROOM', 'SLOT']),
   capacity: z.number(),
@@ -32,9 +33,37 @@ const roomDto = z.object({
   operationalStatus: z.enum(['AVAILABLE', 'MAINTENANCE', 'INACTIVE']),
   isPublic: z.boolean(),
 })
+const backendContractDto = z.object({
+  id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), bookingId: z.string().nullable().optional(),
+  tenantId: z.string().nullable().optional(), managerId: z.string(), contractNumber: z.string(), startDate: z.string(),
+  endDate: z.string(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
+  terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
+  tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), roomMode: z.string().nullable().optional(),
+  landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
+  tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
+  electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
+  electricityRate: z.number().nullable().optional(), waterRate: z.number().nullable().optional(), parkingRate: z.number().nullable().optional(),
+  maxOccupants: z.number().nullable().optional(),
+  services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean() })).optional(),
+}).passthrough()
+function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
+  return contractSchema.parse({
+    id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomId,
+    startDate: value.startDate, endDate: value.endDate, terms: value.terms || '',
+    landlordName: value.landlordName, landlordIdNumber: value.landlordIdNumber, landlordAddress: value.landlordAddress,
+    tenantName: value.tenantName, tenantIdNumber: value.tenantIdNumber, tenantAddress: value.tenantAddress,
+    roomAddress: value.roomAddress, paymentDueDay: value.paymentDueDay, rentPrice: value.rentPrice,
+    contractDepositAmount: value.contractDepositAmount,
+    electricityInitialReading: value.electricityInitialReading, waterInitialReading: value.waterInitialReading,
+    electricityRate: value.electricityRate, waterRate: value.waterRate, parkingRate: value.parkingRate,
+    maxOccupants: value.maxOccupants, services: value.services,
+    rentalMode: value.roomMode === 'WHOLE_ROOM' ? 'ROOM' : 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
+    sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
+  })
+}
 const roomTypeDto = z.object({
-  id: z.string().uuid(),
-  branchId: z.string().uuid(),
+  id: databaseIdSchema,
+  branchId: databaseIdSchema,
   code: z.string(),
   name: z.string(),
   defaultCapacity: z.number(),
@@ -42,8 +71,8 @@ const roomTypeDto = z.object({
   active: z.boolean(),
 })
 const slotDto = z.object({
-  id: z.string().uuid(),
-  roomId: z.string().uuid(),
+  id: databaseIdSchema,
+  roomId: databaseIdSchema,
   code: z.string(),
   name: z.string(),
   status: z.enum(['AVAILABLE', 'MAINTENANCE', 'INACTIVE']),
@@ -173,8 +202,15 @@ export const managerApi = {
     filters: Record<string, string> = {},
   ): Promise<Page<ManagerRecord<K>>> => {
     if (resource === 'bookings' && provider('manager') === 'real') {
-      const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1)
+      const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1, filters)
       return result as unknown as Page<ManagerRecord<K>>
+    }
+    if (resource === 'contracts' && provider('manager') === 'real') {
+      const query = new URLSearchParams({ page: filters.page || '0', size: filters.size || '8' })
+      if (filters.status) query.set('status', filters.status === 'ENDED' ? 'EXPIRED' : filters.status === 'CANCELLED' ? 'TERMINATED' : filters.status)
+      if (filters.q) query.set('keyword', filters.q)
+      const page = await request('manager', `/api/v1/contracts?${query}`, pageSchema(backendContractDto))
+      return { ...page, number: Math.max(0, page.number - 1), content: page.content.map((item) => managerContract(item, branchId)) } as unknown as Page<ManagerRecord<K>>
     }
     if (resource === 'services' && provider('utilities') === 'real') {
       const raw = await utilitiesService.catalog.list(branchId, {
@@ -656,6 +692,10 @@ export const managerApi = {
     }
     if (resource === 'bookings' && provider('manager') === 'real')
       return bookingService.managerGet(id) as unknown as Promise<ManagerRecord<K>>
+    if (resource === 'contracts' && provider('manager') === 'real') {
+      const item = await request('manager', `/api/v1/contracts/${encodeURIComponent(id)}`, backendContractDto)
+      return managerContract(item, branchId) as unknown as ManagerRecord<K>
+    }
     if (resource === 'services' && provider('utilities') === 'real') {
       const item = await utilitiesService.catalog.get(id)
       return {
@@ -790,12 +830,18 @@ export const managerApi = {
       }
     }
     if (resource === 'bookings' && provider('manager') === 'real' && id) {
+      if (action === 'convert') return contractService.createDraftFromBooking(id, value)
       if (action === 'reconcile') {
         const v = value as { paymentId: string; successful: boolean; reason: string }
         return bookingService.reconcile(id, v.paymentId, v.successful, v.reason)
       }
+      if (action === 'cancel') return bookingService.managerCancel(id)
       if (action === 'refund') return bookingService.approveRefund(id)
       return bookingService.review(id, value)
+    }
+    if (resource === 'contracts' && provider('manager') === 'real' && id && action === 'check-in') {
+      const v = value as { signedFileUrl: string }
+      return contractService.completeCheckIn(id, v.signedFileUrl)
     }
     if (resource === 'services' && provider('utilities') === 'real') {
       if (method === 'DELETE' && id) {

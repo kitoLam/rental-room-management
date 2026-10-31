@@ -30,8 +30,8 @@ export function ManagerTenants() {
       title="Người thuê"
       description="Tài khoản là hồ sơ gốc; mỗi quan hệ thuê có nghĩa vụ và lịch sử riêng."
       actions={
-        <ManagerLink to="/manager/contracts/new" button>
-          Tiếp nhận qua hợp đồng
+        <ManagerLink to="/manager/bookings" button>
+          Mở booking để lập hợp đồng
         </ManagerLink>
       }
     >
