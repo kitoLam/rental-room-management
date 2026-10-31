@@ -105,8 +105,11 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         String resolvedRoomId = room != null && StringUtils.hasText(room.getId()) ? room.getId() : request.roomId();
         String resolvedBranchId = room != null && StringUtils.hasText(room.getBranchId()) ? room.getBranchId() : null;
 
-        // 1. Kiểm tra Hợp đồng có hiệu lực (nếu có trong DB)
+        // 1. Kiểm tra Hợp đồng có hiệu lực
         Contract validContract = findActiveContract(tenant.getId(), resolvedRoomId);
+        if (validContract == null) {
+            throw new BadRequestException("Bạn không có hợp đồng đang có hiệu lực cho phòng này.");
+        }
 
         // 2. Validate ảnh đính kèm
         validateAttachments(request.attachments());
@@ -119,7 +122,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         entity.setTenantId(tenant.getId());
         entity.setRoomId(resolvedRoomId);
         entity.setBranchId(resolvedBranchId);
-        entity.setContractId(validContract != null ? validContract.getId() : null);
+        entity.setContractId(validContract.getId());
         entity.setManagerId(assignedManagerId);
         entity.setType(request.type());
         entity.setTitle(request.title().trim());

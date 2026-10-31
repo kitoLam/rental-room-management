@@ -120,6 +120,8 @@ class ReportRequestServiceTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.create(req, tenantPrincipal));
         assertTrue(ex.getMessage().contains("không có hợp đồng đang có hiệu lực"));
+        verifyNoInteractions(reportRequestRepository, reportRecordRepository,
+                reportRequestFurnitureRepository, reportRequestServiceItemRepository);
     }
 
     @Test
