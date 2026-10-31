@@ -191,13 +191,22 @@ export const notificationSchema = z.object({
 })
 export type Notification = z.infer<typeof notificationSchema>
 export const pageSchema = <T extends z.ZodType>(item: T) =>
-  z.object({
-    content: z.array(item),
-    number: z.number(),
-    size: z.number(),
-    totalElements: z.number(),
-    totalPages: z.number(),
-  })
+  z
+    .object({
+      content: z.array(item),
+      number: z.number().optional(),
+      page: z.number().optional(),
+      size: z.number().optional().default(20),
+      totalElements: z.number().optional().default(0),
+      totalPages: z.number().optional().default(1),
+    })
+    .transform((p) => ({
+      content: p.content,
+      number: p.number ?? p.page ?? 0,
+      size: p.size,
+      totalElements: p.totalElements ?? p.content.length,
+      totalPages: p.totalPages ?? 1,
+    }))
 export type Page<T> = {
   content: T[]
   number: number

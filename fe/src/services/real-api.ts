@@ -135,5 +135,19 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       return null
   }
 
+  if (
+    (feature === 'tenant' || feature === 'manager' || feature === 'admin') &&
+    ((matches('/api/v1/report-requests') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/report-requests/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(
+        `/api/v1/report-requests/${id}/(start|request-info|supplement|reject|progress|resolve|confirm-close|reopen|escalate-admin|admin-resolve|cancel)`,
+      ) &&
+        verb === 'POST') ||
+      (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/report-records/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/report-records/by-report/${id}`) && verb === 'GET'))
+  )
+    return null
+
   return 'Chức năng này hiện chưa khả dụng. Vui lòng thử lại khi có thông báo cập nhật.'
 }

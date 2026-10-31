@@ -73,13 +73,22 @@ function PersonalDashboard() {
             Tiếp tục khám phá, hoặc ghé xem không gian bạn đã chọn.
           </p>
         </div>
-        <Link
-          to="/rooms"
-          className="inline-flex min-h-11 shrink-0 items-center gap-2 text-sm font-bold text-primary"
-        >
-          Tìm nơi ở tiếp theo
-          <ArrowUpRight size={18} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link
+            to="/tenant/maintenance"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            Yêu cầu hỗ trợ & Sửa chữa
+            <ArrowUpRight size={18} />
+          </Link>
+          <Link
+            to="/rooms"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 text-sm font-bold text-primary"
+          >
+            Tìm nơi ở tiếp theo
+            <ArrowUpRight size={18} />
+          </Link>
+        </div>
       </section>
       <div className="grid items-start gap-7 lg:grid-cols-2">
         <Panel>

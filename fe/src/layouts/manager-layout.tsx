@@ -54,7 +54,7 @@ const groups = [
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
       ['utility-charges', 'Điện nước', Droplets],
       ['cost-allocations', 'Phân bổ phí', Scale],
-      ['maintenance', 'Sửa chữa', Wrench],
+      ['maintenance', 'Yêu cầu hỗ trợ', Wrench],
     ],
   },
   {

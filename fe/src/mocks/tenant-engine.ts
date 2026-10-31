@@ -315,27 +315,46 @@ export class TenantEngine {
   }
   report(t: Tenancy, input: unknown) {
     this.active(t)
-    const data = reportInputSchema.parse(input),
-      asset = this.assets(t).find((a) => a.id === data.assetId && a.category === data.category)
-    if (!asset) throw new MockError('Tài sản hoặc dịch vụ không thuộc phòng đang chọn.', 422)
-    for (const a of data.attachments) {
-      if (!a.url.startsWith(`data:${a.mime};base64,`))
-        throw new MockError('Ảnh đính kèm chưa hợp lệ.', 422)
-      const encoded = a.url.split(',')[1]
-      let bytes: string
-      try {
-        bytes = atob(encoded)
-      } catch {
-        throw new MockError('Không đọc được ảnh đính kèm.', 422)
+    const data = reportInputSchema.parse(input)
+    let asset = this.assets(t).find((a) => a.id === data.assetId && a.category === data.category)
+    if (!asset && ['FURNITURE', 'SERVICE'].includes(data.category)) {
+      throw new MockError('Tài sản hoặc dịch vụ không thuộc phòng đang chọn.', 422)
+    }
+    if (!asset) {
+      const categoryLabels: Record<string, string> = {
+        REPAIR: 'Sửa chữa',
+        MAINTENANCE: 'Bảo trì',
+        COMPLAINT: 'Khiếu nại',
+        CONTRACT: 'Hợp đồng / Gia hạn',
+        OTHER: 'Yêu cầu hỗ trợ',
       }
-      const valid =
-        a.mime === 'image/png'
-          ? bytes.startsWith('\x89PNG\r\n\x1a\n')
-          : a.mime === 'image/jpeg'
-            ? bytes.startsWith('\xff\xd8\xff')
-            : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP'
-      if (!valid || bytes.length !== a.size)
-        throw new MockError('Nội dung ảnh không khớp định dạng hoặc kích thước.', 422)
+      asset = {
+        id: data.assetId || t.roomId,
+        name: categoryLabels[data.category] || t.roomName || 'Phòng trọ',
+        category: data.category as any,
+        condition: 'Đang sử dụng',
+      }
+    }
+    for (const a of data.attachments) {
+      if (a.url.startsWith('data:')) {
+        if (!a.url.startsWith(`data:${a.mime};base64,`))
+          throw new MockError('Ảnh đính kèm chưa hợp lệ.', 422)
+        const encoded = a.url.split(',')[1]
+        let bytes: string
+        try {
+          bytes = atob(encoded)
+        } catch {
+          throw new MockError('Không đọc được ảnh đính kèm.', 422)
+        }
+        const valid =
+          a.mime === 'image/png'
+            ? bytes.startsWith('\x89PNG\r\n\x1a\n')
+            : a.mime === 'image/jpeg'
+              ? bytes.startsWith('\xff\xd8\xff')
+              : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP'
+        if (!valid || bytes.length !== a.size)
+          throw new MockError('Nội dung ảnh không khớp định dạng hoặc kích thước.', 422)
+      }
     }
     const report = {
       ...data,

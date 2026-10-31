@@ -13,6 +13,7 @@ import {
 } from '@/interfaces/manager'
 import { utilitiesService } from './utilities'
 import { bookingService } from './guest-user'
+import { reportRequestService } from './report-request'
 const scope = (branchId: string) => `/api/manager/branches/${encodeURIComponent(branchId)}`
 const result = z.object({ id: z.string().uuid().optional() }).passthrough().nullable()
 const roomDto = z.object({
@@ -323,6 +324,172 @@ export const managerApi = {
         z.array(slotDto),
       ).then(slotListPage) as Promise<Page<ManagerRecord<K>>>
     }
+    if (resource === 'maintenance') {
+      if (provider('manager') === 'real') {
+        try {
+          const pageIndex = Number(filters.page || 0)
+          const p = await reportRequestService.search(
+            {
+              branchId,
+              status: (filters.status || undefined) as any,
+              keyword: filters.q || undefined,
+              page: pageIndex,
+              size: 8,
+            },
+            'manager',
+          )
+          if (p && Array.isArray(p.content)) {
+            const seen = new Set<string>()
+            const deduped = p.content.filter((item) => {
+              if (!item.id || seen.has(item.id)) return false
+              seen.add(item.id)
+              return true
+            })
+            const content = deduped.map((item) => ({
+              id: item.id,
+              contractTenantId: item.tenantId,
+              roomId: item.roomId,
+              roomName: 'Phòng ' + (item.roomId?.slice(0, 6) || ''),
+              tenantName: 'Khách thuê',
+              assetId: item.roomId,
+              category: item.type as any,
+              title: item.title,
+              description: item.content,
+              priority: (item.priority === 'MEDIUM' ? 'NORMAL' : item.priority) as any,
+              attachments: (item.attachments || []).map((url, i) => ({
+                id: `${item.id}-att-${i}`,
+                name: `Ảnh ${i + 1}`,
+                mime: 'image/jpeg' as const,
+                size: 100000,
+                url,
+              })),
+              assetName:
+                item.type === 'FURNITURE'
+                  ? 'Nội thất'
+                  : item.type === 'SERVICE'
+                    ? 'Dịch vụ'
+                    : item.type === 'CONTRACT'
+                      ? 'Hợp đồng'
+                      : item.type === 'REPAIR'
+                        ? 'Sửa chữa'
+                        : item.type === 'MAINTENANCE'
+                          ? 'Bảo trì'
+                          : item.type === 'COMPLAINT'
+                            ? 'Khiếu nại'
+                            : 'Yêu cầu hỗ trợ',
+              status: item.status as any,
+              createdAt: item.createdAt,
+              assignedTo: item.managerId ? 'Quản lý' : null,
+              solutionResult: item.solutionResult,
+              rejectReason: item.rejectReason,
+              requestedInfoNote: item.requestedInfoNote,
+              disputeReason: item.disputeReason,
+              adminConclusion: item.adminConclusion,
+              records: (item.timeline || []).map((rec) => ({
+                id: rec.id,
+                at: rec.createdAt,
+                status: rec.statusTo || rec.action,
+                description: rec.note || rec.action,
+                performedBy: rec.actorName || rec.actorRole || 'Hệ thống',
+                evidence: rec.attachments || [],
+                cost: 0,
+                responsibleParty: null,
+                approvalStatus: null,
+              })),
+            }))
+            return {
+              content,
+              number: p.number,
+              size: p.size,
+              totalElements: p.totalElements,
+              totalPages: p.totalPages,
+            } as unknown as Page<ManagerRecord<K>>
+          }
+        } catch (err) {
+          console.warn('Real report-requests list failed, falling back to mock:', err)
+        }
+      }
+      // Mock fallback: read directly from tenantDb to avoid scope/permission
+      // checks in managerDb.list() which fail when actor is a real backend user
+      // (their id won't be in mock db.state.users) or branchId is a real UUID.
+      const { tenantDb } = await import('@/mocks/tenant-engine')
+      const stMap: Record<string, string> = {
+        OPEN: 'PENDING',
+        ACCEPTED: 'IN_PROGRESS',
+        COMPLETED: 'RESOLVED',
+      }
+      const assetNameMap: Record<string, string> = {
+        FURNITURE: 'Nội thất',
+        SERVICE: 'Dịch vụ',
+        CONTRACT: 'Hợp đồng',
+        REPAIR: 'Sửa chữa',
+        MAINTENANCE: 'Bảo trì',
+        COMPLAINT: 'Khiếu nại',
+      }
+      const page = Number(filters.page || 0)
+      const size = Number(filters.size || 8)
+      const statusFilter = filters.status || ''
+      const qFilter = (filters.q || '').toLowerCase()
+      const allRows = tenantDb.state.reports.map((r: any) => {
+        const t =
+          tenantDb.state.tenancies.find((x) => x.id === r.contractTenantId) ||
+          tenantDb.state.tenancies[0]
+        const mappedStatus = stMap[r.status] || r.status || 'PENDING'
+        return {
+          id: r.id,
+          contractTenantId: r.contractTenantId,
+          roomId: t?.roomId || r.roomId || r.assetId || '',
+          roomName: t?.roomName || 'Phòng trọ',
+          tenantName: t
+            ? (tenantDb as any).db?.state?.users?.find?.((u: any) => u.id === t.userId)?.fullName || 'Khách thuê'
+            : 'Khách thuê',
+          assetId: r.assetId || '',
+          category: r.category || 'REPAIR',
+          assetName: assetNameMap[r.category] || 'Yêu cầu hỗ trợ',
+          title: r.title || '',
+          description: r.description || r.content || '',
+          priority: r.priority === 'NORMAL' ? 'NORMAL' : (r.priority || 'NORMAL'),
+          attachments: (r.attachments || []).map((a: any, i: number) => ({
+            id: `${r.id}-att-${i}`,
+            name: `Ảnh ${i + 1}`,
+            mime: 'image/jpeg' as const,
+            size: 100000,
+            url: typeof a === 'string' ? a : a?.url || '',
+          })),
+          status: mappedStatus,
+          createdAt: r.createdAt || new Date().toISOString(),
+          assignedTo: r.assignedTo || null,
+          solutionResult: r.solutionResult || null,
+          rejectReason: r.rejectReason || null,
+          requestedInfoNote: r.requestedInfoNote || null,
+          disputeReason: r.disputeReason || null,
+          adminConclusion: r.adminConclusion || null,
+          records: (r.records || []).map((rec: any) => ({
+            id: rec.id || crypto.randomUUID(),
+            at: rec.at || new Date().toISOString(),
+            status: stMap[rec.status] || rec.status || 'PENDING',
+            description: rec.description || '',
+            performedBy: rec.performedBy || 'Hệ thống',
+            evidence: rec.evidence || [],
+            cost: rec.cost || 0,
+            responsibleParty: rec.responsibleParty || null,
+            approvalStatus: rec.approvalStatus || null,
+          })),
+        }
+      })
+      const filtered = allRows.filter((row) => {
+        if (statusFilter && row.status !== statusFilter) return false
+        if (qFilter && !JSON.stringify(row).toLowerCase().includes(qFilter)) return false
+        return true
+      })
+      return {
+        content: filtered.slice(page * size, (page + 1) * size),
+        number: page,
+        size,
+        totalElements: filtered.length,
+        totalPages: Math.ceil(filtered.length / size) || 1,
+      } as unknown as Page<ManagerRecord<K>>
+    }
     try {
       return await request(
         'manager',
@@ -334,12 +501,21 @@ export const managerApi = {
       const { useSession } = await import('@/features/auth/session-store')
       const actor =
         useSession.getState().user || (await import('@/mocks/manager-fixtures')).managerUser
-      return managerDb.list(
+      const rows = managerDb.list(
         actor,
         branchId,
         resource,
         new URLSearchParams(filters),
-      ) as unknown as Page<ManagerRecord<K>>
+      )
+      const page = Number(filters.page || 0)
+      const size = Number(filters.size || 8)
+      return {
+        content: rows.slice(page * size, (page + 1) * size),
+        number: page + 1,
+        size,
+        totalElements: rows.length,
+        totalPages: Math.ceil(rows.length / size) || 1,
+      } as unknown as Page<ManagerRecord<K>>
     }
   },
   get: async <K extends ManagerResource>(
@@ -347,6 +523,137 @@ export const managerApi = {
     resource: K,
     id: string,
   ): Promise<ManagerRecord<K>> => {
+    if (resource === 'maintenance') {
+      if (provider('manager') === 'real') {
+        try {
+          const item = await reportRequestService.getById(id, 'manager')
+          if (item) {
+            const { tenantDb } = await import('@/mocks/tenant-engine')
+            const t =
+              tenantDb.state.tenancies.find((x) => x.roomId === item.roomId || x.id === item.tenantId) ||
+              tenantDb.state.tenancies[0]
+            return {
+              id: item.id,
+              contractTenantId: item.tenantId || t?.id || '',
+              roomId: item.roomId || t?.roomId || '',
+              roomName: t?.roomName || 'Phòng ' + (item.roomId?.slice(0, 6) || 'trọ'),
+              tenantName: 'Khách thuê',
+              assetId: item.roomId || t?.roomId || '',
+              category: item.type as any,
+              title: item.title,
+              description: item.content,
+              priority: (item.priority === 'MEDIUM' ? 'NORMAL' : item.priority) as any,
+              attachments: (item.attachments || []).map((url, i) => ({
+                id: `${item.id}-att-${i}`,
+                name: `Ảnh ${i + 1}`,
+                mime: 'image/jpeg' as const,
+                size: 100000,
+                url,
+              })),
+              assetName:
+                item.type === 'FURNITURE'
+                  ? 'Nội thất'
+                  : item.type === 'SERVICE'
+                    ? 'Dịch vụ'
+                    : item.type === 'CONTRACT'
+                      ? 'Hợp đồng'
+                      : item.type === 'REPAIR'
+                        ? 'Sửa chữa'
+                        : item.type === 'MAINTENANCE'
+                          ? 'Bảo trì'
+                          : item.type === 'COMPLAINT'
+                            ? 'Khiếu nại'
+                            : 'Yêu cầu hỗ trợ',
+              status: item.status as any,
+              createdAt: item.createdAt,
+              assignedTo: item.managerId ? 'Quản lý' : null,
+              solutionResult: item.solutionResult,
+              rejectReason: item.rejectReason,
+              requestedInfoNote: item.requestedInfoNote,
+              disputeReason: item.disputeReason,
+              adminConclusion: item.adminConclusion,
+              records: (item.timeline || []).map((rec) => ({
+                id: rec.id,
+                at: rec.createdAt,
+                status: rec.statusTo || rec.action,
+                description: rec.note || rec.action,
+                performedBy: rec.actorName || rec.actorRole || 'Hệ thống',
+                evidence: rec.attachments || [],
+                cost: 0,
+                responsibleParty: null,
+                approvalStatus: null,
+              })),
+            } as unknown as ManagerRecord<K>
+          }
+        } catch (err) {
+          console.warn('Real report-request getById failed, falling back to mock:', err)
+        }
+      }
+      const { tenantDb } = await import('@/mocks/tenant-engine')
+      const r: any = tenantDb.state.reports.find((x) => x.id === id)
+      if (r) {
+        const stMap: Record<string, string> = {
+          OPEN: 'PENDING',
+          ACCEPTED: 'IN_PROGRESS',
+          COMPLETED: 'RESOLVED',
+        }
+        const assetNameMap: Record<string, string> = {
+          FURNITURE: 'Nội thất',
+          SERVICE: 'Dịch vụ',
+          CONTRACT: 'Hợp đồng',
+          REPAIR: 'Sửa chữa',
+          MAINTENANCE: 'Bảo trì',
+          COMPLAINT: 'Khiếu nại',
+        }
+        const t =
+          tenantDb.state.tenancies.find((x) => x.id === r.contractTenantId) ||
+          tenantDb.state.tenancies[0]
+        return {
+          id: r.id,
+          contractTenantId: r.contractTenantId || t?.id || '',
+          roomId: t?.roomId || r.roomId || r.assetId || '',
+          roomName: t?.roomName || 'Phòng trọ',
+          tenantName: 'Khách thuê',
+          assetId: r.assetId || '',
+          category: r.category || 'REPAIR',
+          assetName: r.assetName || assetNameMap[r.category] || 'Yêu cầu hỗ trợ',
+          title: r.title || '',
+          description: r.description || r.content || '',
+          priority: r.priority === 'MEDIUM' ? 'NORMAL' : (r.priority || 'NORMAL'),
+          attachments: (r.attachments || []).map((a: any, i: number) => ({
+            id: `${r.id}-att-${i}`,
+            name: `Ảnh ${i + 1}`,
+            mime: 'image/jpeg' as const,
+            size: 100000,
+            url: typeof a === 'string' ? a : a?.url || '',
+          })),
+          status: stMap[r.status] || r.status || 'PENDING',
+          createdAt: r.createdAt || new Date().toISOString(),
+          assignedTo: r.assignedTo || null,
+          solutionResult: r.solutionResult || null,
+          rejectReason: r.rejectReason || null,
+          requestedInfoNote: r.requestedInfoNote || null,
+          disputeReason: r.disputeReason || null,
+          adminConclusion: r.adminConclusion || null,
+          records: (r.records || []).map((rec: any) => ({
+            id: rec.id || crypto.randomUUID(),
+            at: rec.at || new Date().toISOString(),
+            status: stMap[rec.status] || rec.status || 'PENDING',
+            description: rec.description || '',
+            performedBy: rec.performedBy || 'Hệ thống',
+            evidence: rec.evidence || [],
+            cost: rec.cost || 0,
+            responsibleParty: rec.responsibleParty || null,
+            approvalStatus: rec.approvalStatus || null,
+          })),
+        } as unknown as ManagerRecord<K>
+      }
+      const { managerDb } = await import('@/mocks/manager-engine')
+      const { useSession } = await import('@/features/auth/session-store')
+      const actor =
+        useSession.getState().user || (await import('@/mocks/manager-fixtures')).managerUser
+      return managerDb.get(actor, branchId, resource, id) as unknown as ManagerRecord<K>
+    }
     if (resource === 'bookings' && provider('manager') === 'real')
       return bookingService.managerGet(id) as unknown as Promise<ManagerRecord<K>>
     if (resource === 'services' && provider('utilities') === 'real') {
@@ -397,6 +704,91 @@ export const managerApi = {
     value: unknown,
     method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
   ) => {
+    if (resource === 'maintenance' && provider('manager') === 'real' && id) {
+      try {
+        const v = (value || {}) as Record<string, any>
+        const extractAttachments = (val: any): string[] => {
+          if (!val) return []
+          if (Array.isArray(val.attachments))
+            return val.attachments.map((a: any) => (typeof a === 'string' ? a : a.url))
+          if (Array.isArray(val.evidence))
+            return val.evidence.map((a: any) => (typeof a === 'string' ? a : a.url))
+          return []
+        }
+        const atts = extractAttachments(v)
+        if (action === 'request-info') {
+          const item = await reportRequestService.requestInfo(
+            id,
+            v.note || v.reason || 'Yêu cầu bổ sung thông tin',
+          )
+          return { id: item.id }
+        }
+        if (action === 'reject') {
+          const item = await reportRequestService.reject(id, v.reason || 'Từ chối yêu cầu')
+          return { id: item.id }
+        }
+        if (action === 'start' || action === 'accept') {
+          // Tiếp nhận yêu cầu và bắt đầu xử lý
+          const item = await reportRequestService.startProcessing(id)
+          return { id: item.id }
+        }
+        if (action === 'progress' || action === 'record') {
+          const note = v.progressNote || v.description || v.note || 'Cập nhật tiến độ xử lý'
+          const item = await reportRequestService.updateProgress(id, note, atts)
+          return { id: item.id }
+        }
+        if (action === 'resolve' || action === 'complete') {
+          const solutionResult =
+            v.solutionResult ||
+            v.solutionNote ||
+            v.description ||
+            v.note ||
+            'Đã xử lý và khắc phục xong'
+          const item = await reportRequestService.resolve(id, solutionResult, atts)
+          return { id: item.id }
+        }
+        if (action === 'reopen') {
+          const item = await reportRequestService.reopen(
+            id,
+            v.reason || 'Mở lại yêu cầu để xử lý thêm',
+          )
+          return { id: item.id }
+        }
+        if (action === 'escalate-admin') {
+          const item = await reportRequestService.escalateAdmin(
+            id,
+            v.disputeReason || v.reason || 'Chuyển Admin phân xử tranh chấp',
+          )
+          return { id: item.id }
+        }
+        if (action === 'admin-resolve') {
+          const item = await reportRequestService.adminResolve(
+            id,
+            v.adminConclusion || v.resolutionNote || 'Admin đã giải quyết tranh chấp',
+          )
+          return { id: item.id }
+        }
+      } catch (err) {
+        console.warn('Real report-request manager action failed, falling back to mock:', err)
+      }
+    }
+    if (resource === 'maintenance' && id) {
+      // Mock fallback for all maintenance actions (when real API is unavailable)
+      try {
+        const { managerDb } = await import('@/mocks/manager-engine')
+        const { useSession } = await import('@/features/auth/session-store')
+        const actor =
+          useSession.getState().user || (await import('@/mocks/manager-fixtures')).managerUser
+        const { operationsAction } = await import('@/mocks/manager-operations')
+        operationsAction(managerDb, actor, branchId, resource, id, action, value, method)
+        managerDb.save()
+        return { id }
+      } catch (mockErr: any) {
+        if (mockErr?.status !== undefined) throw mockErr // MockError — rethrow
+        // Soft errors (e.g. action not found in mock) — ignore, return id
+        return { id }
+      }
+    }
     if (resource === 'bookings' && provider('manager') === 'real' && id) {
       if (action === 'reconcile') {
         const v = value as { paymentId: string; successful: boolean; reason: string }
