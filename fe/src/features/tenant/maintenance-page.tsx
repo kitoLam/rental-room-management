@@ -1,4 +1,5 @@
 import { Pagination, Panel, QueryState } from '@/components/common/page'
+import { useSession } from '@/features/auth/session-store'
 import { dateTime } from '@/lib/activity'
 import { tenantApi } from '@/services/tenant'
 import { Plus } from 'lucide-react'
@@ -10,6 +11,14 @@ import { tenantStatusLabel } from './status'
 
 export function MaintenancePage() {
   const { tenancy: t } = useTenant(),
+    canCreateReport = useSession((s) => {
+      const roles = s.user?.roles || []
+      if (s.activeRole === 'ADMIN' || s.activeRole === 'MANAGER') return false
+      if (roles.includes('ADMIN') || roles.includes('MANAGER')) {
+        return s.activeRole === 'TENANT' || s.activeRole === 'OWNER'
+      }
+      return roles.includes('TENANT') || roles.includes('OWNER')
+    }),
     query = useTenantQuery('maintenance', tenantApi.reports, [], true),
     [state, setState] = useState(''),
     [category, setCategory] = useState(''),
@@ -24,10 +33,12 @@ export function MaintenancePage() {
       title="Yêu cầu hỗ trợ & Bảo trì"
       description="Gửi yêu cầu hỗ trợ (sửa chữa, khiếu nại, gia hạn...), theo dõi tiến độ và đánh giá kết quả."
       actions={
-        <TenantLink to="/tenant/maintenance/new" button>
-          <Plus size={17} />
-          Tạo yêu cầu
-        </TenantLink>
+        canCreateReport ? (
+          <TenantLink to="/tenant/maintenance/new" button>
+            <Plus size={17} />
+            Tạo yêu cầu
+          </TenantLink>
+        ) : undefined
       }
     >
       <div className="flex flex-wrap gap-3">
@@ -82,9 +93,11 @@ export function MaintenancePage() {
         empty={rows.length === 0}
         emptyMessage="Chưa có yêu cầu bảo trì phù hợp."
         emptyAction={
-          <TenantLink to="/tenant/maintenance/new" button>
-            Tạo yêu cầu
-          </TenantLink>
+          canCreateReport ? (
+            <TenantLink to="/tenant/maintenance/new" button>
+              Tạo yêu cầu
+            </TenantLink>
+          ) : null
         }
       >
         <Panel>

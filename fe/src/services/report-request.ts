@@ -20,6 +20,7 @@ type MockReportLike = InternalReport & {
   branchId?: string
   contractId?: string
   content?: string
+  locallyModified?: boolean
 }
 
 function toItem(r: MockReportLike, tenancy?: Tenancy): ReportRequestItem {
@@ -83,7 +84,10 @@ async function syncMockReports() {
             if (!sr || !sr.id) continue
             const existingIdx = tenantDb.state.reports.findIndex((x) => x.id === sr.id)
             if (existingIdx >= 0) {
-              tenantDb.state.reports[existingIdx] = sr
+              const existing = tenantDb.state.reports[existingIdx] as MockReportLike
+              if (sr.locallyModified || !existing.locallyModified) {
+                tenantDb.state.reports[existingIdx] = sr
+              }
             } else {
               tenantDb.state.reports.unshift(sr)
             }
@@ -98,78 +102,112 @@ async function syncMockReports() {
 }
 
 function saveSharedReports(tenantDb: { state: { reports: InternalReport[] }; save: () => void }) {
-  tenantDb.save()
+  try {
+    tenantDb.save()
+  } catch {
+    // ignore sessionStorage quota errors
+  }
   if (typeof localStorage !== 'undefined') {
     try {
-      localStorage.setItem(SHARED_REPORTS_KEY, JSON.stringify(tenantDb.state.reports))
+      const compactReports = tenantDb.state.reports.slice(0, 20).map((r) => ({
+        ...r,
+        attachments: (r.attachments || []).map((a) =>
+          typeof a === 'object' && a && typeof a.url === 'string' && a.url.startsWith('data:image/')
+            ? { ...a, url: '/demo/room-1.webp' }
+            : a,
+        ),
+        records: (r.records || []).map((rec) => ({
+          ...rec,
+          evidence: (rec.evidence || []).map((u) =>
+            typeof u === 'string' && u.startsWith('data:image/') ? '/demo/room-1.webp' : u,
+          ),
+        })),
+      }))
+      localStorage.setItem(SHARED_REPORTS_KEY, JSON.stringify(compactReports))
     } catch {
-      // ignore quota errors
+      try {
+        localStorage.removeItem(SHARED_REPORTS_KEY)
+      } catch {
+        // ignore
+      }
     }
   }
 }
 
-async function upsertMockFromItem(item: ReportRequestItem) {
-  const tenantDb = await syncMockReports()
-  const tenancy =
-    tenantDb.state.tenancies.find((t) => t.roomId === item.roomId) ||
-    tenantDb.state.tenancies[0]
-  const assetNameMap: Record<string, string> = {
-    REPAIR: 'Sửa chữa',
-    FURNITURE: 'Nội thất',
-    SERVICE: 'Dịch vụ',
-    COMPLAINT: 'Khiếu nại',
-    MAINTENANCE: 'Bảo trì',
-    CONTRACT: 'Hợp đồng',
-    OTHER: 'Khác',
+async function upsertMockFromItem(item: ReportRequestItem, fromMutation = false) {
+  try {
+    const tenantDb = await syncMockReports()
+    const existingIdx = tenantDb.state.reports.findIndex((r) => r.id === item.id)
+    if (existingIdx >= 0) {
+      const existing = tenantDb.state.reports[existingIdx] as MockReportLike
+      // Do not let a stale GET response overwrite a locally modified fallback state
+      if (existing.locallyModified && !fromMutation) {
+        return
+      }
+    }
+    const tenancy =
+      tenantDb.state.tenancies.find((t) => t.roomId === item.roomId) ||
+      tenantDb.state.tenancies[0]
+    const assetNameMap: Record<string, string> = {
+      REPAIR: 'Sửa chữa',
+      FURNITURE: 'Nội thất',
+      SERVICE: 'Dịch vụ',
+      COMPLAINT: 'Khiếu nại',
+      MAINTENANCE: 'Bảo trì',
+      CONTRACT: 'Hợp đồng',
+      OTHER: 'Khác',
+    }
+    const mockItem: MockReportLike = {
+      id: item.id,
+      contractTenantId: tenancy?.id || item.tenantId || '',
+      roomId: item.roomId,
+      branchId: item.branchId || tenancy?.branchId || '',
+      contractId: item.contractId || tenancy?.contractId || '',
+      assetId: item.roomId || tenancy?.roomId || '',
+      category: (item.type || 'REPAIR') as MaintenanceReport['category'],
+      assetName: assetNameMap[item.type] || 'Yêu cầu hỗ trợ',
+      title: item.title,
+      description: item.content,
+      content: item.content,
+      priority: (item.priority === 'MEDIUM' ? 'NORMAL' : item.priority) as MaintenanceReport['priority'],
+      status: item.status as MaintenanceReport['status'],
+      attachments: (item.attachments || []).map((url, idx) => ({
+        id: `${item.id}-att-${idx}`,
+        name: `Ảnh ${idx + 1}`,
+        mime: 'image/jpeg' as const,
+        size: 100000,
+        url,
+      })),
+      createdAt: item.createdAt,
+      assignedTo: item.managerId ? 'Quản lý chi nhánh' : null,
+      solutionResult: item.solutionResult || null,
+      rejectReason: item.rejectReason || null,
+      requestedInfoNote: item.requestedInfoNote || null,
+      disputeReason: item.disputeReason || null,
+      adminConclusion: item.adminConclusion || null,
+      locallyModified: false,
+      workflowAt: 0,
+      records: (item.timeline || []).map((rec) => ({
+        id: rec.id,
+        at: rec.createdAt,
+        status: (rec.statusTo || rec.action) as MaintenanceReport['records'][number]['status'],
+        description: rec.note || rec.action,
+        performedBy: rec.actorName || rec.actorRole || 'Hệ thống',
+        evidence: rec.attachments || [],
+        cost: 0,
+        responsibleParty: null,
+        approvalStatus: null,
+      })),
+    }
+    if (existingIdx >= 0) {
+      tenantDb.state.reports[existingIdx] = mockItem
+    } else {
+      tenantDb.state.reports.unshift(mockItem)
+    }
+    saveSharedReports(tenantDb)
+  } catch {
+    // Never let cache sync failure break the main API flow
   }
-  const mockItem: MockReportLike = {
-    id: item.id,
-    contractTenantId: tenancy?.id || item.tenantId || '',
-    roomId: item.roomId,
-    branchId: item.branchId || tenancy?.branchId || '',
-    contractId: item.contractId || tenancy?.contractId || '',
-    assetId: item.roomId || tenancy?.roomId || '',
-    category: (item.type || 'REPAIR') as MaintenanceReport['category'],
-    assetName: assetNameMap[item.type] || 'Yêu cầu hỗ trợ',
-    title: item.title,
-    description: item.content,
-    content: item.content,
-    priority: (item.priority === 'MEDIUM' ? 'NORMAL' : item.priority) as MaintenanceReport['priority'],
-    status: item.status as MaintenanceReport['status'],
-    attachments: (item.attachments || []).map((url, idx) => ({
-      id: `${item.id}-att-${idx}`,
-      name: `Ảnh ${idx + 1}`,
-      mime: 'image/jpeg' as const,
-      size: 100000,
-      url,
-    })),
-    createdAt: item.createdAt,
-    assignedTo: item.managerId ? 'Quản lý chi nhánh' : null,
-    solutionResult: item.solutionResult || null,
-    rejectReason: item.rejectReason || null,
-    requestedInfoNote: item.requestedInfoNote || null,
-    disputeReason: item.disputeReason || null,
-    adminConclusion: item.adminConclusion || null,
-    workflowAt: 0,
-    records: (item.timeline || []).map((rec) => ({
-      id: rec.id,
-      at: rec.createdAt,
-      status: (rec.statusTo || rec.action) as MaintenanceReport['records'][number]['status'],
-      description: rec.note || rec.action,
-      performedBy: rec.actorName || rec.actorRole || 'Hệ thống',
-      evidence: rec.attachments || [],
-      cost: 0,
-      responsibleParty: null,
-      approvalStatus: null,
-    })),
-  }
-  const idx = tenantDb.state.reports.findIndex((r) => r.id === item.id)
-  if (idx >= 0) {
-    tenantDb.state.reports[idx] = mockItem
-  } else {
-    tenantDb.state.reports.unshift(mockItem)
-  }
-  saveSharedReports(tenantDb)
 }
 
 async function findMockReport(id: string) {
@@ -205,7 +243,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', input),
       )
-      await upsertMockFromItem(created)
+      await upsertMockFromItem(created, true)
       return created
     } catch (err) {
       console.warn('Real report-requests create failed, falling back to mock:', err)
@@ -226,9 +264,10 @@ export const reportRequestService = {
           size: 50000,
           url,
         })),
-      })
+      }) as MockReportLike
+      rep.locallyModified = true
       saveSharedReports(tenantDb)
-      return toItem(rep as MockReportLike, tenancy)
+      return toItem(rep, tenancy)
     }
   },
 
@@ -237,6 +276,12 @@ export const reportRequestService = {
     feature: 'tenant' | 'manager' | 'admin' = 'tenant',
   ): Promise<ReportRequestItem> => {
     const { r: mockR, tenancy: mockTenancy } = await findMockReport(id)
+    // If local state has a locally modified update (e.g. escalated to admin, rejected, resolved),
+    // return it immediately so stale backend GET responses cannot overwrite it.
+    if (mockR?.locallyModified) {
+      return toItem(mockR, mockTenancy)
+    }
+
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(id)
 
     // If it's a MongoDB ObjectId or not in mock memory yet, try the real API first
@@ -247,7 +292,7 @@ export const reportRequestService = {
           `/api/v1/report-requests/${encodeURIComponent(id)}`,
           reportRequestResponseSchema,
         )
-        await upsertMockFromItem(item)
+        await upsertMockFromItem(item, false)
         return item
       } catch (err) {
         if (mockR) {
@@ -266,14 +311,14 @@ export const reportRequestService = {
     feature: 'tenant' | 'manager' | 'admin' = 'tenant',
   ): Promise<Page<ReportRequestItem>> => {
     const tenantDb = await syncMockReports()
-    const getLocalItems = (): ReportRequestItem[] =>
+    const getLocalItems = (): { item: ReportRequestItem; locallyModified?: boolean }[] =>
       tenantDb.state.reports.map((rawReport) => {
         const r = rawReport as MockReportLike
         const t =
           tenantDb.state.tenancies.find((x) => x.id === r.contractTenantId) ||
           tenantDb.state.tenancies.find((x) => x.roomId === r.roomId || x.roomId === r.assetId) ||
           tenantDb.state.tenancies[0]
-        return toItem(r, t)
+        return { item: toItem(r, t), locallyModified: r.locallyModified }
       })
 
     try {
@@ -298,19 +343,31 @@ export const reportRequestService = {
 
       const seen = new Set<string>()
       const merged: ReportRequestItem[] = []
-
-      for (const item of p.content || []) {
-        if (item.id && !seen.has(item.id)) {
-          seen.add(item.id)
-          merged.push(item)
-          await upsertMockFromItem(item)
+      const localEntries = getLocalItems()
+      const localModifiedMap = new Map<string, ReportRequestItem>()
+      for (const le of localEntries) {
+        if (le.locallyModified && le.item.id) {
+          localModifiedMap.set(le.item.id, le.item)
         }
       }
 
-      for (const localItem of getLocalItems()) {
-        if (localItem.id && !seen.has(localItem.id)) {
-          seen.add(localItem.id)
-          merged.push(localItem)
+      for (const apiItem of p.content || []) {
+        if (apiItem.id && !seen.has(apiItem.id)) {
+          seen.add(apiItem.id)
+          const localMod = localModifiedMap.get(apiItem.id)
+          if (localMod) {
+            merged.push(localMod)
+          } else {
+            merged.push(apiItem)
+            await upsertMockFromItem(apiItem, false)
+          }
+        }
+      }
+
+      for (const le of localEntries) {
+        if (le.item.id && !seen.has(le.item.id)) {
+          seen.add(le.item.id)
+          merged.push(le.item)
         }
       }
 
@@ -326,7 +383,10 @@ export const reportRequestService = {
       }
     } catch (err) {
       console.warn('Real report-requests search failed, falling back to mock:', err)
-      const filtered = filterItems(getLocalItems(), filter)
+      const filtered = filterItems(
+        getLocalItems().map((x) => x.item),
+        filter,
+      )
       const page = filter.page || 0
       const size = filter.size || 20
       return {
@@ -347,7 +407,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { note }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests requestInfo failed, falling back to mock:', err)
@@ -355,6 +415,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'WAITING_INFO'
       r.requestedInfoNote = note
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -383,13 +444,14 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { additionalInfo, additionalAttachments }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests supplementInfo failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'PENDING'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -414,7 +476,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { reason }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests reject failed, falling back to mock:', err)
@@ -422,6 +484,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'REJECTED'
       r.rejectReason = reason
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -446,7 +509,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST'),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests startProcessing failed, falling back to mock:', err)
@@ -454,6 +517,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'IN_PROGRESS'
       r.assignedTo = 'Quản lý chi nhánh'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -482,13 +546,14 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { progressNote, attachments }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests updateProgress failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'IN_PROGRESS'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -517,7 +582,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { solutionResult, attachments }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests resolve failed, falling back to mock:', err)
@@ -525,6 +590,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'RESOLVED'
       r.solutionResult = solutionResult
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -549,13 +615,14 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST'),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests confirmClose failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'CLOSED'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -584,13 +651,14 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { reason, attachments }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests reopen failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'IN_PROGRESS'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -619,7 +687,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { disputeReason, attachments }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests escalateAdmin failed, falling back to mock:', err)
@@ -627,6 +695,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'ESCALATED_ADMIN'
       r.disputeReason = disputeReason
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -651,7 +720,7 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST', { adminConclusion }),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests adminResolve failed, falling back to mock:', err)
@@ -659,6 +728,7 @@ export const reportRequestService = {
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'CLOSED'
       r.adminConclusion = adminConclusion
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
@@ -683,13 +753,14 @@ export const reportRequestService = {
         reportRequestResponseSchema,
         write('POST'),
       )
-      await upsertMockFromItem(item)
+      await upsertMockFromItem(item, true)
       return item
     } catch (err) {
       console.warn('Real report-requests cancel failed, falling back to mock:', err)
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'CANCELLED'
+      r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
