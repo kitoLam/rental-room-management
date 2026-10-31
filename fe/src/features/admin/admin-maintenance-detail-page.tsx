@@ -17,7 +17,7 @@ export function AdminMaintenanceDetailPage() {
 
   const query = useQuery({
     queryKey: ['admin', 'maintenance-detail', reportId],
-    queryFn: () => reportRequestService.getById(reportId),
+    queryFn: () => reportRequestService.getById(reportId, 'admin'),
     enabled: !!reportId,
   })
 

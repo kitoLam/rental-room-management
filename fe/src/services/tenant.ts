@@ -232,48 +232,62 @@ export const tenantApi = {
     return request('tenant', path(id, 'allocations'), proposalSchema, write('POST', value))
   },
   reports: async (id: string): Promise<MaintenanceReport[]> => {
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+    const mockList = tenantDb.state.reports.filter(
+      (r) => !t || r.contractTenantId === t.id || r.contractTenantId === id || !r.contractTenantId,
+    )
+    const localList = mockList.length ? mockList : tenantDb.state.reports
+    // Attempt real API to get the latest list; merge with local items so newly created
+    // records (created via mock fallback) are always included.
     if (provider('tenant') === 'real') {
       try {
         const p = await reportRequestService.search({ size: 100 })
         if (p && Array.isArray(p.content)) {
           const seen = new Set<string>()
-          return p.content
+          const realItems = p.content
             .filter((item) => {
               if (!item.id || seen.has(item.id)) return false
               seen.add(item.id)
               return true
             })
             .map((item) => adaptReportRequest(item, id))
+          // Prepend local-only records (those not returned by real API)
+          const localOnly = localList.filter((r) => !seen.has(r.id))
+          return [...localOnly, ...realItems]
         }
-      } catch (err) {
-        console.warn('Real report-requests search failed, falling back to mock:', err)
+      } catch {
+        // Real API unavailable — fall through to local list
       }
     }
-    const { tenantDb } = await import('@/mocks/tenant-engine')
-    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
-    const list = tenantDb.state.reports.filter(
-      (r) => !t || r.contractTenantId === t.id || r.contractTenantId === id || !r.contractTenantId,
-    )
-    return list.length ? list : tenantDb.state.reports
+    return localList
   },
   report: async (id: string, reportId: string): Promise<MaintenanceReport> => {
-    if (provider('tenant') === 'real') {
-      try {
-        const item = await reportRequestService.getById(reportId)
-        if (item) {
-          return adaptReportRequest(item, id)
-        }
-      } catch (err) {
-        console.warn('Real report-request getById failed, falling back to mock:', err)
-      }
-    }
     const { tenantDb } = await import('@/mocks/tenant-engine')
     const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
-    const found =
+    // Check mock memory first to avoid hammering real API with a 404 loop when
+    // the record was created via mock fallback (e.g. backend unavailable).
+    const mockFound =
       tenantDb.state.reports.find((x) => x.id === reportId && x.contractTenantId === t.id) ||
       tenantDb.state.reports.find((x) => x.id === reportId)
-    if (!found) throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
-    return found
+    if (mockFound) {
+      // Silently attempt real API for fresher data; fall back to cached mock on any error
+      if (provider('tenant') === 'real') {
+        try {
+          const item = await reportRequestService.getById(reportId)
+          if (item) return adaptReportRequest(item, id)
+        } catch {
+          // ignore — use mock below
+        }
+      }
+      return mockFound
+    }
+    // Not in mock — try real API (will throw if not found)
+    if (provider('tenant') === 'real') {
+      const item = await reportRequestService.getById(reportId)
+      if (item) return adaptReportRequest(item, id)
+    }
+    throw new Error('Không tìm thấy yêu cầu hỗ trợ.')
   },
   createReport: async (
     id: string,

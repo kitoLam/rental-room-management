@@ -23,23 +23,18 @@ import java.util.List;
 public class ReportRequest extends BaseDocument {
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String tenantId;
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String roomId;
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String branchId;
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String contractId;
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String managerId;
 
     private ReportRequestType type;

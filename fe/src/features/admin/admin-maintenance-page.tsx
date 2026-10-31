@@ -24,7 +24,7 @@ export function AdminMaintenancePage() {
           page,
           size: 10,
         },
-        'admin' as any,
+        'admin',
       ),
   })
 
