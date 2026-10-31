@@ -11,6 +11,8 @@ import {
   type ManagerResource,
   type ManagerRecord,
   contractSchema,
+  contractTenantSchema,
+  eligibleContractTenantSchema,
 } from '@/interfaces/manager'
 import { utilitiesService } from './utilities'
 import { bookingService, contractService } from './guest-user'
@@ -173,6 +175,24 @@ const slotListPage = (slots: z.infer<typeof slotDto>[]) => ({
   totalPages: slots.length ? 1 : 0,
 })
 export const managerApi = {
+  roomFilterOptions: async (branchId: string) => {
+    const params = new URLSearchParams({ branchId, page: '0', size: '100' })
+    const page = await request(
+      'manager',
+      `/api/v1/rooms?${params}`,
+      z.object({
+        content: z.array(z.object({ id: databaseIdSchema, roomNumber: z.string() }).passthrough()),
+        number: z.number(),
+        size: z.number(),
+        totalElements: z.number(),
+        totalPages: z.number(),
+      }),
+    )
+    return {
+      ...page,
+      content: page.content.map(({ id, roomNumber }) => ({ id, code: roomNumber, title: roomNumber })),
+    }
+  },
   previewCharge: (branchId: string, value: unknown) =>
     request(
       'manager',
@@ -211,6 +231,13 @@ export const managerApi = {
       if (filters.q) query.set('keyword', filters.q)
       const page = await request('manager', `/api/v1/contracts?${query}`, pageSchema(backendContractDto))
       return { ...page, number: Math.max(0, page.number - 1), content: page.content.map((item) => managerContract(item, branchId)) } as unknown as Page<ManagerRecord<K>>
+    }
+    if (resource === 'contract-tenants' && provider('manager') === 'real') {
+      const query = new URLSearchParams({ page: filters.page || '0', size: filters.size || '8' })
+      if (filters.contractId) query.set('contractId', filters.contractId)
+      if (filters.status) query.set('status', filters.status)
+      const page = await request('manager', `/api/v1/contract-tenants?${query}`, pageSchema(contractTenantSchema))
+      return { ...page, number: Math.max(0, page.number - 1) } as unknown as Page<ManagerRecord<K>>
     }
     if (resource === 'services' && provider('utilities') === 'real') {
       const raw = await utilitiesService.catalog.list(branchId, {
@@ -696,6 +723,8 @@ export const managerApi = {
       const item = await request('manager', `/api/v1/contracts/${encodeURIComponent(id)}`, backendContractDto)
       return managerContract(item, branchId) as unknown as ManagerRecord<K>
     }
+    if (resource === 'contract-tenants' && provider('manager') === 'real')
+      return request('manager', `/api/v1/contract-tenants/${encodeURIComponent(id)}`, contractTenantSchema) as Promise<ManagerRecord<K>>
     if (resource === 'services' && provider('utilities') === 'real') {
       const item = await utilitiesService.catalog.get(id)
       return {
@@ -744,6 +773,12 @@ export const managerApi = {
     value: unknown,
     method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
   ) => {
+    if (resource === 'contract-tenants' && provider('manager') === 'real') {
+      const path = `/api/v1/contract-tenants${id ? `/${encodeURIComponent(id)}` : ''}`
+      if (method === 'DELETE')
+        return request('manager', path, z.null(), write(method, value)).then(() => null)
+      return request('manager', path, contractTenantSchema, write(method, value))
+    }
     if (resource === 'maintenance' && provider('manager') === 'real' && id) {
       try {
         const v = (value || {}) as Record<string, any>
@@ -1037,6 +1072,12 @@ export const managerApi = {
           phone: z.string().nullable(),
         }),
       ),
+    ),
+  eligibleContractTenants: (contractId: string) =>
+    request(
+      'manager',
+      `/api/v1/contract-tenants/eligible?contractId=${encodeURIComponent(contractId)}`,
+      z.array(eligibleContractTenantSchema),
     ),
   sources: (branchId: string, tenancyId: string, month: string, invoiceId?: string) =>
     request(
