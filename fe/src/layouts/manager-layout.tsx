@@ -54,7 +54,7 @@ const groups = [
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
       ['utility-charges', 'Điện nước', Droplets],
       ['cost-allocations', 'Phân bổ phí', Scale],
-      ['maintenance', 'Sửa chữa', Wrench],
+      ['maintenance', 'Yêu cầu hỗ trợ', Wrench],
     ],
   },
   {
@@ -147,6 +147,14 @@ export function ManagerLayout() {
         {allowed && (
           <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
             <aside className="min-w-0">
+              {user.roles.includes('ADMIN') && (
+                <Link
+                  className="mb-5 block min-h-11 text-sm font-bold text-primary"
+                  to="/admin/dashboard"
+                >
+                  ← Quản trị hệ thống
+                </Link>
+              )}
               {user.roles.includes('OWNER') && (
                 <Link
                   className="mb-5 block min-h-11 text-sm font-bold text-primary"

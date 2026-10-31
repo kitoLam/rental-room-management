@@ -91,17 +91,36 @@ export function ManagerStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'APPROVED', 'VERIFIED', 'CONFIRMED', 'FINALIZED', 'PAID', 'COMPLETED'].includes(
-          value,
-        )
+        [
+          'ACTIVE',
+          'APPROVED',
+          'VERIFIED',
+          'CONFIRMED',
+          'FINALIZED',
+          'PAID',
+          'COMPLETED',
+          'RESOLVED',
+          'CLOSED',
+          'ADMIN_RESOLVED',
+        ].includes(value)
           ? 'success'
-          : ['PENDING', 'REVIEW', 'HELD', 'OPEN', 'AWAITING_PAYMENT', 'CANCEL_REQUESTED'].includes(
-                value,
-              )
-            ? 'warning'
-            : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
-              ? 'danger'
-              : 'neutral'
+          : ['IN_PROGRESS', 'ACCEPTED', 'PROGRESS_UPDATED'].includes(value)
+            ? 'info'
+            : [
+                'PENDING',
+                'REVIEW',
+                'HELD',
+                'OPEN',
+                'AWAITING_PAYMENT',
+                'CANCEL_REQUESTED',
+                'WAITING_INFO',
+                'INFO_SUPPLEMENTED',
+                'REQUESTED_INFO',
+              ].includes(value)
+              ? 'warning'
+              : ['REJECTED', 'FAILED', 'OVERDUE', 'ESCALATED_ADMIN'].includes(value)
+                ? 'danger'
+                : 'neutral'
       }
     >
       {labels[value] || tenantStatusLabel(value)}

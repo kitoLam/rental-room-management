@@ -26,8 +26,34 @@ export class TenantEngine {
     this.state = state || seedTenant()
   }
   save() {
-    if (typeof sessionStorage !== 'undefined')
-      sessionStorage.setItem(storageKey, JSON.stringify(this.state))
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(this.state))
+      } catch {
+        try {
+          const compactState = {
+            ...this.state,
+            reports: this.state.reports.slice(0, 20).map((r) => ({
+              ...r,
+              attachments: (r.attachments || []).map((a) =>
+                typeof a === 'object' && a && typeof a.url === 'string' && a.url.startsWith('data:image/')
+                  ? { ...a, url: '/demo/room-1.webp' }
+                  : a,
+              ),
+              records: (r.records || []).map((rec) => ({
+                ...rec,
+                evidence: (rec.evidence || []).map((u) =>
+                  typeof u === 'string' && u.startsWith('data:image/') ? '/demo/room-1.webp' : u,
+                ),
+              })),
+            })),
+          }
+          sessionStorage.setItem(storageKey, JSON.stringify(compactState))
+        } catch {
+          // Ignore storage quota errors — in-memory state remains intact
+        }
+      }
+    }
   }
   reset() {
     this.state = seedTenant()
@@ -315,27 +341,46 @@ export class TenantEngine {
   }
   report(t: Tenancy, input: unknown) {
     this.active(t)
-    const data = reportInputSchema.parse(input),
-      asset = this.assets(t).find((a) => a.id === data.assetId && a.category === data.category)
-    if (!asset) throw new MockError('Tài sản hoặc dịch vụ không thuộc phòng đang chọn.', 422)
-    for (const a of data.attachments) {
-      if (!a.url.startsWith(`data:${a.mime};base64,`))
-        throw new MockError('Ảnh đính kèm chưa hợp lệ.', 422)
-      const encoded = a.url.split(',')[1]
-      let bytes: string
-      try {
-        bytes = atob(encoded)
-      } catch {
-        throw new MockError('Không đọc được ảnh đính kèm.', 422)
+    const data = reportInputSchema.parse(input)
+    let asset = this.assets(t).find((a) => a.id === data.assetId && a.category === data.category)
+    if (!asset && ['FURNITURE', 'SERVICE'].includes(data.category)) {
+      throw new MockError('Tài sản hoặc dịch vụ không thuộc phòng đang chọn.', 422)
+    }
+    if (!asset) {
+      const categoryLabels: Record<string, string> = {
+        REPAIR: 'Sửa chữa',
+        MAINTENANCE: 'Bảo trì',
+        COMPLAINT: 'Khiếu nại',
+        CONTRACT: 'Hợp đồng / Gia hạn',
+        OTHER: 'Yêu cầu hỗ trợ',
       }
-      const valid =
-        a.mime === 'image/png'
-          ? bytes.startsWith('\x89PNG\r\n\x1a\n')
-          : a.mime === 'image/jpeg'
-            ? bytes.startsWith('\xff\xd8\xff')
-            : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP'
-      if (!valid || bytes.length !== a.size)
-        throw new MockError('Nội dung ảnh không khớp định dạng hoặc kích thước.', 422)
+      asset = {
+        id: data.assetId || t.roomId,
+        name: categoryLabels[data.category] || t.roomName || 'Phòng trọ',
+        category: data.category as any,
+        condition: 'Đang sử dụng',
+      }
+    }
+    for (const a of data.attachments) {
+      if (a.url.startsWith('data:')) {
+        if (!a.url.startsWith(`data:${a.mime};base64,`))
+          throw new MockError('Ảnh đính kèm chưa hợp lệ.', 422)
+        const encoded = a.url.split(',')[1]
+        let bytes: string
+        try {
+          bytes = atob(encoded)
+        } catch {
+          throw new MockError('Không đọc được ảnh đính kèm.', 422)
+        }
+        const valid =
+          a.mime === 'image/png'
+            ? bytes.startsWith('\x89PNG\r\n\x1a\n')
+            : a.mime === 'image/jpeg'
+              ? bytes.startsWith('\xff\xd8\xff')
+              : bytes.startsWith('RIFF') && bytes.slice(8, 12) === 'WEBP'
+        if (!valid || bytes.length !== a.size)
+          throw new MockError('Nội dung ảnh không khớp định dạng hoặc kích thước.', 422)
+      }
     }
     const report = {
       ...data,

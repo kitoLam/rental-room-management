@@ -1,15 +1,24 @@
 import { Pagination, Panel, QueryState } from '@/components/common/page'
+import { useSession } from '@/features/auth/session-store'
 import { dateTime } from '@/lib/activity'
 import { tenantApi } from '@/services/tenant'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { TenantLink, TenantPage, TenantStatus } from './components'
-import { isActive, tenantLink, useTenant, useTenantQuery } from './context'
+import { tenantLink, useTenant, useTenantQuery } from './context'
 import { tenantStatusLabel } from './status'
 
 export function MaintenancePage() {
   const { tenancy: t } = useTenant(),
+    canCreateReport = useSession((s) => {
+      const roles = s.user?.roles || []
+      if (s.activeRole === 'ADMIN' || s.activeRole === 'MANAGER') return false
+      if (roles.includes('ADMIN') || roles.includes('MANAGER')) {
+        return s.activeRole === 'TENANT' || s.activeRole === 'OWNER'
+      }
+      return roles.includes('TENANT') || roles.includes('OWNER')
+    }),
     query = useTenantQuery('maintenance', tenantApi.reports, [], true),
     [state, setState] = useState(''),
     [category, setCategory] = useState(''),
@@ -21,13 +30,13 @@ export function MaintenancePage() {
     current = Math.min(page, Math.max(1, pages))
   return (
     <TenantPage
-      title="Bảo trì & sửa chữa"
-      description="Gửi báo hỏng, theo dõi lịch xử lý và kết quả sửa chữa."
+      title="Yêu cầu hỗ trợ & Bảo trì"
+      description="Gửi yêu cầu hỗ trợ (sửa chữa, khiếu nại, gia hạn...), theo dõi tiến độ và đánh giá kết quả."
       actions={
-        isActive(t) ? (
+        canCreateReport ? (
           <TenantLink to="/tenant/maintenance/new" button>
             <Plus size={17} />
-            Báo hỏng
+            Tạo yêu cầu
           </TenantLink>
         ) : undefined
       }
@@ -43,14 +52,23 @@ export function MaintenancePage() {
           }}
         >
           <option value="">Tất cả trạng thái</option>
-          {['OPEN', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED'].map((s) => (
+          {[
+            'PENDING',
+            'WAITING_INFO',
+            'IN_PROGRESS',
+            'RESOLVED',
+            'CLOSED',
+            'REJECTED',
+            'CANCELLED',
+            'ESCALATED_ADMIN',
+          ].map((s) => (
             <option key={s} value={s}>
               {tenantStatusLabel(s)}
             </option>
           ))}
         </select>
         <select
-          aria-label="Loại báo hỏng"
+          aria-label="Loại yêu cầu"
           className="input w-auto"
           value={category}
           onChange={(e) => {
@@ -59,8 +77,13 @@ export function MaintenancePage() {
           }}
         >
           <option value="">Tất cả loại</option>
+          <option value="REPAIR">Sửa chữa</option>
+          <option value="MAINTENANCE">Bảo trì</option>
+          <option value="COMPLAINT">Khiếu nại</option>
           <option value="FURNITURE">Nội thất</option>
           <option value="SERVICE">Dịch vụ</option>
+          <option value="CONTRACT">Hợp đồng / Gia hạn</option>
+          <option value="OTHER">Khác</option>
         </select>
       </div>
       <QueryState
@@ -70,7 +93,7 @@ export function MaintenancePage() {
         empty={rows.length === 0}
         emptyMessage="Chưa có yêu cầu bảo trì phù hợp."
         emptyAction={
-          isActive(t) ? (
+          canCreateReport ? (
             <TenantLink to="/tenant/maintenance/new" button>
               Tạo yêu cầu
             </TenantLink>

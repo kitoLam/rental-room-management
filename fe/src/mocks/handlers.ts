@@ -4,6 +4,7 @@ import { db, MockError } from './database'
 import { demoUser, branches } from './fixtures'
 import { tenantUser, roommateUser } from './tenant-fixtures'
 import { handleTenant } from './tenant-handler'
+import { handleReportRequests } from './report-request-handler'
 import { provider } from '@/services/config'
 import { managerUser, ownerUser, otherManager } from './manager-fixtures'
 import { managerDb } from './manager-engine'
@@ -347,6 +348,8 @@ export const handlers = [
         return await handleAdmin(request, user, scenario === 'empty')
       if (path.startsWith('/api/tenant/'))
         return await handleTenant(request, user.id, scenario === 'empty')
+      if (path.startsWith('/api/v1/report-requests') || path.startsWith('/api/v1/report-records'))
+        return await handleReportRequests(request, user)
       if (path.startsWith('/api/manager/')) return await handleManager(request,user,scenario==='empty')
       if (path.startsWith('/api/owner/')) return await handleOwner(request,user,scenario==='empty')
       if (path === '/api/me' || path === '/api/v1/auth/me') {

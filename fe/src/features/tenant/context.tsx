@@ -28,9 +28,8 @@ export type TenantContext = { tenancy: Tenancy; tenancies: Tenancy[] }
 export const useTenant = () => useOutletContext<TenantContext>()
 export const isActive = (t: Tenancy) =>
   t.status === 'ACTIVE' &&
-  t.contractStatus === 'ACTIVE' &&
-  t.startDate <= new Date().toISOString().slice(0, 10) &&
-  t.endDate > new Date().toISOString().slice(0, 10)
+  (t.contractStatus === 'ACTIVE' || !t.contractStatus) &&
+  (!t.endDate || t.endDate >= new Date().toISOString().slice(0, 10))
 export function tenantLink(path: string, t: Tenancy) {
   return `${path}?tenancyId=${encodeURIComponent(t.id)}`
 }

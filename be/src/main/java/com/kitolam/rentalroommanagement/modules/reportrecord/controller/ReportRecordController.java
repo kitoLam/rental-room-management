@@ -24,10 +24,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/report-records")
 @RequiredArgsConstructor
-@Tag(name = "Report Records")
+@Tag(name = "Report Records", description = "Quản lý lịch sử và tiến độ xử lý báo cáo hỗ trợ")
 public class ReportRecordController {
 
     private final ReportRecordService reportRecordService;
@@ -45,11 +47,17 @@ public class ReportRecordController {
         return StandardResponse.success(reportRecordService.getById(id));
     }
 
+    @GetMapping("/by-report/{reportRequestId}")
+    @Operation(summary = "Lấy toàn bộ tiến trình lịch sử xử lý theo id yêu cầu báo cáo")
+    public StandardResponse<List<ReportRecordResponse>> getByReportRequestId(@PathVariable String reportRequestId) {
+        return StandardResponse.success(reportRecordService.getByReportRequestId(reportRequestId));
+    }
+
     @GetMapping
     @Operation(summary = "Tìm kiếm / phân trang lịch sử xử lý báo cáo")
     public StandardResponse<PagedResponse<ReportRecordResponse>> search(
             @Valid @ParameterObject ReportRecordFilterRequest filter,
-            @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.ASC) Pageable pageable) {
         return StandardResponse.success(reportRecordService.search(filter, pageable));
     }
 

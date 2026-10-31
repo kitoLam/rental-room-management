@@ -17,6 +17,9 @@ public interface RoomSlotOccupancyRepository extends BaseRepository<RoomSlotOccu
     List<RoomSlotOccupancy> findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
             Collection<String> roomSlotIds, Collection<OccupancyStatus> statuses, LocalDate requestedEnd, LocalDate requestedStart);
 
+    List<RoomSlotOccupancy> findByRoomSlotIdInAndStatusInAndIsDeletedFalse(
+            Collection<String> roomSlotIds, Collection<OccupancyStatus> statuses);
+
     List<RoomSlotOccupancy> findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateIsNullAndIsDeletedFalse(
             Collection<String> roomSlotIds, Collection<OccupancyStatus> statuses, LocalDate requestedEnd);
 
