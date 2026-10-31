@@ -82,6 +82,7 @@ public class ContractController {
 
     @GetMapping
     @Operation(summary = "Tìm kiếm / phân trang hợp đồng")
+    @PreAuthorize("hasAnyRole('TENANT', 'OWNER', 'MANAGER', 'ADMIN')")
     public StandardResponse<PagedResponse<ContractResponse>> search(
             @Valid @ParameterObject ContractFilterRequest filter,
             @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,

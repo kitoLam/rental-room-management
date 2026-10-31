@@ -1,8 +1,49 @@
 import { z } from 'zod'
 
 const id = z.string().uuid()
+const databaseId = z.union([z.guid(), z.string().regex(/^[0-9a-fA-F]{24}$/)])
 const money = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const date = z.iso.date()
+export const tenantContractSchema = z.object({
+  id: databaseId,
+  roomId: databaseId,
+  roomSlotId: databaseId.nullable().optional(),
+  bookingId: databaseId.nullable().optional(),
+  tenantId: databaseId.nullable().optional(),
+  managerId: databaseId,
+  contractNumber: z.string(),
+  startDate: date,
+  endDate: date,
+  rentPrice: z.number().nullable().optional(),
+  contractDepositAmount: z.number().nullable().optional(),
+  landlordName: z.string().nullable().optional(),
+  landlordIdNumber: z.string().nullable().optional(),
+  landlordAddress: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  tenantIdNumber: z.string().nullable().optional(),
+  tenantAddress: z.string().nullable().optional(),
+  roomAddress: z.string().nullable().optional(),
+  roomMode: z.enum(['WHOLE_ROOM', 'PER_SLOT']).nullable().optional(),
+  electricityInitialReading: z.number().nullable().optional(),
+  waterInitialReading: z.number().nullable().optional(),
+  electricityRate: z.number().nullable().optional(),
+  waterRate: z.number().nullable().optional(),
+  parkingRate: z.number().nullable().optional(),
+  maxOccupants: z.number().nullable().optional(),
+  services: z.array(z.object({
+    serviceId: z.string(),
+    name: z.string(),
+    unit: z.string(),
+    unitPrice: z.number(),
+    mandatory: z.boolean(),
+    selected: z.boolean(),
+  })).optional(),
+  paymentDueDay: z.number().nullable().optional(),
+  terms: z.string().nullable(),
+  signedFileUrl: z.string().nullable(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
+})
+export type TenantContract = z.infer<typeof tenantContractSchema>
 export const tenancySchema = z.object({
   id,
   userId: id,

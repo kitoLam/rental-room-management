@@ -242,14 +242,26 @@ public class ContractServiceImpl implements ContractService {
 
     @Override
     public PagedResponse<ContractResponse> search(ContractFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
-        if (principal == null || !List.of("OWNER", "MANAGER", "ADMIN").contains(principal.role()))
-            throw new ForbiddenException("Chỉ Owner/Manager mới được tìm kiếm hợp đồng");
+        if (principal == null || !List.of("TENANT", "OWNER", "MANAGER", "ADMIN").contains(principal.role()))
+            throw new ForbiddenException("Không có quyền tìm kiếm hợp đồng");
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
         MongoQueryHelper.addObjectIdEquals(criteria, "roomId", filter.roomId());
         MongoQueryHelper.addObjectIdEquals(criteria, "managerId", filter.managerId());
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addKeyword(criteria, filter.keyword(), "contractNumber", "tenantName", "landlordName");
-        if (!"ADMIN".equals(principal.role())) {
+        if ("TENANT".equals(principal.role())) {
+            Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email())
+                    .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));
+            List<Criteria> ownership = new ArrayList<>();
+            ownership.add(new Criteria().orOperator(
+                    Criteria.where("tenantId").is(MongoQueryHelper.toObjectId(tenant.getId())),
+                    Criteria.where("tenantId").is(tenant.getId())));
+            List<ObjectId> memberContractIds = contractTenantRepository.findByTenantIdAndIsDeletedFalse(tenant.getId()).stream()
+                    .map(com.kitolam.rentalroommanagement.modules.contracttenant.document.ContractTenant::getContractId)
+                    .filter(ObjectId::isValid).map(ObjectId::new).toList();
+            if (!memberContractIds.isEmpty()) ownership.add(Criteria.where("_id").in(memberContractIds));
+            criteria.add(new Criteria().orOperator(ownership.toArray(Criteria[]::new)));
+        } else if (!"ADMIN".equals(principal.role())) {
             List<String> branchIds = "OWNER".equals(principal.role())
                     ? new ArrayList<>(branchAccess.ownedBranchIds(principal.userId()))
                     : branchAccess.managedBranches(principal).stream().map(com.kitolam.rentalroommanagement.modules.branch.dto.response.BranchResponse::id).toList();
@@ -358,7 +370,10 @@ public class ContractServiceImpl implements ContractService {
         if (principal == null || !"TENANT".equals(principal.role())) throw new ForbiddenException("Chỉ Tenant mới được chọn dịch vụ");
         Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email())
                 .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));
-        if (!tenant.getId().equals(contract.getTenantId())) throw new ForbiddenException("Bạn không có quyền thao tác hợp đồng này");
+        boolean primaryTenant = tenant.getId().equals(contract.getTenantId());
+        boolean contractMember = contractTenantRepository.existsByContractIdAndTenantIdAndIsDeletedFalse(
+                contract.getId(), tenant.getId());
+        if (!primaryTenant && !contractMember) throw new ForbiddenException("Bạn không có quyền thao tác hợp đồng này");
     }
 
     private Contract find(String id) {

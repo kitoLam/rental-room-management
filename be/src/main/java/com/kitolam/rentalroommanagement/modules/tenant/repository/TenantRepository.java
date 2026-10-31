@@ -5,4 +5,5 @@ import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 
 public interface TenantRepository extends BaseRepository<Tenant> {
     java.util.Optional<Tenant> findByEmailAndIsDeletedFalse(String email);
+    java.util.List<Tenant> findByEmailInAndIsDeletedFalse(java.util.Collection<String> emails);
 }

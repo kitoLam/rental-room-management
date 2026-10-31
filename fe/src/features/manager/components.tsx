@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/common/status-badge'
 import { tenantStatusLabel } from '@/features/tenant/status'
 import { imageAttachment } from '@/features/tenant/attachments'
-import { useManager, managerLink, useManagerList } from './context'
+import { managerApi } from '@/services/manager'
+import { useManager, managerLink, useManagerList, useManagerQuery } from './context'
 import type { Page as PageData } from '@/interfaces/domain'
 export function ManagerPage({
   title,
@@ -253,8 +254,8 @@ export function ScopeFilters({
   tenant?: boolean
   dates?: boolean
 }) {
-  const rooms = useManagerList('rooms', { size: '100' }),
-    tenants = useManagerList('tenants', { size: '100' })
+  const rooms = useManagerQuery('room-filter-options', managerApi.roomFilterOptions),
+    tenants = useManagerList('tenants', { size: '100' }, false, tenant)
   return (
     <div className="flex flex-wrap gap-3">
       <select
@@ -314,7 +315,7 @@ export function ScopeFilters({
           />
         </>
       )}
-      <InlineError error={rooms.error || tenants.error} />
+      <InlineError error={rooms.error || (tenant ? tenants.error : null)} />
     </div>
   )
 }

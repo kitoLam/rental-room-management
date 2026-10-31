@@ -11,6 +11,8 @@ public record ContractTenantResponse(
         String contractId,
         String tenantId,
         String bookingId,
+        String tenantName,
+        String tenantEmail,
         Boolean isRepresentative,
         BigDecimal rentAmount,
         LocalDate joinedAt,

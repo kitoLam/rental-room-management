@@ -79,6 +79,40 @@ export const managerTenancySchema = tenancySchema.extend({
   sourceBookingId: uuid.nullable(),
 })
 export type ManagerTenancy = z.infer<typeof managerTenancySchema>
+export const eligibleContractTenantSchema = z.object({
+  tenantId: databaseIdSchema,
+  fullName: z.string().nullable(),
+  email: z.string().email(),
+  phone: z.string().nullable(),
+})
+export const contractTenantSchema = z.object({
+  id: databaseIdSchema,
+  contractId: databaseIdSchema,
+  tenantId: databaseIdSchema,
+  bookingId: databaseIdSchema.nullable(),
+  tenantName: z.string().nullable(),
+  tenantEmail: z.string().email(),
+  isRepresentative: z.boolean().nullable(),
+  rentAmount: z.number().nonnegative().nullable(),
+  joinedAt: date,
+  leftAt: date.nullable(),
+  status: z.enum(['ACTIVE', 'LEFT']),
+})
+export const contractTenantInputSchema = z.object({
+  tenantId: databaseIdSchema,
+  isRepresentative: z.boolean(),
+  rentAmount: vnd,
+  joinedAt: date,
+  leftAt: date.nullable(),
+})
+export const contractTenantUpdateSchema = z.object({
+  isRepresentative: z.boolean().optional(),
+  rentAmount: vnd.optional(),
+  joinedAt: date.optional(),
+  leftAt: date.optional(),
+  status: z.enum(['ACTIVE', 'LEFT']).optional(),
+})
+export type ManagerContractTenant = z.infer<typeof contractTenantSchema>
 export const contractInputSchema = z.object({
   code: z.string().trim().min(3).max(50),
   roomId: databaseIdSchema,
@@ -337,6 +371,7 @@ export const managerSchemas = {
   'room-types': managerRoomTypeSchema,
   slots: slotSchema,
   tenants: managerTenancySchema,
+  'contract-tenants': contractTenantSchema,
   appointments: appointmentSchema.extend({
     requesterName: z.string(),
     requesterEmail: z.string(),

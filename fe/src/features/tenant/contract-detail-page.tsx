@@ -2,6 +2,7 @@ import { Notice, Panel, QueryState } from '@/components/common/page'
 import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
+import type { TenantContract, Tenancy } from '@/interfaces/tenant'
 import { ExternalLink } from 'lucide-react'
 import { useParams } from 'react-router'
 import { EmptyRows, Facts, TenantLink, TenantPage, TenantStatus } from './components'
@@ -11,9 +12,15 @@ import { PrepaidPanel } from './prepaid-panel'
 export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
   const { contractId = '' } = useParams(),
     { tenancy: t } = useTenant(),
-    query = useTenantQuery('contract', (id) => tenantApi.contract(id, contractId), [contractId]),
-    payments = useTenantQuery('payments', tenantApi.payments)
+    query = useTenantQuery<TenantContract | Tenancy>(
+      'contract',
+      (id) => tenantApi.contract(id, contractId),
+      [contractId],
+    ),
+    payments = useTenantQuery('payments', tenantApi.payments),
+    contract = query.data && 'contractNumber' in query.data ? query.data : null
   const prepaid = (payments.data || []).filter((p) => p.status === 'VERIFIED' && !p.invoiceId)
+  const tenancyMatchesContract = Boolean(contract && contract.id === t.contractId)
   return (
     <TenantPage
       title={terms ? 'Điều khoản cá nhân' : 'Chi tiết hợp đồng'}
@@ -24,8 +31,8 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
           <>
             <Panel>
               <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-xl font-bold">{query.data.code}</h2>
-                <TenantStatus value={terms ? t.status : t.contractStatus} />
+                <h2 className="text-xl font-bold">{contract?.contractNumber || t.code}</h2>
+                <TenantStatus value={terms ? t.status : contract?.status || t.contractStatus} />
               </div>
               <Facts
                 items={
@@ -47,28 +54,73 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                         ],
                       ]
                     : [
-                        ['Chi nhánh', t.branchName],
-                        ['Phòng', t.roomName],
+                        [contract ? 'Địa chỉ thuê' : 'Chi nhánh', contract?.roomAddress || t.branchName],
+                        [
+                          'Phòng / chỗ ở',
+                          tenancyMatchesContract
+                            ? `${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`
+                            : contract?.roomSlotId
+                              ? 'Chỗ ở theo hợp đồng'
+                              : contract
+                                ? 'Phòng thuê'
+                                : t.roomName,
+                        ],
                         [
                           'Hình thức thuê',
-                          t.rentalMode === 'SLOT' ? 'Thuê chỗ' : 'Thuê nguyên phòng',
+                          contract?.roomMode === 'PER_SLOT'
+                            ? 'Thuê chỗ'
+                            : contract?.roomMode === 'WHOLE_ROOM'
+                              ? 'Thuê nguyên phòng'
+                              : t.rentalMode === 'SLOT'
+                                ? 'Thuê chỗ'
+                                : 'Thuê nguyên phòng',
                         ],
                         [
                           'Thời hạn',
-                          `${dateOnly(t.startDate)} – ${dateOnly(t.endDate)} (không gồm ngày kết thúc)`,
+                          `${dateOnly(contract?.startDate || t.startDate)} – ${dateOnly(contract?.endDate || t.endDate)} (không gồm ngày kết thúc)`,
                         ],
-                        [
-                          'Vai trò của bạn',
-                          t.role === 'REPRESENTATIVE' ? 'Đại diện' : 'Thành viên',
-                        ],
-                        ['Trạng thái quan hệ cá nhân', <TenantStatus value={t.status} />],
+                        ...(tenancyMatchesContract
+                          ? [
+                              ['Vai trò của bạn', t.role === 'REPRESENTATIVE' ? 'Đại diện' : 'Thành viên'] as [string, string],
+                              ['Trạng thái quan hệ cá nhân', <TenantStatus value={t.status} />] as [string, React.ReactNode],
+                            ]
+                          : []),
                       ]
                 }
               />
               <p className="mt-6 border-t border-border pt-5 text-sm leading-7 text-muted-foreground">
-                {terms ? t.terms : t.sharedTerms}
+                {terms ? t.terms : contract?.terms || (tenancyMatchesContract ? t.sharedTerms : '')}
               </p>
-              {!terms && (
+              {!terms && contract && (
+                <>
+                  <h3 className="mt-6 font-bold">Thông tin trên hợp đồng</h3>
+                  <Facts
+                    items={[
+                      ['Địa chỉ thuê', contract.roomAddress || t.branchName],
+                      ['Bên cho thuê', `${contract.landlordName || '—'} · CCCD/CMND ${contract.landlordIdNumber || '—'}`],
+                      ['Bên thuê', `${contract.tenantName || '—'} · CCCD/CMND ${contract.tenantIdNumber || '—'}`],
+                      ['Giá thuê / tháng', contract.rentPrice == null ? '—' : formatVnd(contract.rentPrice)],
+                      ['Tiền cọc hợp đồng', contract.contractDepositAmount == null ? '—' : formatVnd(contract.contractDepositAmount)],
+                      ['Ngày thanh toán hàng tháng', contract.paymentDueDay ?? '—'],
+                      ['Chỉ số điện đầu kỳ', contract.electricityInitialReading ?? '—'],
+                      ['Chỉ số nước đầu kỳ', contract.waterInitialReading ?? '—'],
+                    ]}
+                  />
+                  {contract.services?.length ? (
+                    <div className="mt-5 space-y-2">
+                      <h3 className="font-bold">Dịch vụ theo hợp đồng</h3>
+                      {contract.services.map((service) => (
+                        <p key={service.serviceId} className="text-sm">
+                          {service.name} · {formatVnd(service.unitPrice)}/{service.unit} ·{' '}
+                          {service.mandatory ? 'Bắt buộc' : 'Tùy chọn'} ·{' '}
+                          {service.selected ? 'Đã chọn' : 'Chưa chọn'}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+              {!terms && tenancyMatchesContract && (
                 <div className="mt-4">
                   <TenantLink to={`/tenant/contracts/${t.contractId}/my-terms`}>
                     Điều khoản & nghĩa vụ của tôi
@@ -116,7 +168,17 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
             ) : (
               <Panel>
                 <h2 className="mb-3 font-bold">Văn bản hợp đồng</h2>
-                {t.document ? (
+                {contract?.signedFileUrl ? (
+                  <a
+                    href={contract.signedFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 text-sm text-primary"
+                  >
+                    Mở bản hợp đồng đã ký
+                    <ExternalLink size={16} />
+                  </a>
+                ) : t.document ? (
                   <a
                     href={t.document.url}
                     target="_blank"
@@ -128,7 +190,9 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                   </a>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Chưa có văn bản được cung cấp. Liên hệ quản lý để nhận bản hợp đồng.
+                    {contract?.status === 'DRAFT'
+                      ? 'Hợp đồng đang ở trạng thái nháp; quản lý sẽ cập nhật bản đã ký sau khi bàn giao.'
+                      : 'Chưa có văn bản được cung cấp. Liên hệ quản lý để nhận bản hợp đồng.'}
                   </p>
                 )}
               </Panel>

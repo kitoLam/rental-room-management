@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { request, write } from './http'
+import { pageSchema } from '@/interfaces/domain'
 import {
   tenancySchema,
   tenantRoomSchema,
@@ -8,6 +9,7 @@ import {
   serviceSchema,
   chargeSchema,
   proposalSchema,
+  tenantContractSchema,
   type ReportInput,
   type MaintenanceReport,
 } from '@/interfaces/tenant'
@@ -85,6 +87,17 @@ export const tenantApi = {
       return list.length ? list : tenantDb.state.tenancies.slice(0, 1)
     }
   },
+  contracts: async () => {
+    if (provider('leasing') === 'real') {
+      const page = await request(
+        'leasing',
+        '/api/v1/contracts?page=0&size=100',
+        pageSchema(tenantContractSchema),
+      )
+      return page.content
+    }
+    return tenantApi.tenancies()
+  },
   room: async (id: string) => {
     try {
       return await request('tenant', path(id, 'room'), tenantRoomSchema)
@@ -95,7 +108,9 @@ export const tenantApi = {
     }
   },
   contract: (id: string, contractId: string) =>
-    request('tenant', path(id, `contracts/${encodeURIComponent(contractId)}`), tenancySchema),
+    provider('leasing') === 'real'
+      ? request('leasing', `/api/v1/contracts/${encodeURIComponent(contractId)}`, tenantContractSchema)
+      : request('tenant', path(id, `contracts/${encodeURIComponent(contractId)}`), tenancySchema),
   invoices: (id: string) => request('tenant', path(id, 'invoices'), z.array(invoiceSchema)),
   invoice: (id: string, invoiceId: string) =>
     request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}`), invoiceSchema),
