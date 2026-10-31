@@ -1,5 +1,6 @@
 import { InlineError, Modal, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/features/auth/session-store'
 import { dateOnly } from '@/lib/activity'
 import { safeZalo } from '@/lib/tenant-finance'
 import { tenantApi } from '@/services/tenant'
@@ -11,6 +12,14 @@ import { isActive, useTenant, useTenantQuery } from './context'
 
 export function MyRoomPage() {
   const { tenancy: t } = useTenant(),
+    canCreateReport = useSession((s) => {
+      const roles = s.user?.roles || []
+      if (s.activeRole === 'ADMIN' || s.activeRole === 'MANAGER') return false
+      if (roles.includes('ADMIN') || roles.includes('MANAGER')) {
+        return s.activeRole === 'TENANT' || s.activeRole === 'OWNER'
+      }
+      return roles.includes('TENANT') || roles.includes('OWNER')
+    }),
     room = useTenantQuery('room', tenantApi.room),
     services = useTenantQuery('services', tenantApi.services, [], true),
     [image, setImage] = useState<string | null>(null)
@@ -76,7 +85,7 @@ export function MyRoomPage() {
               <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
                 <TenantLink to={`/tenant/contracts/${t.contractId}`}>Hợp đồng</TenantLink>
                 <TenantLink to="/tenant/services">Dịch vụ</TenantLink>
-                {isActive(t) && <TenantLink to="/tenant/maintenance/new">Báo hỏng</TenantLink>}
+                {isActive(t) && canCreateReport && <TenantLink to="/tenant/maintenance/new">Báo hỏng</TenantLink>}
                 <Link
                   to={`/branches/${t.branchId}`}
                   className="inline-flex min-h-11 items-center text-sm text-primary"
@@ -120,36 +129,27 @@ export function MyRoomPage() {
                 >
                   {room.data.manager.phone}
                 </a>
-                <div className="mt-3">
-                  {zalo ? (
+                {zalo ? (
+                  <div className="mt-4">
                     <Button asChild variant="outline">
                       <a href={zalo} target="_blank" rel="noopener noreferrer">
                         Nhóm Zalo chi nhánh
                         <ExternalLink size={16} />
                       </a>
                     </Button>
-                  ) : (
-                    <>
-                      <Button variant="outline" disabled>
-                        Nhóm Zalo chưa khả dụng
-                      </Button>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {isActive(t)
-                          ? 'Chi nhánh chưa cung cấp liên kết nhóm hợp lệ.'
-                          : 'Chỉ dành cho quan hệ thuê đang hiệu lực.'}
-                      </p>
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Liên kết nhóm Zalo được hiển thị cho hợp đồng đang hiệu lực.
+                  </p>
+                )}
               </Panel>
             </div>
           </>
         )}
       </QueryState>
-      <Modal open={!!image} onOpenChange={() => setImage(null)} title={`Ảnh ${t.roomName}`}>
-        {image && (
-          <img src={image} alt={`Ảnh mở rộng ${t.roomName}`} className="w-full rounded-lg" />
-        )}
+      <Modal title="Ảnh phòng" open={!!image} onOpenChange={() => setImage(null)}>
+        {image && <img src={image} alt={`Không gian ${t.roomName}`} className="w-full rounded-lg" />}
       </Modal>
     </TenantPage>
   )

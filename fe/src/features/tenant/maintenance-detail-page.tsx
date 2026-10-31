@@ -1,5 +1,6 @@
 import { Field, InlineError, Modal, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/features/auth/session-store'
 import { dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
@@ -15,6 +16,7 @@ import { tenantStatusLabel } from './status'
 export function MaintenanceDetailPage() {
   const { reportId = '' } = useParams(),
     { tenancy: t } = useTenant(),
+    isAdmin = useSession((s) => Boolean(s.user?.roles.includes('ADMIN') || s.activeRole === 'ADMIN')),
     query = useTenantQuery('report', (id) => tenantApi.report(id, reportId), [reportId], true),
     [confirmCancel, setConfirmCancel] = useState(false),
     [confirmCloseModal, setConfirmCloseModal] = useState(false),
@@ -28,6 +30,8 @@ export function MaintenanceDetailPage() {
     [escalateModal, setEscalateModal] = useState(false),
     [disputeReason, setDisputeReason] = useState(''),
     [escalateImages, setEscalateImages] = useState<string[]>([]),
+    [adminResolveModal, setAdminResolveModal] = useState(false),
+    [adminConclusion, setAdminConclusion] = useState(''),
     [uploading, setUploading] = useState(false),
     [uploadError, setUploadError] = useState<Error | null>(null)
 
@@ -57,6 +61,13 @@ export function MaintenanceDetailPage() {
     setEscalateModal(false)
     setDisputeReason('')
     setEscalateImages([])
+    query.refetch()
+  })
+
+  const adminResolve = useTenantMutation(async () => {
+    await reportRequestService.adminResolve(reportId, adminConclusion.trim())
+    setAdminResolveModal(false)
+    setAdminConclusion('')
     query.refetch()
   })
 
@@ -208,9 +219,16 @@ export function MaintenanceDetailPage() {
                   <p className="mt-1 whitespace-pre-wrap">
                     Lý do khiếu nại: {query.data.disputeReason || 'Chờ phân xử'}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Các thao tác thông thường tạm khóa trong thời gian chờ Admin giải quyết.
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      Các thao tác thông thường tạm khóa trong thời gian chờ Admin giải quyết.
+                    </p>
+                    {isAdmin && (
+                      <Button onClick={() => setAdminResolveModal(true)}>
+                        Admin phân xử & đóng
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -232,7 +250,7 @@ export function MaintenanceDetailPage() {
                 </div>
               )}
 
-              {/* Action Buttons based on state */}
+              {/* Action Buttons based on state (for Tenant) */}
               {!isTerminal && query.data.status !== 'ESCALATED_ADMIN' && (
                 <div className="mt-6 flex flex-wrap gap-3">
                   {/* PENDING: Huỷ */}
@@ -565,7 +583,6 @@ export function MaintenanceDetailPage() {
               Đóng
             </Button>
             <Button
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               loading={escalate.isPending}
               disabled={!disputeReason.trim() || uploading}
               onClick={() => escalate.mutate(reportId)}
@@ -575,6 +592,45 @@ export function MaintenanceDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal: Admin Resolve (only for ADMIN role) */}
+      {isAdmin && (
+        <Modal
+          title="Admin phân xử & Đóng hồ sơ tranh chấp"
+          description="Đưa ra kết luận phân xử chính thức. Quyết định của Admin là quyết định cuối cùng và hồ sơ sẽ được đóng hoàn tất."
+          open={adminResolveModal}
+          onOpenChange={setAdminResolveModal}
+        >
+          <div className="grid gap-4">
+            <Field id="tenant-admin-conclusion" label="Kết luận phân xử chính thức (bắt buộc)">
+              <textarea
+                id="tenant-admin-conclusion"
+                className="input min-h-28"
+                placeholder="Nhập kết luận phân xử của Admin (ví dụ: Admin đã đối chiếu biên bản bàn giao ban đầu...)"
+                value={adminConclusion}
+                onChange={(e) => setAdminConclusion(e.target.value)}
+              />
+            </Field>
+            <InlineError error={adminResolve.error} />
+            <div className="flex justify-end gap-3 mt-2">
+              <Button
+                variant="outline"
+                disabled={adminResolve.isPending}
+                onClick={() => setAdminResolveModal(false)}
+              >
+                Hủy
+              </Button>
+              <Button
+                loading={adminResolve.isPending}
+                disabled={!adminConclusion.trim()}
+                onClick={() => adminResolve.mutate(reportId)}
+              >
+                Xác nhận kết luận & Đóng hồ sơ
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal: Confirm Close */}
       <Modal
@@ -614,7 +670,6 @@ export function MaintenanceDetailPage() {
             Giữ lại yêu cầu
           </Button>
           <Button
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             loading={cancel.isPending}
             onClick={() => cancel.mutate(reportId)}
           >

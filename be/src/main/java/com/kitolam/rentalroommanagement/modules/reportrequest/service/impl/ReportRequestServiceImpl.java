@@ -82,6 +82,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     @Override
     @Transactional
     public ReportRequestResponse create(ReportRequestCreateRequest request, AuthPrincipal principal) {
+        requireRole(principal, "TENANT", "OWNER");
         Tenant tenant = resolveTenant(principal, request.tenantId());
         Room room = null;
         if (StringUtils.hasText(request.roomId())) {
@@ -622,8 +623,8 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         requireRole(principal, "ADMIN");
         ReportRequest report = findReport(id);
 
-        if (report.getStatus() != ReportRequestStatus.ESCALATED_ADMIN) {
-            throw new BadRequestException("Chỉ có thể phân xử tranh chấp đối với yêu cầu đang chuyển Admin (ESCALATED_ADMIN).");
+        if (report.getStatus() == ReportRequestStatus.CLOSED || report.getStatus() == ReportRequestStatus.CANCELLED) {
+            throw new BadRequestException("Yêu cầu hỗ trợ đã đóng hoặc đã hủy.");
         }
 
         ReportRequestStatus previousStatus = report.getStatus();
@@ -635,7 +636,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         createRecord(
                 report.getId(),
                 principal != null ? principal.userId() : null,
-                "ADMIN",
+                principal != null ? principal.role() : "ADMIN",
                 resolveActorName(principal, "Admin Quản trị viên"),
                 report.getManagerId(),
                 ReportRecordAction.ADMIN_RESOLVED,

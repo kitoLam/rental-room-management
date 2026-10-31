@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 export function AdminMaintenancePage() {
-  const [status, setStatus] = useState('ESCALATED_ADMIN')
+  const [status, setStatus] = useState('')
   const [type, setType] = useState('')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(0)
@@ -22,7 +22,7 @@ export function AdminMaintenancePage() {
           type: (type || undefined) as any,
           keyword: keyword.trim() || undefined,
           page,
-          size: 10,
+          size: 20,
         },
         'admin',
       ),
@@ -46,7 +46,13 @@ export function AdminMaintenancePage() {
     }
   }
 
-  const items = query.data?.content || []
+  const rawItems = query.data?.content || []
+  const items = [...rawItems].sort((a, b) => {
+    const aEsc = a.status === 'ESCALATED_ADMIN' ? 0 : 1
+    const bEsc = b.status === 'ESCALATED_ADMIN' ? 0 : 1
+    if (aEsc !== bEsc) return aEsc - bEsc
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
   const totalPages = query.data?.totalPages || 1
 
   return (

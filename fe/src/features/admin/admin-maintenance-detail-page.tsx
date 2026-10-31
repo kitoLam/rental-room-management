@@ -1,7 +1,9 @@
 import { Field, InlineError, Modal, Panel, QueryState } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/features/auth/session-store'
 import { dateTime } from '@/lib/activity'
+import { queryClient } from '@/services/query-client'
 import { reportRequestService } from '@/services/report-request'
 import { tenantStatusLabel } from '@/features/tenant/status'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -11,6 +13,7 @@ import { ArrowLeft, ShieldAlert } from 'lucide-react'
 
 export function AdminMaintenanceDetailPage() {
   const { reportId = '' } = useParams()
+  const isAdmin = useSession((s) => Boolean(s.user?.roles.includes('ADMIN') || s.activeRole === 'ADMIN'))
   const [resolveModal, setResolveModal] = useState(false)
   const [adminConclusion, setAdminConclusion] = useState('')
   const [image, setImage] = useState<string | null>(null)
@@ -26,7 +29,9 @@ export function AdminMaintenanceDetailPage() {
     onSuccess: () => {
       setResolveModal(false)
       setAdminConclusion('')
-      query.refetch()
+      void query.refetch()
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'maintenance'] })
+      void queryClient.invalidateQueries({ queryKey: ['manager'] })
     },
   })
 
@@ -49,6 +54,7 @@ export function AdminMaintenanceDetailPage() {
   }
 
   const r = query.data
+  const canAdminResolve = isAdmin && !!r && r.status !== 'CLOSED' && r.status !== 'CANCELLED'
 
   return (
     <div className="min-w-0">
@@ -120,8 +126,8 @@ export function AdminMaintenanceDetailPage() {
                 )}
               </div>
 
-              {/* Dispute section when ESCALATED_ADMIN */}
-              {r.status === 'ESCALATED_ADMIN' && (
+              {/* Dispute section when ESCALATED_ADMIN or disputeReason exists */}
+              {(r.status === 'ESCALATED_ADMIN' || !!r.disputeReason) && (
                 <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm">
                   <div className="flex items-center gap-2 text-destructive font-bold text-base">
                     <ShieldAlert size={20} />
@@ -130,17 +136,16 @@ export function AdminMaintenanceDetailPage() {
                   <div className="mt-3">
                     <p className="font-semibold text-foreground">Nội dung tranh chấp / khiếu nại của Khách thuê:</p>
                     <p className="mt-1 whitespace-pre-wrap rounded-md bg-background/80 p-3 text-foreground font-medium">
-                      {r.disputeReason || 'Chưa có nội dung chi tiết.'}
+                      {r.disputeReason || 'Khách thuê yêu cầu Admin phân xử bất đồng với Quản lý.'}
                     </p>
                   </div>
-                  <div className="mt-4 flex justify-end">
-                    <Button
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
-                      onClick={() => setResolveModal(true)}
-                    >
-                      Admin phân xử & đóng
-                    </Button>
-                  </div>
+                  {canAdminResolve && (
+                    <div className="mt-4 flex justify-end">
+                      <Button onClick={() => setResolveModal(true)}>
+                        Admin phân xử & đóng
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -169,6 +174,15 @@ export function AdminMaintenanceDetailPage() {
                 <div className="mt-6 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                   <p className="font-bold">Lý do từ chối:</p>
                   <p className="mt-1 whitespace-pre-wrap">{r.rejectReason}</p>
+                </div>
+              )}
+
+              {/* Single Admin resolve button when not already shown in the ESCALATED_ADMIN box */}
+              {canAdminResolve && r.status !== 'ESCALATED_ADMIN' && !r.disputeReason && (
+                <div className="mt-6 flex justify-end">
+                  <Button onClick={() => setResolveModal(true)}>
+                    Admin phân xử & đóng
+                  </Button>
                 </div>
               )}
             </Panel>
@@ -248,7 +262,6 @@ export function AdminMaintenanceDetailPage() {
               Hủy
             </Button>
             <Button
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
               loading={resolveMutation.isPending}
               disabled={!adminConclusion.trim()}
               onClick={() => resolveMutation.mutate()}

@@ -1,5 +1,6 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/features/auth/session-store'
 import { Facts } from '@/features/tenant/components'
 import { recordInputSchema } from '@/interfaces/manager'
 import type { Attachment } from '@/interfaces/tenant'
@@ -15,6 +16,7 @@ import { EvidenceInput } from './evidence-input'
 
 export function ManagerMaintenanceDetail() {
   const { reportId = '' } = useParams(),
+    isAdmin = useSession((s) => Boolean(s.user?.roles.includes('ADMIN') || s.activeRole === 'ADMIN')),
     query = useManagerQuery(
       'maintenance-detail',
       (b) => managerApi.get(b, 'maintenance', reportId),
@@ -109,13 +111,22 @@ export function ManagerMaintenanceDetail() {
                   <p className="mt-1 whitespace-pre-wrap">{query.data.rejectReason}</p>
                 </div>
               )}
-              {query.data.disputeReason && query.data.status === 'ESCALATED_ADMIN' && (
+              {query.data.status === 'ESCALATED_ADMIN' && (
                 <div className="mt-6 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
                   <p className="font-bold">Hồ sơ đã chuyển lên Admin phân xử. Đang chờ kết luận:</p>
-                  <p className="mt-1 whitespace-pre-wrap">Lý do khiếu nại: {query.data.disputeReason}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Các thao tác của Quản lý tạm khóa chờ Admin giải quyết.
+                  <p className="mt-1 whitespace-pre-wrap">
+                    Lý do khiếu nại: {query.data.disputeReason || 'Chờ phân xử'}
                   </p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      Các thao tác của Quản lý tạm khóa chờ Admin giải quyết.
+                    </p>
+                    {isAdmin && (
+                      <Button onClick={() => setAction('admin-resolve')}>
+                        Admin phân xử & đóng
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
               {query.data.adminConclusion && query.data.status === 'CLOSED' && (
@@ -125,7 +136,7 @@ export function ManagerMaintenanceDetail() {
                 </div>
               )}
 
-              {/* Action buttons */}
+              {/* Action buttons (for Manager) */}
               <div className="mt-6 flex flex-wrap gap-3">
                 {getActionButtons(query.data.status).map(([a, label]) => (
                   <Button variant="outline" key={a} onClick={() => setAction(a)}>
@@ -277,6 +288,39 @@ export function ManagerMaintenanceDetail() {
           >
             <EvidenceInput value={evidence} onChange={setEvidence} disabled={mutation.isPending} />
           </ManagerForm>
+        </Modal>
+      ) : action === 'admin-resolve' && isAdmin ? (
+        <Modal
+          title="Admin phân xử & Đóng hồ sơ tranh chấp"
+          description="Đưa ra kết luận phân xử chính thức. Quyết định của Admin là quyết định cuối cùng và hồ sơ sẽ được đóng hoàn tất."
+          open
+          onOpenChange={(v) => {
+            if (!v && !mutation.isPending) setAction('')
+          }}
+        >
+          <ManagerForm
+            schema={z.object({
+              adminConclusion: z.string().trim().min(5, 'Cần nhập kết luận phân xử ít nhất 5 ký tự'),
+            })}
+            defaults={{ adminConclusion: '' }}
+            fields={[
+              {
+                name: 'adminConclusion',
+                label: 'Kết luận phân xử chính thức (bắt buộc)',
+                kind: 'textarea',
+              },
+            ]}
+            pending={mutation.isPending}
+            error={mutation.error}
+            onSubmit={(value) =>
+              mutation.mutate({
+                resource: 'maintenance',
+                id: reportId,
+                action: 'admin-resolve',
+                value: { adminConclusion: value.adminConclusion },
+              })
+            }
+          />
         </Modal>
       ) : (
         <ActionDialog

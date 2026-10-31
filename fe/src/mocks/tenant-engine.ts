@@ -26,8 +26,34 @@ export class TenantEngine {
     this.state = state || seedTenant()
   }
   save() {
-    if (typeof sessionStorage !== 'undefined')
-      sessionStorage.setItem(storageKey, JSON.stringify(this.state))
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(this.state))
+      } catch {
+        try {
+          const compactState = {
+            ...this.state,
+            reports: this.state.reports.slice(0, 20).map((r) => ({
+              ...r,
+              attachments: (r.attachments || []).map((a) =>
+                typeof a === 'object' && a && typeof a.url === 'string' && a.url.startsWith('data:image/')
+                  ? { ...a, url: '/demo/room-1.webp' }
+                  : a,
+              ),
+              records: (r.records || []).map((rec) => ({
+                ...rec,
+                evidence: (rec.evidence || []).map((u) =>
+                  typeof u === 'string' && u.startsWith('data:image/') ? '/demo/room-1.webp' : u,
+                ),
+              })),
+            })),
+          }
+          sessionStorage.setItem(storageKey, JSON.stringify(compactState))
+        } catch {
+          // Ignore storage quota errors — in-memory state remains intact
+        }
+      }
+    }
   }
   reset() {
     this.state = seedTenant()

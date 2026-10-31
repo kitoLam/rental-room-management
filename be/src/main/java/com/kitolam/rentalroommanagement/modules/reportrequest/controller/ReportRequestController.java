@@ -47,8 +47,8 @@ public class ReportRequestController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Tenant gửi yêu cầu hỗ trợ (hệ thống kiểm tra hợp đồng hiệu lực và tự gán Manager)")
-    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN', 'MANAGER')")
+    @Operation(summary = "Tenant hoặc Owner gửi yêu cầu hỗ trợ (hệ thống kiểm tra hợp đồng hiệu lực và tự gán Manager)")
+    @PreAuthorize("hasAnyRole('TENANT', 'OWNER')")
     public StandardResponse<ReportRequestResponse> create(
             @Valid @RequestBody ReportRequestCreateRequest request,
             @AuthenticationPrincipal AuthPrincipal principal) {
