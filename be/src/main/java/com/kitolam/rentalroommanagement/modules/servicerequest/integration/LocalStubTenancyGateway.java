@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.servicerequest.integration;
 
 import com.kitolam.rentalroommanagement.common.exception.exceptions.InternalServerErrorException;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomResponse;
 import com.kitolam.rentalroommanagement.modules.room.service.RoomService;
@@ -15,7 +16,7 @@ import java.util.Optional;
 
 /**
  * LOCAL DEVELOPMENT ONLY: every tenant is treated as renting the configured room (and slot)
- * so the service flow can be tested before the contract module is merged.
+ * so the service flow can be demoed without signing a contract. Overrides {@link ContractTenancyGateway}.
  * Room and branch data come from their modules' public services.
  */
 @Slf4j
@@ -39,7 +40,7 @@ public class LocalStubTenancyGateway implements TenancyGateway {
     }
 
     @Override
-    public Optional<ActiveTenancySnapshot> findActiveTenancy(String tenantId, String accountEmail, LocalDate onDate) {
+    public Optional<ActiveTenancySnapshot> findActiveTenancy(AuthPrincipal principal, String tenantId, LocalDate onDate) {
         if (!StringUtils.hasText(roomId)) {
             throw new InternalServerErrorException("Chưa cấu hình SERVICE_REQUEST_TENANCY_STUB_ROOM_ID");
         }

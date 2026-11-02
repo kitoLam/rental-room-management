@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.servicerequest.integration;
 
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -11,8 +13,8 @@ import java.util.Optional;
 public interface TenancyGateway {
 
     /**
-     * @param tenantId     tenant profile id, null when the account has no profile yet
-     * @param accountEmail email of the logged-in account
+     * @param principal the logged-in tenant account
+     * @param tenantId  tenant profile id, null when the account has no profile yet
      */
-    Optional<ActiveTenancySnapshot> findActiveTenancy(String tenantId, String accountEmail, LocalDate onDate);
+    Optional<ActiveTenancySnapshot> findActiveTenancy(AuthPrincipal principal, String tenantId, LocalDate onDate);
 }

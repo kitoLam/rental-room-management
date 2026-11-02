@@ -53,7 +53,7 @@ public class ServiceRequestAccessSupport {
             throw new ForbiddenException("Chỉ người thuê mới gửi được yêu cầu dịch vụ");
         }
         String tenantId = principal.email() == null ? null : tenants.profileIdByEmail(principal.email()).orElse(null);
-        return tenancies.findActiveTenancy(tenantId, principal.email(), today())
+        return tenancies.findActiveTenancy(principal, tenantId, today())
                 .orElseThrow(() -> new ForbiddenException("Bạn chưa có hợp đồng thuê đang hiệu lực"));
     }
 
