@@ -10,6 +10,19 @@ export type CostEstimateInput = {
   parkingRate: number
 }
 
+/** Số lượng dịch vụ tùy chọn đang tích, theo id dịch vụ. Dịch vụ bắt buộc không nằm ở đây. */
+export type ServiceSelection = Record<string, number>
+
+/** Chi phí tháng của dịch vụ đã chọn; dịch vụ tính theo chỉ số (điện, nước) đã có ở phần ước tính riêng. */
+export function selectedServiceCosts(
+  services: { id: string; name: string; price: number; mandatory: boolean; calculationType: string }[],
+  selection: ServiceSelection,
+) {
+  return services
+    .filter((s) => s.calculationType !== 'METERED' && (s.mandatory || selection[s.id] != null))
+    .map((s) => ({ label: s.name, cost: s.price * (s.mandatory ? 1 : selection[s.id]) }))
+}
+
 export function estimateMonthlyCost(input: CostEstimateInput) {
   const rent = input.rent * (input.rentalMode === 'SLOT' ? input.people : 1)
   const electricity = input.electricity * input.electricityRate

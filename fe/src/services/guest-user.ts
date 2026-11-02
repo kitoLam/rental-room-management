@@ -13,6 +13,8 @@ import {
   policySchema,
   roomSchema,
   userSchema,
+  type Room,
+  type RoomServiceOption,
   type User,
   utilityRatesSchema,
   type AppointmentInput,
@@ -85,6 +87,14 @@ export const authService = {
       z.object({ href: z.string(), purpose: z.string() }).nullable(),
     ),
 }
+const publicServiceSchema = z.object({
+  id: databaseIdSchema,
+  name: z.string(),
+  unit: z.string(),
+  unitPrice: z.coerce.number(),
+  calculationType: z.string(),
+  mandatory: z.boolean(),
+})
 const publicRoomSchema = z.object({
   utilityRates: utilityRatesSchema.nullish(),
   room: z.object({
@@ -224,6 +234,31 @@ export const catalogService = {
       availabilitySchema,
     ),
   branch: (id: string) => request('catalog', `/api/v1/public/branches/${id}`, branchSchema),
+  // Dịch vụ tham khảo: API thật lấy danh mục công khai theo kiểu thuê; mock lấy dịch vụ đi kèm phòng.
+  services: async (room: Room): Promise<RoomServiceOption[]> => {
+    if (provider('catalog') === 'mock')
+      return room.services.map((s) => ({
+        id: s.name,
+        name: s.name,
+        unit: s.unit,
+        price: s.price,
+        mandatory: s.mandatory ?? false,
+        calculationType: s.calculationType ?? 'FIXED',
+      }))
+    const items = await request(
+      'catalog',
+      `/api/v1/public/services?${new URLSearchParams({ roomMode: room.rentalMode })}`,
+      z.array(publicServiceSchema),
+    )
+    return items.map((s) => ({
+      id: s.id,
+      name: s.name,
+      unit: s.unit,
+      price: s.unitPrice,
+      mandatory: s.mandatory,
+      calculationType: s.calculationType,
+    }))
+  },
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }
 export const roomSlotService = {

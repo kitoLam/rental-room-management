@@ -81,7 +81,8 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
 
   if (feature === 'catalog' && verb === 'GET' && (matches(`/api/v1/public/rooms(/${id})?`) ||
       matches(`/api/v1/public/branches(/${id})?`) ||
-      pathname === '/api/v1/public/room-types'))
+      pathname === '/api/v1/public/room-types' ||
+      pathname === '/api/v1/public/services'))
     return null
 
   if (

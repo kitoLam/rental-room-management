@@ -15,6 +15,7 @@ public record ServiceItemUpdateRequest(
         @PositiveOrZero BigDecimal unitPrice,
         CalculationType calculationType,
         ServiceScope scope,
-        ServiceStatus status
+        ServiceStatus status,
+        Boolean mandatory
 ) {
 }

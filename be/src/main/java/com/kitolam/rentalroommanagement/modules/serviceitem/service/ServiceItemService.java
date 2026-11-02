@@ -28,4 +28,7 @@ public interface ServiceItemService {
 
     /** Internal: ACTIVE optional services of the given scopes. Metered utilities are configured per room, not registered. */
     List<ServiceItemResponse> listSubscribable(Set<ServiceScope> scopes);
+
+    /** Public: ACTIVE services of the given scopes, mandatory first, for the room detail page. */
+    List<ServiceItemResponse> listPublic(Set<ServiceScope> scopes);
 }

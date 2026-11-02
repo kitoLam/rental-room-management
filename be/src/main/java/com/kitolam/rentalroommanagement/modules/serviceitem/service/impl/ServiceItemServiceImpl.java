@@ -26,6 +26,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -48,6 +49,7 @@ public class ServiceItemServiceImpl implements ServiceItemService {
         }
         ServiceItem serviceItem = mapper.toDocument(request);
         serviceItem.setCode(code);
+        enforceMandatory(serviceItem);
         return mapper.toResponse(serviceItemRepository.save(serviceItem));
     }
 
@@ -75,6 +77,7 @@ public class ServiceItemServiceImpl implements ServiceItemService {
             throw new ConflictException("Dịch vụ đang được sử dụng, không thể đổi phạm vi hoặc cách tính phí");
         }
         mapper.update(request, serviceItem);
+        enforceMandatory(serviceItem);
         return mapper.toResponse(serviceItemRepository.save(serviceItem));
     }
 
@@ -103,8 +106,27 @@ public class ServiceItemServiceImpl implements ServiceItemService {
         criteria.add(Criteria.where("status").is(ServiceStatus.ACTIVE.name()));
         criteria.add(Criteria.where("scope").in(scopes.stream().map(Enum::name).toList()));
         criteria.add(Criteria.where("calculationType").ne(CalculationType.METERED.name()));
+        criteria.add(Criteria.where("mandatory").ne(true));
         Query query = new Query(new Criteria().andOperator(criteria)).with(Sort.by("name"));
         return mongoTemplate.find(query, ServiceItem.class).stream().map(mapper::toResponse).toList();
+    }
+
+    @Override
+    public List<ServiceItemResponse> listPublic(Set<ServiceScope> scopes) {
+        List<Criteria> criteria = MongoQueryHelper.baseCriteria();
+        criteria.add(Criteria.where("status").is(ServiceStatus.ACTIVE.name()));
+        criteria.add(Criteria.where("scope").in(scopes.stream().map(Enum::name).toList()));
+        Query query = new Query(new Criteria().andOperator(criteria)).with(Sort.by("name"));
+        return mongoTemplate.find(query, ServiceItem.class).stream().map(mapper::toResponse)
+                .sorted(Comparator.comparing(ServiceItemResponse::mandatory).reversed())
+                .toList();
+    }
+
+    /** Metered utilities (electricity, water) always apply, so they cannot be optional. */
+    private static void enforceMandatory(ServiceItem serviceItem) {
+        if (serviceItem.getCalculationType() == CalculationType.METERED) {
+            serviceItem.setMandatory(true);
+        }
     }
 
     private ServiceItem find(String id) {

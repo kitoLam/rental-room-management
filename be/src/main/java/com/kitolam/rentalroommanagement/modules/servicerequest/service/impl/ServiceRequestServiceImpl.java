@@ -107,6 +107,9 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
         if (service.calculationType() == CalculationType.METERED) {
             throw new BadRequestException("Dịch vụ tính theo chỉ số được cấu hình theo phòng, không cần đăng ký");
         }
+        if (service.mandatory()) {
+            throw new BadRequestException("Dịch vụ bắt buộc luôn được áp dụng, không cần đăng ký");
+        }
         String targetId = targetId(service.scope(), tenancy);
         if (hasActiveSubscription(service.scope(), targetId, service.id())) {
             throw new ConflictException("Dịch vụ này đang được sử dụng");
