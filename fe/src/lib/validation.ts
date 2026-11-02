@@ -88,18 +88,25 @@ export function addDays(days: number) {
   return localDate(date)
 }
 export function bookingReviewTimeErrors(
-  value: { paymentDeadline: string; holdExpiresAt: string },
+  value: { paymentDeadline: string; holdExpiresAt: string; checkInDeadline?: string; expectedMoveInDate?: string },
   now = Date.now(),
 ) {
   const payment = Date.parse(value.paymentDeadline)
   const hold = Date.parse(value.holdExpiresAt)
-  const errors: { paymentDeadline?: string; holdExpiresAt?: string } = {}
+  const errors: { paymentDeadline?: string; holdExpiresAt?: string; checkInDeadline?: string } = {}
   if (Number.isFinite(payment) && payment <= now)
     errors.paymentDeadline = 'Hạn thanh toán phải ở tương lai.'
   if (Number.isFinite(hold) && hold <= now)
     errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải ở tương lai.'
   else if (Number.isFinite(hold) && Number.isFinite(payment) && hold <= payment)
     errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải lớn hơn hạn thanh toán.'
+  if (value.checkInDeadline !== undefined) {
+    const checkIn = Date.parse(value.checkInDeadline)
+    if (!Number.isFinite(checkIn) || checkIn <= now)
+      errors.checkInDeadline = 'Hạn check-in phải ở tương lai.'
+    else if (value.expectedMoveInDate && value.checkInDeadline.slice(0, 10) < value.expectedMoveInDate)
+      errors.checkInDeadline = 'Hạn check-in không được trước ngày bắt đầu thuê.'
+  }
   return errors
 }
 export const dateRangeSchema = z

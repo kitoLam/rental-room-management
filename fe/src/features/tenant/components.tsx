@@ -4,33 +4,40 @@ import { ArrowUpRight } from 'lucide-react'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import { useTenant, tenantLink } from './context'
-
 import { tenantStatusLabel } from './status'
+
 export function TenantStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'PAID', 'VERIFIED', 'APPROVED', 'COMPLETED'].includes(value)
+        ['ACTIVE', 'PAID', 'VERIFIED', 'APPROVED', 'COMPLETED', 'RESOLVED', 'CLOSED', 'ADMIN_RESOLVED'].includes(
+          value,
+        )
           ? 'success'
-          : [
+          : ['IN_PROGRESS', 'ACCEPTED', 'PROGRESS_UPDATED'].includes(value)
+            ? 'info'
+            : [
                 'PENDING',
                 'PARTIAL',
                 'REVIEW',
                 'CANCEL_REQUESTED',
                 'STOP_PENDING',
                 'OPEN',
-                'IN_PROGRESS',
+                'WAITING_INFO',
+                'INFO_SUPPLEMENTED',
+                'REQUESTED_INFO',
               ].includes(value)
-            ? 'warning'
-            : ['OVERDUE', 'FAILED', 'REJECTED', 'URGENT'].includes(value)
-              ? 'danger'
-              : 'neutral'
+              ? 'warning'
+              : ['OVERDUE', 'FAILED', 'REJECTED', 'URGENT', 'ESCALATED_ADMIN'].includes(value)
+                ? 'danger'
+                : 'neutral'
       }
     >
       {tenantStatusLabel(value)}
     </StatusBadge>
   )
 }
+
 export function TenantPage({
   title,
   description,
@@ -60,6 +67,7 @@ export function TenantPage({
     </div>
   )
 }
+
 export function TenantLink({
   to,
   children,
@@ -85,6 +93,7 @@ export function TenantLink({
   )
   return button ? <Button asChild>{link}</Button> : link
 }
+
 export function Facts({ items }: { items: [string, ReactNode][] }) {
   return (
     <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
@@ -99,6 +108,7 @@ export function Facts({ items }: { items: [string, ReactNode][] }) {
     </dl>
   )
 }
+
 export function EmptyRows({
   children = 'Chưa có dữ liệu trong kỳ này.',
 }: {

@@ -24,6 +24,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import java.time.Clock;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -93,8 +94,14 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     public PagedResponse<RoomResponse> search(RoomFilterRequest filter, Pageable pageable) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
+        List<Criteria> criteria = MongoQueryHelper.baseCriteria();
+        MongoQueryHelper.addObjectIdEquals(criteria, "branchId", filter.branchId());
+        MongoQueryHelper.addObjectIdEquals(criteria, "roomTypeId", filter.roomTypeId());
+        MongoQueryHelper.addObjectIdEquals(criteria, "managerId", filter.managerId());
+        MongoQueryHelper.addEquals(criteria, "roomMode", filter.roomMode());
+        MongoQueryHelper.addEquals(criteria, "status", filter.status());
+        MongoQueryHelper.addKeyword(criteria, filter.keyword(), "roomNumber");
+        return PagedResponse.from(MongoQueryHelper.page(mongo, criteria, pageable, Room.class), mapper::toResponse);
     }
 
     @Override

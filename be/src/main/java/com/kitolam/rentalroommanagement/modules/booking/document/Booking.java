@@ -31,6 +31,10 @@ public class Booking extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomSlotId;
 
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String contractId;
+
     private LocalDate expectedMoveInDate;
 
     private LocalDate expectedMoveOutDate;
@@ -41,6 +45,8 @@ public class Booking extends BaseDocument {
     private Instant paymentDeadline;
 
     private Instant holdExpiresAt;
+
+    private Instant checkInDeadline;
 
     private String cancellationPolicy;
 

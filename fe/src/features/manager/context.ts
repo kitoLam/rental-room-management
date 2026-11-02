@@ -48,6 +48,7 @@ export function useManagerQuery<T>(
   fn: (branchId: string) => Promise<T>,
   extra: unknown[] = [],
   poll = false,
+  enabled = true,
 ) {
   const { branch } = useManager(),
     userId = useSession((s) => s.user!.id),
@@ -63,6 +64,7 @@ export function useManagerQuery<T>(
       params.get('demo'),
     ],
     queryFn: () => fn(branch.id),
+    enabled,
     refetchInterval: poll ? 4000 : false,
   })
 }
@@ -70,8 +72,9 @@ export function useManagerList<K extends ManagerResource>(
   resource: K,
   filters: Record<string, string> = {},
   poll = false,
+  enabled = true,
 ) {
-  return useManagerQuery(resource, (b) => managerApi.list(b, resource, filters), [filters], poll)
+  return useManagerQuery(resource, (b) => managerApi.list(b, resource, filters), [filters], poll, enabled)
 }
 export function useManagerAction(onSuccess?: (result: { id?: string } | null) => void) {
   const { branch } = useManager()

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useSession } from '@/features/auth/session-store'
 import { tenantApi } from '@/services/tenant'
+import type { Tenancy } from '@/interfaces/tenant'
 import { provider } from '@/services/config'
 import { queryClient } from '@/services/query-client'
 import { useTenancySelection, isActive, tenantLink } from '@/features/tenant/context'
@@ -27,7 +28,7 @@ const nav = [
   ['/tenant/payments', 'Thanh toán', Wallet],
   ['/tenant/services', 'Dịch vụ', Plug],
   ['/tenant/utilities', 'Điện & nước', Droplets],
-  ['/tenant/maintenance', 'Bảo trì', Wrench],
+  ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
 ] as const
 export function TenantLayout() {
   const userId = useSession((s) => s.user!.id),
@@ -36,7 +37,7 @@ export function TenantLayout() {
   const [params] = useSearchParams(),
     location = useLocation(),
     navigate = useNavigate()
-  const list = useQuery({
+  const list = useQuery<Tenancy[]>({
     queryKey: ['tenant', userId, 'tenancies', params.get('demo')],
     queryFn: tenantApi.tenancies,
   })

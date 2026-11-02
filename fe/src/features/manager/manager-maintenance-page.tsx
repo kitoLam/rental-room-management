@@ -9,7 +9,7 @@ export function ManagerMaintenance() {
     [page, setPage] = useState(1),
     query = useManagerList('maintenance', { q, status, page: String(page - 1) }, true)
   return (
-    <ManagerPage title="Sửa chữa & bảo trì">
+    <ManagerPage title="Quản lý yêu cầu hỗ trợ & Bảo trì">
       <div className="flex flex-wrap gap-3">
         <SearchBox
           value={q}
@@ -19,7 +19,7 @@ export function ManagerMaintenance() {
           }}
         />
         <select
-          aria-label="Trạng thái sửa chữa"
+          aria-label="Trạng thái yêu cầu"
           className="input w-auto"
           value={status}
           onChange={(e) => {
@@ -28,11 +28,14 @@ export function ManagerMaintenance() {
           }}
         >
           <option value="">Tất cả trạng thái</option>
-          <option value="OPEN">Mới gửi</option>
-          <option value="ACCEPTED">Đã tiếp nhận</option>
+          <option value="PENDING">Chờ xử lý / Mới gửi</option>
+          <option value="WAITING_INFO">Chờ bổ sung</option>
           <option value="IN_PROGRESS">Đang xử lý</option>
-          <option value="COMPLETED">Hoàn tất</option>
+          <option value="RESOLVED">Đã giải quyết</option>
+          <option value="CLOSED">Đã đóng</option>
           <option value="REJECTED">Từ chối</option>
+          <option value="ESCALATED_ADMIN">Chuyển Admin</option>
+          <option value="CANCELLED">Đã hủy</option>
         </select>
       </div>
       <Records

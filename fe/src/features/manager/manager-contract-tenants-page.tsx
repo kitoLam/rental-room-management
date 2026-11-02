@@ -1,12 +1,15 @@
 import { Modal, Notice, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { tenancyInputSchema, type ManagerTenancy } from '@/interfaces/manager'
+import {
+  contractTenantInputSchema,
+  contractTenantUpdateSchema,
+  type ManagerContractTenant,
+} from '@/interfaces/manager'
 import { formatVnd } from '@/lib/format'
 import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import {
-  ActionDialog,
   ManagerForm,
   ManagerLink,
   ManagerPage,
@@ -20,70 +23,46 @@ export function ManagerContractTenants() {
   const { contractId = '' } = useParams(),
     contract = useManagerQuery(
       'contract',
-      (b) => managerApi.get(b, 'contracts', contractId),
+      (branchId) => managerApi.get(branchId, 'contracts', contractId),
       [contractId],
       true,
     ),
-    query = useManagerList('tenants', { contractId, size: '100' }, true),
-    users = useManagerQuery('eligible-users', managerApi.users),
-    slots = useManagerList('slots', { roomId: contract.data?.roomId || '', size: '100' }),
-    [editing, setEditing] = useState<ManagerTenancy | null | undefined>(undefined),
-    [action, setAction] = useState<{ id: string; action: string } | null>(null),
-    mutation = useManagerAction(() => {
-      setEditing(undefined)
-      setAction(null)
-    })
+    query = useManagerList('contract-tenants', { contractId, size: '100' }, true),
+    candidates = useManagerQuery(
+      'eligible-contract-tenants',
+      () => managerApi.eligibleContractTenants(contractId),
+      [contractId],
+    ),
+    [editing, setEditing] = useState<ManagerContractTenant | null | undefined>(undefined),
+    mutation = useManagerAction(() => setEditing(undefined))
+
   const fields: FieldSpec[] = [
-    {
-      name: 'userId',
-      label: 'Tài khoản đã xác minh',
-      kind: 'select',
-      options: users.data?.map((u) => ({ value: u.id, label: `${u.fullName} · ${u.email}` })),
-    },
-    {
-      name: 'roomSlotId',
-      label: 'Chỗ ở (chỉ thuê chỗ)',
-      kind: 'select',
-      nullable: true,
-      options: slots.data?.content.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` })),
-    },
-    {
-      name: 'role',
-      label: 'Vai trò',
-      kind: 'select',
+    ...(!editing
+      ? [{
+          name: 'tenantId',
+          label: 'Tài khoản Tenant đã xác minh',
+          kind: 'select' as const,
+          options: candidates.data?.map((tenant) => ({
+            value: tenant.tenantId,
+            label: `${tenant.fullName || 'Người thuê'} · ${tenant.email}`,
+          })),
+        }]
+      : []),
+    { name: 'rentAmount', label: 'Phần tiền thuê hàng tháng (VND)', kind: 'number', min: 0 },
+    { name: 'joinedAt', label: 'Ngày bắt đầu cư trú', kind: 'date' },
+    { name: 'leftAt', label: 'Ngày rời đi', kind: 'date', nullable: true },
+    { name: 'isRepresentative', label: 'Đại diện hợp đồng', kind: 'check' },
+    ...(editing ? [{
+      name: 'status',
+      label: 'Trạng thái thành viên',
+      kind: 'select' as const,
       options: [
-        { value: 'REPRESENTATIVE', label: 'Đại diện' },
-        { value: 'MEMBER', label: 'Thành viên' },
+        { value: 'ACTIVE', label: 'Đang ở' },
+        { value: 'LEFT', label: 'Đã rời đi' },
       ],
-    },
-    { name: 'startDate', label: 'Bắt đầu cư trú', kind: 'date' },
-    { name: 'endDate', label: 'Kết thúc cư trú (không gồm)', kind: 'date' },
-    ...(
-      [
-        'monthlyRent',
-        'firstMonthRent',
-        'lastMonthRent',
-        'prepaidFirstRequired',
-        'prepaidLastRequired',
-      ] as const
-    ).map((name, n) => ({
-      name,
-      label:
-        [
-          'Giá thuê hàng tháng',
-          'Giá thuê kỳ đầu',
-          'Giá thuê kỳ cuối',
-          'Trả trước kỳ đầu',
-          'Trả trước kỳ cuối',
-        ][n] + ' (VND)',
-      kind: 'number' as const,
-      hint:
-        name === 'lastMonthRent' || name === 'prepaidLastRequired'
-          ? 'Thuê đúng 1 tháng: nhập 0, chỉ trả trước kỳ đầu.'
-          : undefined,
-    })),
-    { name: 'terms', label: 'Điều khoản cá nhân', kind: 'textarea' },
+    }] : []),
   ]
+
   return (
     <ManagerPage
       title="Thành viên & nghĩa vụ cá nhân"
@@ -91,16 +70,16 @@ export function ManagerContractTenants() {
       actions={<ManagerLink to={`/manager/contracts/${contractId}`}>Hợp đồng</ManagerLink>}
     >
       <QueryState
-        pending={contract.isPending || users.isPending}
-        error={contract.error || users.error}
+        pending={contract.isPending || candidates.isPending}
+        error={contract.error || candidates.error}
         retry={() => {
           void contract.refetch()
-          void users.refetch()
+          void candidates.refetch()
         }}
       >
         <Notice>
-          Chọn tài khoản đã có yêu cầu/quan hệ tại chi nhánh. Hồ sơ tài khoản không bị ghi đè khi
-          thêm người thuê.
+          Quản lý thành viên, người đại diện, phần tiền thuê, ngày cư trú và trạng thái theo các trường
+          hiện có của hợp đồng.
         </Notice>
         {['DRAFT', 'ACTIVE'].includes(contract.data?.status || '') && (
           <div>
@@ -114,118 +93,81 @@ export function ManagerContractTenants() {
           columns={[
             {
               label: 'Người thuê',
-              render: (t) => (
+              render: (tenant) => (
                 <>
-                  <ManagerLink to={`/manager/tenancies/${t.id}`}>{t.userName}</ManagerLink>
+                  <strong>{tenant.tenantName || 'Người thuê'}</strong>
+                  <p className="text-xs text-muted-foreground">{tenant.tenantEmail}</p>
                   <p className="text-xs text-muted-foreground">
-                    {t.slotName || 'Nguyên phòng'} ·{' '}
-                    {t.role === 'REPRESENTATIVE' ? 'Đại diện' : 'Thành viên'}
+                    {tenant.isRepresentative ? 'Đại diện hợp đồng' : 'Thành viên'}
                   </p>
                 </>
               ),
             },
             {
-              label: 'Giá thuê / trả trước',
-              render: (t) => (
+              label: 'Nghĩa vụ thuê',
+              render: (tenant) => (
                 <>
-                  <strong>{formatVnd(t.monthlyRent)}/tháng</strong>
+                  <strong>{formatVnd(tenant.rentAmount || 0)}/tháng</strong>
                   <p className="text-xs text-muted-foreground">
-                    Đầu: {formatVnd(t.prepaidFirstRequired)} · Cuối:{' '}
-                    {formatVnd(t.prepaidLastRequired)}
+                    {tenant.joinedAt} – {tenant.leftAt || (tenant.status === 'LEFT' ? 'Đã rời đi' : 'Đang cư trú')}
                   </p>
                 </>
               ),
             },
-            { label: 'Trạng thái', render: (t) => <ManagerStatus value={t.status} /> },
+            { label: 'Trạng thái', render: (tenant) => <ManagerStatus value={tenant.status} /> },
             {
               label: 'Thao tác',
-              render: (t) => (
-                <div className="flex flex-wrap gap-2">
-                  {t.status === 'DRAFT' && (
-                    <Button variant="outline" onClick={() => setEditing(t)}>
-                      Sửa nghĩa vụ
-                    </Button>
-                  )}
-                  {t.status === 'DRAFT' && contract.data?.status === 'ACTIVE' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setAction({ id: t.id, action: 'activate' })}
-                    >
-                      Kích hoạt
-                    </Button>
-                  )}
-                  {t.status === 'ACTIVE' && t.role === 'MEMBER' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setAction({ id: t.id, action: 'representative' })}
-                    >
-                      Chọn đại diện
-                    </Button>
-                  )}
-                </div>
+              render: (tenant) => (
+                <Button variant="outline" onClick={() => setEditing(tenant)}>
+                  Sửa nghĩa vụ
+                </Button>
               ),
             },
           ]}
         />
       </QueryState>
       <Modal
-        title={editing ? 'Sửa nghĩa vụ nháp' : 'Thêm thành viên'}
+        title={editing ? 'Sửa nghĩa vụ thành viên' : 'Thêm thành viên'}
         open={editing !== undefined}
-        onOpenChange={(v) => {
-          if (!v && !mutation.isPending) setEditing(undefined)
+        onOpenChange={(open) => {
+          if (!open && !mutation.isPending) setEditing(undefined)
         }}
       >
         {editing !== undefined && (
           <ManagerForm
-            schema={tenancyInputSchema}
+            schema={editing ? contractTenantUpdateSchema : contractTenantInputSchema}
             defaults={
               editing
-                ? { ...editing }
+                ? {
+                    isRepresentative: Boolean(editing.isRepresentative),
+                    rentAmount: editing.rentAmount || 0,
+                    joinedAt: editing.joinedAt,
+                    leftAt: editing.leftAt,
+                    status: editing.status,
+                  }
                 : {
-                    userId: '',
-                    roomSlotId: '',
-                    role: 'MEMBER',
-                    startDate: contract.data?.startDate,
-                    endDate: contract.data?.endDate,
-                    monthlyRent: 0,
-                    firstMonthRent: 0,
-                    lastMonthRent: 0,
-                    prepaidFirstRequired: 0,
-                    prepaidLastRequired: 0,
-                    terms: '',
+                    tenantId: '',
+                    isRepresentative: false,
+                    rentAmount: 0,
+                    joinedAt: contract.data?.startDate || '',
+                    leftAt: null,
                   }
             }
             fields={fields}
             pending={mutation.isPending}
             error={mutation.error}
+            submitLabel={editing ? 'Lưu nghĩa vụ' : 'Thêm thành viên'}
             onSubmit={(value) =>
               mutation.mutate({
-                resource: 'tenants',
+                resource: 'contract-tenants',
                 id: editing?.id,
-                value: { ...value, contractId },
+                value: editing ? value : { ...value, contractId },
                 method: editing ? 'PATCH' : 'POST',
               })
             }
           />
         )}
       </Modal>
-      <ActionDialog
-        title="Cập nhật quan hệ thuê"
-        open={!!action}
-        onOpenChange={(v) => {
-          if (!v) setAction(null)
-        }}
-        pending={mutation.isPending}
-        error={mutation.error}
-        onConfirm={(value) =>
-          mutation.mutate({
-            resource: 'tenants',
-            id: action!.id,
-            action: action!.action,
-            value: { ...value, contractId },
-          })
-        }
-      />
     </ManagerPage>
   )
 }

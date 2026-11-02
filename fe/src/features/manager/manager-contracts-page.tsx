@@ -12,8 +12,8 @@ export function ManagerContracts() {
     <ManagerPage
       title="Hợp đồng thuê"
       actions={
-        <ManagerLink to="/manager/contracts/new" button>
-          Tạo hợp đồng
+        <ManagerLink to="/manager/bookings" button>
+          Tạo hợp đồng từ booking đã xác nhận
         </ManagerLink>
       }
     >

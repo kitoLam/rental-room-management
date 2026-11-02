@@ -264,6 +264,8 @@ const backendBookingSchema = z.object({
   holdingDepositAmount: z.number().nullable(),
   paymentDeadline: z.string().nullable(),
   holdExpiresAt: z.string().nullable(),
+  checkInDeadline: z.string().nullable().optional(),
+  contractId: databaseIdSchema.nullable().optional(),
   cancellationPolicy: z.string().nullable(),
   depositStatus: z.enum(['UNPAID', 'PROCESSING', 'PAID', 'REFUNDED', 'FORFEITED']),
   rejectReason: z.string().nullable(),
@@ -308,6 +310,41 @@ const backendPaymentSchema = z.object({
   paidAt: z.string().nullable(),
   paymentUrl: z.string().nullable(),
 })
+const backendContractSchema = z.object({
+  id: databaseIdSchema,
+  roomId: databaseIdSchema,
+  roomSlotId: databaseIdSchema,
+  bookingId: databaseIdSchema,
+  tenantId: databaseIdSchema,
+  managerId: databaseIdSchema,
+  contractNumber: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  rentPrice: z.number(),
+  contractDepositAmount: z.number(),
+  landlordName: z.string().nullable().optional(),
+  landlordIdNumber: z.string().nullable().optional(),
+  landlordAddress: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  tenantIdNumber: z.string().nullable().optional(),
+  tenantAddress: z.string().nullable().optional(),
+  roomAddress: z.string().nullable().optional(),
+  roomMode: z.string().nullable().optional(),
+  electricityInitialReading: z.number().nullable().optional(),
+  waterInitialReading: z.number().nullable().optional(),
+  electricityRate: z.number().nullable().optional(),
+  waterRate: z.number().nullable().optional(),
+  parkingRate: z.number().nullable().optional(),
+  maxOccupants: z.number().nullable().optional(),
+  paymentDueDay: z.number().nullable(),
+  terms: z.string().nullable(),
+  signedFileUrl: z.string().nullable(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
+  services: z.array(z.object({
+    serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
+    calculationType: z.string(), mandatory: z.boolean(), selected: z.boolean(),
+  })).default([]),
+}).passthrough()
 const toBackendBookingStatus = (status: string) => status
 function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
   const status = b.status === 'PENDING' ? 'REQUESTED' : b.status === 'APPROVED' ? 'CONFIRMED' : b.status
@@ -329,6 +366,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     holdAmount: b.holdingDepositAmount || 0,
     paymentDueAt: b.paymentDeadline || '',
     temporaryHoldUntil: b.holdExpiresAt || '',
+    checkInDeadline: b.checkInDeadline || null,
     confirmedHoldUntil: status === 'CONFIRMED' ? b.holdExpiresAt : null,
     status,
     policySnapshot: {
@@ -349,7 +387,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     paymentEnvironment: 'PRODUCTION',
     createdAt,
     timeline: b.timeline,
-    contractId: null,
+    contractId: b.contractId || null,
   })
 }
 function adaptPayment(p: z.infer<typeof backendPaymentSchema>) {
@@ -448,19 +486,33 @@ export const bookingService = {
   },
   review: async (id: string, value: unknown) =>
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/review`, backendBookingSchema, write('POST', value))),
-  managerList: async (status = '', page = 1) => {
+  managerList: async (status = '', page = 1, filters: Record<string, string> = {}) => {
     const query = new URLSearchParams({ page: String(page), size: '8' })
     if (status) query.set('status', toBackendBookingStatus(status))
+    for (const key of ['roomId', 'from', 'to', 'q']) {
+      if (filters[key]) query.set(key, filters[key])
+    }
     const result = await request('manager', `/api/v1/bookings?${query}`, pageSchema(backendBookingSchema))
     return { ...result, content: result.content.map(adaptBooking) }
   },
   managerGet: async (id: string) =>
     adaptBooking(await request('manager', `/api/v1/bookings/${id}`, backendBookingSchema)),
+  managerCancel: async (id: string) =>
+    adaptBooking(await request('manager', `/api/v1/bookings/${id}/cancel`, backendBookingSchema, write('POST'))),
   reconcile: async (id: string, paymentId: string, successful: boolean, reason: string) =>
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/payments/${paymentId}/reconcile`, backendBookingSchema,
       write('POST', { successful, reason }))),
   approveRefund: async (id: string) =>
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/refund/approve`, backendBookingSchema, write('POST'))),
+}
+export const contractService = {
+  createDraftFromBooking: (bookingId: string, value: unknown) =>
+    request('manager', `/api/v1/contracts/from-booking/${bookingId}`, backendContractSchema, write('POST', value)),
+  get: (id: string) => request('leasing', `/api/v1/contracts/${id}`, backendContractSchema),
+  selectServices: (id: string, selectedServiceIds: string[]) =>
+    request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
+  completeCheckIn: (id: string, signedFileUrl: string) =>
+    request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
 }
 export const profileService = {
   get: async (): Promise<User> => {

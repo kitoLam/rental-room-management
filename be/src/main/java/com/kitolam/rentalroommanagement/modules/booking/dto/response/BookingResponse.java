@@ -19,6 +19,8 @@ public record BookingResponse(
         BigDecimal holdingDepositAmount,
         Instant paymentDeadline,
         Instant holdExpiresAt,
+        Instant checkInDeadline,
+        String contractId,
         String cancellationPolicy,
         DepositStatus depositStatus,
         String rejectReason,

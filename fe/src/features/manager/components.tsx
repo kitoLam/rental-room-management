@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/common/status-badge'
 import { tenantStatusLabel } from '@/features/tenant/status'
 import { imageAttachment } from '@/features/tenant/attachments'
-import { useManager, managerLink, useManagerList } from './context'
+import { managerApi } from '@/services/manager'
+import { useManager, managerLink, useManagerList, useManagerQuery } from './context'
 import type { Page as PageData } from '@/interfaces/domain'
 export function ManagerPage({
   title,
@@ -91,11 +92,22 @@ export function ManagerStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'APPROVED', 'VERIFIED', 'CONFIRMED', 'FINALIZED', 'PAID', 'COMPLETED'].includes(
-          value,
-        )
+        [
+          'ACTIVE',
+          'APPROVED',
+          'VERIFIED',
+          'CONFIRMED',
+          'FINALIZED',
+          'PAID',
+          'COMPLETED',
+          'RESOLVED',
+          'CLOSED',
+          'ADMIN_RESOLVED',
+        ].includes(value)
           ? 'success'
-          : [
+          : ['IN_PROGRESS', 'ACCEPTED', 'PROGRESS_UPDATED'].includes(value)
+            ? 'info'
+            : [
                 'PENDING',
                 'REVIEW',
                 'HELD',
@@ -103,11 +115,14 @@ export function ManagerStatus({ value }: { value: string }) {
                 'AWAITING_PAYMENT',
                 'CANCEL_REQUESTED',
                 'STOP_PENDING',
+                'WAITING_INFO',
+                'INFO_SUPPLEMENTED',
+                'REQUESTED_INFO',
               ].includes(value)
-            ? 'warning'
-            : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
-              ? 'danger'
-              : 'neutral'
+              ? 'warning'
+              : ['REJECTED', 'FAILED', 'OVERDUE', 'ESCALATED_ADMIN'].includes(value)
+                ? 'danger'
+                : 'neutral'
       }
     >
       {labels[value] || tenantStatusLabel(value)}
@@ -240,8 +255,8 @@ export function ScopeFilters({
   tenant?: boolean
   dates?: boolean
 }) {
-  const rooms = useManagerList('rooms', { size: '100' }),
-    tenants = useManagerList('tenants', { size: '100' })
+  const rooms = useManagerQuery('room-filter-options', managerApi.roomFilterOptions),
+    tenants = useManagerList('tenants', { size: '100' }, false, tenant)
   return (
     <div className="flex flex-wrap gap-3">
       <select
@@ -301,7 +316,7 @@ export function ScopeFilters({
           />
         </>
       )}
-      <InlineError error={rooms.error || tenants.error} />
+      <InlineError error={rooms.error || (tenant ? tenants.error : null)} />
     </div>
   )
 }

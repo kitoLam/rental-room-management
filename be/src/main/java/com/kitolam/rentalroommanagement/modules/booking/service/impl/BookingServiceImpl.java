@@ -26,6 +26,9 @@ import com.kitolam.rentalroommanagement.modules.booking.enums.DepositStatus;
 import com.kitolam.rentalroommanagement.modules.booking.event.BookingStatusChangedEvent;
 import com.kitolam.rentalroommanagement.modules.booking.repository.BookingRepository;
 import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
+import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
@@ -49,6 +52,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -57,8 +61,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -66,6 +72,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
+    private final ContractRepository contractRepository;
     private final RoomRepository roomRepository;
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository roomSlotOccupancyRepository;
@@ -77,6 +84,12 @@ public class BookingServiceImpl implements BookingService {
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final BranchService branchAccess;
+
+    @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
+    @Transactional
+    public void expireBookingsOnSchedule() {
+        expireOverdueBookings();
+    }
 
     @Override
     public EffectiveRoomHoldResponse currentRoomHold(String roomSlotId) {
@@ -198,6 +211,36 @@ public class BookingServiceImpl implements BookingService {
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", filter.tenantId());
         }
         MongoQueryHelper.addObjectIdEquals(criteria, "roomSlotId", filter.roomSlotId());
+        if (filter.roomId() != null) {
+            List<ObjectId> roomSlotIds = roomSlotRepository.findByRoomIdAndIsDeletedFalse(filter.roomId()).stream()
+                    .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+            criteria.add(Criteria.where("roomSlotId").in(roomSlotIds));
+        }
+        if (filter.from() != null && filter.to() != null && filter.to().isBefore(filter.from()))
+            throw new BadRequestException("Ngày kết thúc lọc phải bằng hoặc sau ngày bắt đầu lọc");
+        if (filter.from() != null) criteria.add(Criteria.where("expectedMoveOutDate").gt(filter.from()));
+        if (filter.to() != null) criteria.add(Criteria.where("expectedMoveInDate").lte(filter.to()));
+        if (filter.q() != null && !filter.q().isBlank()) {
+            Pattern keyword = Pattern.compile(Pattern.quote(filter.q().trim()), Pattern.CASE_INSENSITIVE);
+            List<String> matchingRoomIds = mongoTemplate.find(
+                    Query.query(Criteria.where("roomNumber").regex(keyword)), Room.class).stream()
+                    .map(Room::getId).toList();
+            List<ObjectId> matchingRoomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(matchingRoomIds).stream()
+                    .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+            List<ObjectId> matchingSlotCodes = mongoTemplate.find(
+                    Query.query(Criteria.where("slotCode").regex(keyword)), RoomSlot.class).stream()
+                    .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+            List<ObjectId> matchingTenantIds = mongoTemplate.find(Query.query(new Criteria().orOperator(
+                    Criteria.where("fullName").regex(keyword), Criteria.where("email").regex(keyword),
+                    Criteria.where("phone").regex(keyword))), Tenant.class).stream()
+                    .map(Tenant::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+            List<Criteria> keywordCriteria = new ArrayList<>();
+            if (!matchingRoomSlotIds.isEmpty()) keywordCriteria.add(Criteria.where("roomSlotId").in(matchingRoomSlotIds));
+            if (!matchingSlotCodes.isEmpty()) keywordCriteria.add(Criteria.where("roomSlotId").in(matchingSlotCodes));
+            if (!matchingTenantIds.isEmpty()) keywordCriteria.add(Criteria.where("tenantId").in(matchingTenantIds));
+            if (keywordCriteria.isEmpty()) criteria.add(Criteria.where("_id").exists(false));
+            else criteria.add(new Criteria().orOperator(keywordCriteria.toArray(Criteria[]::new)));
+        }
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addEquals(criteria, "depositStatus", filter.depositStatus());
         return PagedResponse.from(MongoQueryHelper.page(mongoTemplate, criteria, pageable, Booking.class), this::response);
@@ -240,6 +283,9 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Hạn thanh toán và thời điểm hết hạn giữ chỗ phải ở tương lai");
         if (request.cancellationPolicy() == null || request.cancellationPolicy().isBlank())
             throw new BadRequestException("Cần xác nhận điều kiện hủy");
+        if (request.checkInDeadline() == null || !request.checkInDeadline().isAfter(now)
+                || request.checkInDeadline().isBefore(start.atStartOfDay(java.time.ZoneOffset.UTC).toInstant()))
+            throw new BadRequestException("Hạn check-in phải ở tương lai và không trước ngày bắt đầu thuê");
         claimSlot(booking.getRoomSlotId());
         ensureNoOccupancyOverlap(booking.getRoomSlotId(), start, end, booking.getId());
 
@@ -248,6 +294,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setHoldingDepositAmount(amount);
         booking.setPaymentDeadline(request.paymentDeadline());
         booking.setHoldExpiresAt(request.holdExpiresAt());
+        booking.setCheckInDeadline(request.checkInDeadline());
         booking.setCancellationPolicy(request.cancellationPolicy().trim());
         booking.setRejectReason(null);
         booking.setStatus(BookingStatus.AWAITING_PAYMENT);
@@ -289,15 +336,30 @@ public class BookingServiceImpl implements BookingService {
         if (isRole(principal, "TENANT")) ensureTenantOwns(booking, principal);
         else ensureCanManage(booking, principal);
         claimSlot(booking.getRoomSlotId());
-        if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.AWAITING_PAYMENT)
+        boolean manager = !isRole(principal, "TENANT");
+        boolean confirmedBeforeHandover = manager && booking.getStatus() == BookingStatus.CONFIRMED;
+        Contract draft = confirmedBeforeHandover
+                ? contractRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).orElse(null) : null;
+        if (draft != null && draft.getStatus() != ContractStatus.DRAFT)
+            throw new ConflictException("Booking đã hoàn tất bàn giao, không thể hủy");
+        if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.AWAITING_PAYMENT && !confirmedBeforeHandover)
             throw new ConflictException("Trạng thái hiện tại không cho phép hủy yêu cầu");
-        if (paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream().anyMatch(p -> p.getStatus() == PaymentStatus.SUCCESS))
+        if (!confirmedBeforeHandover && paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream().anyMatch(p -> p.getStatus() == PaymentStatus.SUCCESS))
             throw new ConflictException("Đã nhận thanh toán; vui lòng liên hệ Owner để xử lý hoàn tiền");
+        if (draft != null) {
+            draft.setStatus(ContractStatus.TERMINATED);
+            draft.setTerminatedAt(clock.instant());
+            draft.setTerminationReason("Owner/Manager không thể bàn giao phòng.");
+            contractRepository.save(draft);
+        }
         BookingStatus previous = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setTermsAcceptedAt(null);
-        Booking saved = saveTransition(booking, previous, "Tenant đã hủy yêu cầu.");
+        Booking saved = saveTransition(booking, previous, confirmedBeforeHandover
+                ? "Owner/Manager hủy booking đã xác nhận do không thể bàn giao; khoản cọc chờ xử lý theo chính sách hủy."
+                : "Tenant đã hủy yêu cầu.");
         releaseReservation(saved.getId());
+        if (confirmedBeforeHandover) refreshRoomStatus(room(roomSlot(saved.getRoomSlotId()).getRoomId()));
         return response(saved);
     }
 
@@ -430,8 +492,9 @@ public class BookingServiceImpl implements BookingService {
         requireRole(principal, "OWNER", "MANAGER", "ADMIN");
         Booking booking = find(id);
         ensureCanManage(booking, principal);
-        if (booking.getStatus() != BookingStatus.EXPIRED || booking.getDepositStatus() != DepositStatus.PAID)
-            throw new ConflictException("Chỉ tiền cọc của booking hết hạn mới chờ duyệt hoàn");
+        if ((booking.getStatus() != BookingStatus.EXPIRED && booking.getStatus() != BookingStatus.CANCELLED)
+                || booking.getDepositStatus() != DepositStatus.PAID)
+            throw new ConflictException("Chỉ tiền cọc của booking hết hạn/hủy mới chờ duyệt hoàn");
         booking.setDepositStatus(DepositStatus.PROCESSING);
         Booking saved = bookingRepository.save(booking);
         eventPublisher.publishEvent(new BookingStatusChangedEvent(saved.getId(), saved.getTenantId(), saved.getStatus(), saved.getDepositStatus(), "Owner đã duyệt xử lý hoàn tiền cọc."));
@@ -461,6 +524,27 @@ public class BookingServiceImpl implements BookingService {
             expireBooking(booking);
             saveTransition(booking, previous, "Đã hết hạn thanh toán/giữ chỗ.");
             releaseReservation(booking.getId());
+        }
+        List<Booking> missedCheckIns = bookingRepository.findByStatusAndCheckInDeadlineLessThanEqualAndIsDeletedFalse(
+                BookingStatus.CONFIRMED, now).stream().filter(b -> b.getRoomSlotId() != null).toList();
+        for (Booking booking : missedCheckIns) {
+            BookingStatus previous = booking.getStatus();
+            claimSlot(booking.getRoomSlotId());
+            booking.setStatus(BookingStatus.EXPIRED);
+            if (paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                    .anyMatch(payment -> payment.getStatus() == PaymentStatus.SUCCESS))
+                booking.setDepositStatus(DepositStatus.PAID);
+            Booking saved = saveTransition(booking, previous, "Quá hạn check-in; booking hết hiệu lực theo chính sách hủy đã gửi.");
+            releaseReservation(saved.getId());
+            contractRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
+                    .filter(contract -> contract.getStatus() == ContractStatus.DRAFT)
+                    .ifPresent(contract -> {
+                        contract.setStatus(ContractStatus.TERMINATED);
+                        contract.setTerminatedAt(now);
+                        contract.setTerminationReason("Đã quá hạn check-in theo điều khoản booking.");
+                        contractRepository.save(contract);
+                    });
+            refreshRoomStatus(room(roomSlot(saved.getRoomSlotId()).getRoomId()));
         }
     }
 
@@ -633,12 +717,32 @@ public class BookingServiceImpl implements BookingService {
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(b.getTenantId()).orElse(null);
         User user = tenant == null ? null : userRepository.findByEmailAndIsDeletedFalse(tenant.getEmail()).orElse(null);
         return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), b.getExpectedMoveInDate(),
-                b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(),
+                b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(), b.getCheckInDeadline(), b.getContractId(),
                 b.getCancellationPolicy(), b.getDepositStatus(), b.getRejectReason(), b.getStatus(),
                 b.getTermsAcceptedAt(), b.getCreatedAt(), b.getUpdatedAt(), user == null ? b.getTenantId() : user.getId(),
                 tenant == null ? null : tenant.getFullName(), tenant == null ? null : tenant.getEmail(),
                 tenant == null ? null : tenant.getPhone(), room.getRoomNumber(), room.getBranchId(),
                 branch == null ? null : branch.getName(), b.getTimeline() == null ? List.of() : List.copyOf(b.getTimeline()));
+    }
+
+    private void refreshRoomStatus(Room room) {
+        if (room.getStatus() == com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.MAINTENANCE
+                || room.getStatus() == com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.INACTIVE) return;
+        List<String> slotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(List.of(room.getId())).stream()
+                .map(RoomSlot::getId).toList();
+        if (slotIds.isEmpty()) return;
+        if (room.getRoomMode() == com.kitolam.rentalroommanagement.modules.room.enums.RoomMode.WHOLE_ROOM) {
+            boolean occupied = roomSlotOccupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(
+                    slotIds, List.of(OccupancyStatus.ACTIVE)).size() > 0;
+            room.setStatus(occupied ? com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.OCCUPIED
+                    : com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.AVAILABLE);
+        } else {
+            var active = roomSlotOccupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(slotIds, List.of(OccupancyStatus.ACTIVE));
+            boolean allUsed = slotIds.stream().allMatch(slotId -> active.stream().anyMatch(occupancy -> slotId.equals(occupancy.getRoomSlotId())));
+            room.setStatus(allUsed ? com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.OCCUPIED
+                    : com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus.AVAILABLE);
+        }
+        roomRepository.save(room);
     }
 
     private BookingPaymentResponse paymentResponse(Payment p, String paymentUrl) {

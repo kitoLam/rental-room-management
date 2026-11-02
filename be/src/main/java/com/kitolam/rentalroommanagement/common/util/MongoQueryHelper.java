@@ -45,7 +45,14 @@ public final class MongoQueryHelper {
 
     public static void addObjectIdEquals(List<Criteria> criteria, String field, String id) {
         if (StringUtils.hasText(id)) {
-            criteria.add(Criteria.where(field).is(toObjectId(id)));
+            if (ObjectId.isValid(id)) {
+                criteria.add(new Criteria().orOperator(
+                        Criteria.where(field).is(new ObjectId(id)),
+                        Criteria.where(field).is(id)
+                ));
+            } else {
+                criteria.add(Criteria.where(field).is(id));
+            }
         }
     }
 

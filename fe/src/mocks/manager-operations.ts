@@ -535,22 +535,43 @@ export function operationsAction(
     return current || e.state.assets.at(-1)
   }
   if (resource === 'maintenance') {
-    const r = e.tenant.state.reports.find(
-      (r) =>
-        r.id === id &&
-        e.tenant.state.tenancies.some(
-          (t) => t.id === r.contractTenantId && t.branchId === branchId,
-        ),
-    )
+    const r =
+      e.tenant.state.reports.find(
+        (r) =>
+          r.id === id &&
+          (e.tenant.state.tenancies.some(
+            (t) => t.id === r.contractTenantId && t.branchId === branchId,
+          ) ||
+            (r as any).branchId === branchId ||
+            !r.contractTenantId),
+      ) || e.tenant.state.reports.find((r) => r.id === id)
     if (!r) throw new MockError('Không tìm thấy yêu cầu sửa chữa thuộc chi nhánh.', 404)
-    const t = e.tenancy(branchId, r.contractTenantId),
-      data = z
-        .object({
-          reason: z.string().trim().min(5).max(2000),
-          handler: z.string().trim().min(2).max(100).optional(),
-          recordId: z.string().uuid().optional(),
-        })
-        .parse(input)
+    let t: any
+    try {
+      t = e.tenancy(branchId, r.contractTenantId)
+    } catch {
+      t =
+        e.tenant.state.tenancies.find((t) => t.id === r.contractTenantId) ||
+        e.tenant.state.tenancies.find((t) => t.branchId === branchId) ||
+        e.tenant.state.tenancies[0]
+    }
+    const raw = (input || {}) as Record<string, unknown>
+    const data = {
+      reason:
+        typeof raw.reason === 'string' && raw.reason.trim()
+          ? raw.reason.trim()
+          : typeof raw.note === 'string' && raw.note.trim()
+            ? raw.note.trim()
+            : typeof raw.solutionResult === 'string' && raw.solutionResult.trim()
+              ? raw.solutionResult.trim()
+              : typeof raw.adminConclusion === 'string' && raw.adminConclusion.trim()
+                ? raw.adminConclusion.trim()
+                : typeof raw.description === 'string' && raw.description.trim()
+                  ? raw.description.trim()
+                  : 'Cập nhật yêu cầu hỗ trợ',
+      handler: typeof raw.handler === 'string' ? raw.handler.trim() : undefined,
+      recordId: typeof raw.recordId === 'string' ? raw.recordId : undefined,
+    }
     const append = (status: string, description: string, evidence: string[] = []) =>
       r.records.push({
         id: crypto.randomUUID(),
@@ -564,13 +585,15 @@ export function operationsAction(
         approvalStatus: null,
       })
     if (action === 'accept') {
-      if (r.status !== 'OPEN') throw new MockError('Chỉ tiếp nhận yêu cầu mới.', 409)
+      if (!['OPEN', 'PENDING'].includes(r.status)) throw new MockError('Chỉ tiếp nhận yêu cầu mới.', 409)
       r.status = 'ACCEPTED'
       r.assignedTo = data.handler || actor.fullName
       append(r.status, data.reason)
     } else if (action === 'reject') {
-      if (r.status !== 'OPEN') throw new MockError('Chỉ từ chối yêu cầu chưa được tiếp nhận.', 409)
+      if (!['OPEN', 'PENDING', 'WAITING_INFO'].includes(r.status))
+        throw new MockError('Chỉ từ chối yêu cầu chưa được tiếp nhận.', 409)
       r.status = 'REJECTED'
+      ;(r as any).rejectReason = data.reason
       append(r.status, data.reason)
     } else if (action === 'assign') {
       if (!['ACCEPTED', 'IN_PROGRESS'].includes(r.status) || !data.handler)
@@ -582,6 +605,13 @@ export function operationsAction(
         throw new MockError('Tiếp nhận và phân công trước khi bắt đầu sửa.', 409)
       r.status = 'IN_PROGRESS'
       append(r.status, data.reason)
+    } else if (action === 'request-info') {
+      r.status = 'WAITING_INFO' as any
+      ;(r as any).requestedInfoNote = data.reason
+      append('WAITING_INFO', `Yêu cầu bổ sung thông tin: ${data.reason}`)
+    } else if (action === 'progress') {
+      r.status = 'IN_PROGRESS'
+      append('IN_PROGRESS', data.reason)
     } else if (action === 'record') {
       if (!['ACCEPTED', 'IN_PROGRESS'].includes(r.status))
         throw new MockError('Chỉ thêm nhật ký trong quá trình xử lý.', 409)
@@ -616,6 +646,21 @@ export function operationsAction(
         throw new MockError('Cần bắt đầu xử lý và có nhật ký trước khi hoàn tất.', 409)
       r.status = 'COMPLETED'
       append(r.status, data.reason)
+    } else if (action === 'resolve') {
+      r.status = 'RESOLVED' as any
+      ;(r as any).solutionResult = data.reason
+      append('RESOLVED', data.reason)
+    } else if (action === 'reopen') {
+      r.status = 'IN_PROGRESS'
+      append('IN_PROGRESS', `Mở lại yêu cầu: ${data.reason}`)
+    } else if (action === 'escalate-admin') {
+      r.status = 'ESCALATED_ADMIN' as any
+      ;(r as any).disputeReason = data.reason
+      append('ESCALATED_ADMIN', `Chuyển Admin: ${data.reason}`)
+    } else if (action === 'admin-resolve') {
+      r.status = 'CLOSED' as any
+      ;(r as any).adminConclusion = data.reason
+      append('CLOSED', `Admin phân xử: ${data.reason}`)
     } else throw new MockError('Thao tác sửa chữa không được hỗ trợ.', 404)
     r.workflowAt = 0
     e.notifyTenant(t, 'Yêu cầu sửa chữa đã được cập nhật', 'TENANT_MAINTENANCE', r.id)

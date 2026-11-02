@@ -13,6 +13,8 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -23,6 +25,27 @@ public class Contract extends BaseDocument {
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String roomSlotId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String bookingId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String tenantId;
+
+    private String landlordName;
+    private String landlordIdNumber;
+    private String landlordAddress;
+    private String tenantName;
+    private String tenantIdNumber;
+    private String tenantAddress;
+    private String roomAddress;
+    private String roomMode;
 
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
@@ -40,6 +63,25 @@ public class Contract extends BaseDocument {
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal contractDepositAmount;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal electricityInitialReading;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal waterInitialReading;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal electricityRate;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal waterRate;
+
+    @Field(targetType = FieldType.DECIMAL128)
+    private BigDecimal parkingRate;
+
+    private Integer maxOccupants;
+
+    private List<ContractServiceSnapshot> services = new ArrayList<>();
 
     private Integer paymentDueDay;
 

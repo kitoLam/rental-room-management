@@ -10,6 +10,9 @@ import java.util.List;
 
 public record ReportRecordCreateRequest(
         @NotBlank @ValidObjectId String reportRequestId,
+        String actorId,
+        String actorRole,
+        String actorName,
         @ValidObjectId String managerId,
         @NotNull ReportRecordAction action,
         ReportRequestStatus statusFrom,

@@ -196,6 +196,20 @@ export const router = createBrowserRouter([
                     .AdminAuditDetail,
                 }),
               },
+              {
+                path: 'maintenance',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-maintenance-page'))
+                    .AdminMaintenancePage,
+                }),
+              },
+              {
+                path: 'maintenance/:reportId',
+                lazy: async () => ({
+                  Component: (await import('@/features/admin/admin-maintenance-detail-page'))
+                    .AdminMaintenanceDetailPage,
+                }),
+              },
             ],
           },
           {

@@ -30,6 +30,7 @@ const groups: [string, [string, string][]][] = [
     [
       ['owners', 'Danh bạ chủ trọ'],
       ['branches', 'Danh bạ chi nhánh'],
+      ['maintenance', 'Phân xử yêu cầu'],
       ['activity', 'Nhật ký hoạt động'],
     ],
   ],
@@ -101,6 +102,25 @@ export function AdminLayout() {
                   </div>
                 ))}
               </nav>
+              {user.roles.includes('ADMIN') && (
+                <div className="mb-5 hidden lg:block">
+                  <p className="mb-1 px-3 text-[11px] font-bold uppercase text-muted-foreground">
+                    Cho thuê
+                  </p>
+                  {[
+                    ['/manager/bookings', 'Đặt phòng & cọc'],
+                    ['/manager/contracts', 'Hợp đồng'],
+                  ].map(([to, label]) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      className="flex min-h-11 items-center rounded-lg px-3 text-sm text-muted-foreground hover:bg-surface hover:text-foreground"
+                    >
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              )}
               <select
                 aria-label="Điều hướng quản trị"
                 className="input lg:hidden"
@@ -117,6 +137,16 @@ export function AdminLayout() {
                   </optgroup>
                 ))}
               </select>
+              {user.roles.includes('ADMIN') && (
+                <div className="mt-3 grid gap-1 lg:hidden">
+                  <Link className="min-h-11 px-3 py-3 text-sm text-muted-foreground" to="/manager/bookings">
+                    Đặt phòng & cọc
+                  </Link>
+                  <Link className="min-h-11 px-3 py-3 text-sm text-muted-foreground" to="/manager/contracts">
+                    Hợp đồng
+                  </Link>
+                </div>
+              )}
               <div className="mt-3 flex gap-5 text-sm font-bold text-primary lg:mt-5 lg:grid lg:gap-3">
                 <Link to="/notifications">Thông báo</Link>
                 <Link to="/profile">Hồ sơ cá nhân</Link>

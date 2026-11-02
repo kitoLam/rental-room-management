@@ -609,23 +609,47 @@ export class ManagerEngine {
       case 'furnitures':
         records = this.state.assets.filter((a) => a.branchId === branchId)
         break
-      case 'maintenance':
+      case 'maintenance': {
+        const branchTenancies = this.tenant.state.tenancies.filter((t) => t.branchId === branchId)
+        const branchTenancyIds = new Set(branchTenancies.map((t) => t.id))
+        const branchRoomIds = new Set(branchTenancies.map((t) => t.roomId))
         records = this.tenant.state.reports
-          .filter((r) =>
-            this.tenant.state.tenancies.some(
-              (t) => t.id === r.contractTenantId && t.branchId === branchId,
-            ),
-          )
+          .filter((r) => {
+            if (!branchId) return true
+            return (
+              branchTenancyIds.has(r.contractTenantId) ||
+              branchRoomIds.has((r as any).roomId || r.assetId) ||
+              (r as any).branchId === branchId ||
+              !r.contractTenantId
+            )
+          })
           .map((r) => {
-            const t = this.tenancy(branchId, r.contractTenantId)
+            const t =
+              this.tenant.state.tenancies.find(
+                (t) => t.id === r.contractTenantId && t.branchId === branchId,
+              ) ||
+              this.tenant.state.tenancies.find((t) => t.id === r.contractTenantId) ||
+              this.tenant.state.tenancies.find((t) => t.roomId === ((r as any).roomId || r.assetId)) ||
+              branchTenancies[0] ||
+              this.tenant.state.tenancies[0]
+            const room = this.inventory.state.rooms.find(
+              (rm) => rm.id === (t?.roomId || (r as any).roomId || r.assetId),
+            )
+            const stMap: Record<string, string> = {
+              OPEN: 'PENDING',
+              ACCEPTED: 'IN_PROGRESS',
+              COMPLETED: 'RESOLVED',
+            }
             return {
               ...r,
-              roomId: t.roomId,
-              roomName: t.roomName,
-              tenantName: this.namedTenancy(t).userName,
+              status: stMap[r.status] || r.status || 'PENDING',
+              roomId: t?.roomId || (r as any).roomId || r.assetId || '',
+              roomName: t?.roomName || room?.title || 'Phòng trọ',
+              tenantName: t ? this.namedTenancy(t).userName : 'Khách thuê',
             }
           })
         break
+      }
     }
     const q = (params.get('q') || '').toLocaleLowerCase('vi')
     return records.filter((row) => {
@@ -667,6 +691,12 @@ export class ManagerEngine {
     const row = this.list(actor, branchId, resource).find(
       (row) => (row as { id: string }).id === id,
     )
+    if (!row && resource === 'maintenance') {
+      const fallbackRow = this.list(actor, '', resource).find(
+        (r) => (r as { id: string }).id === id,
+      )
+      if (fallbackRow) return fallbackRow
+    }
     if (!row) throw new MockError('Không tìm thấy dữ liệu thuộc chi nhánh.', 404)
     return row
   }
