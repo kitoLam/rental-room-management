@@ -90,7 +90,7 @@ src/main/java/com/kitolam/rentalroommanagement
 | roomslot | RoomSlot | room_slots | /api/v1/room-slots |
 | furniture | Furniture | furnitures | /api/v1/furnitures |
 | shift | Shift | shifts | /api/v1/shifts |
-| serviceitem | ServiceItem | services | /api/v1/services |
+| serviceitem | ServiceItem | services | /api/v1/services, /api/v1/public/services |
 | roomservice | RoomService | room_services | /api/v1/room-services |
 | slotservice | SlotService | slot_services | /api/v1/slot-services |
 | servicerequest | ServiceRequest (+ HistoryEntry) | service_requests | /api/v1/service-requests |
@@ -111,7 +111,9 @@ src/main/java/com/kitolam/rentalroommanagement
 
 > `SERVICES` đặt tên class là `ServiceItem` để không trùng annotation `@Service` của Spring.
 
-> `servicerequest` là luồng đăng ký / ngừng dịch vụ. `room_services` / `slot_services` chỉ được tạo hoặc ngừng khi quản lý xác nhận ngày lắp đặt / kết thúc, nên phí luôn tính theo ngày đã xác nhận. Khi module hợp đồng chưa có API, bật `SERVICE_REQUEST_TENANCY_STUB_ENABLED` ở local (xem `.env.example`).
+> `servicerequest` là luồng đăng ký / ngừng dịch vụ. `room_services` / `slot_services` chỉ được tạo hoặc ngừng khi quản lý xác nhận ngày lắp đặt / kết thúc, nên phí luôn tính theo ngày đã xác nhận. Phòng / chỗ của người thuê lấy từ hợp đồng `ACTIVE` đang hiệu lực (qua `ContractService`); không có hợp đồng thì trả 403. `SERVICE_REQUEST_TENANCY_STUB_ENABLED=true` chỉ là fallback để demo không cần ký hợp đồng (xem `.env.example`).
+
+> Dịch vụ có cờ `mandatory`: dịch vụ bắt buộc (điện, nước `METERED` luôn bắt buộc; vệ sinh/rác do admin đánh dấu) luôn áp dụng, không đăng ký / ngừng qua `servicerequest`. `GET /api/v1/public/services?roomMode=ROOM|SLOT` (không cần đăng nhập) trả danh mục đang cung cấp cho mục "Dịch vụ tham khảo" ở trang chi tiết phòng; lựa chọn ở đó chỉ dùng để ước tính chi phí, không lưu.
 
 ## 3. Quy ước code
 
