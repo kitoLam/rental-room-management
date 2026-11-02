@@ -41,6 +41,8 @@ app:
   seed:
     auth:
       enabled: ${AUTH_SEED_ENABLED:false}
+    services:
+      enabled: ${SERVICE_SEED_ENABLED:false}
   security:
     jwt-secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:rental-room-management}
