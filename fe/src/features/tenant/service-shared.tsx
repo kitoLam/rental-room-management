@@ -16,7 +16,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Facts, TenantLink } from './components'
-import { isActive, useTenant, useTenantMutation } from './context'
+import { isActive, useServiceContract, useTenant, useTenantMutation } from './context'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -27,14 +27,14 @@ export function RegisterService({
   service: TenantService
   onSuccess: () => void
 }) {
-  const { tenancy: t } = useTenant(),
+  const contract = useServiceContract(),
     form = useForm<z.infer<typeof serviceRegistrationFormSchema>>({
       resolver: zodResolver(serviceRegistrationFormSchema),
       defaultValues: { serviceId: s.id, proposedDate: today(), note: '' },
     }),
     mutation = useTenantMutation(
       (id, value: z.infer<typeof serviceRegistrationFormSchema>) =>
-        tenantApi.registerService(id, { ...value, contractEndDate: t.endDate }),
+        tenantApi.registerService(id, { ...value, contractEndDate: contract.endDate ?? '' }),
       onSuccess,
     )
   return (
@@ -62,7 +62,7 @@ export function RegisterService({
           type="date"
           className="input"
           min={today()}
-          max={t.endDate}
+          max={contract.endDate}
           {...form.register('proposedDate')}
         />
       </Field>
@@ -70,7 +70,7 @@ export function RegisterService({
         <textarea id="service-note" className="input min-h-24" {...form.register('note')} />
       </Field>
       <InlineError error={mutation.error} />
-      <Button type="submit" loading={mutation.isPending} disabled={!isActive(t)}>
+      <Button type="submit" loading={mutation.isPending} disabled={!contract.active}>
         Gửi đăng ký
       </Button>
     </form>
@@ -84,7 +84,7 @@ export function StopService({
   service: TenantService
   onSuccess: () => void
 }) {
-  const { tenancy: t } = useTenant(),
+  const contract = useServiceContract(),
     form = useForm<z.infer<typeof serviceStopFormSchema>>({
       resolver: zodResolver(serviceStopFormSchema),
       defaultValues: { proposedDate: today(), note: '' },
@@ -110,7 +110,7 @@ export function StopService({
           type="date"
           className="input"
           min={s.startDate && s.startDate > today() ? s.startDate : today()}
-          max={t.endDate}
+          max={contract.endDate}
           {...form.register('proposedDate')}
         />
       </Field>
@@ -118,7 +118,7 @@ export function StopService({
         <textarea id="service-stop-note" className="input min-h-24" {...form.register('note')} />
       </Field>
       <InlineError error={mutation.error} />
-      <Button type="submit" variant="outline" loading={mutation.isPending} disabled={!isActive(t)}>
+      <Button type="submit" variant="outline" loading={mutation.isPending} disabled={!contract.active}>
         Gửi yêu cầu ngừng dịch vụ
       </Button>
     </form>

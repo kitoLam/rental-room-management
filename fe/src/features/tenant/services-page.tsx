@@ -6,7 +6,7 @@ import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import { useState } from 'react'
 import { Facts, TenantPage, TenantStatus } from './components'
-import { isActive, useTenant, useTenantMutation, useTenantQuery } from './context'
+import { useServiceContract, useTenantMutation, useTenantQuery } from './context'
 import { RegisterService, StopService } from './service-shared'
 import { serviceActions } from './status'
 
@@ -14,7 +14,7 @@ import { serviceActions } from './status'
 const proposalStatuses = ['PENDING', 'APPROVED']
 
 export function ServicesPage() {
-  const { tenancy: t } = useTenant(),
+  const contract = useServiceContract(),
     query = useTenantQuery('services', (id) => tenantApi.services(id), [], true),
     [selected, setSelected] = useState<TenantService | null>(null),
     [success, setSuccess] = useState('')
@@ -64,7 +64,7 @@ export function ServicesPage() {
                 {s.status && <TenantStatus value={s.status} />}
                 <Button
                   variant="outline"
-                  disabled={!isActive(t) && !s.subscriptionId}
+                  disabled={!contract.active && !s.subscriptionId}
                   onClick={() => {
                     cancelRequest.reset()
                     setSuccess('')
