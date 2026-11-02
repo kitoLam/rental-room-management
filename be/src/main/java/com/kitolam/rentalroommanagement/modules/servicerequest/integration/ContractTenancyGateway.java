@@ -8,6 +8,8 @@ import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomResponse;
 import com.kitolam.rentalroommanagement.modules.room.service.RoomService;
+import com.kitolam.rentalroommanagement.modules.roomslot.dto.request.RoomSlotFilterRequest;
+import com.kitolam.rentalroommanagement.modules.roomslot.dto.response.RoomSlotResponse;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -30,6 +32,7 @@ import java.util.Optional;
 public class ContractTenancyGateway implements TenancyGateway {
 
     private static final int MAX_ACTIVE_CONTRACTS = 20;
+    private static final int MAX_SLOTS_PER_ROOM = 100;
 
     private final ContractService contracts;
     private final RoomService rooms;
@@ -56,9 +59,18 @@ public class ContractTenancyGateway implements TenancyGateway {
         RoomResponse room = rooms.getById(contract.roomId());
         String branchName = branches.getById(room.branchId()).name();
         String roomSlotId = StringUtils.hasText(contract.roomSlotId()) ? contract.roomSlotId() : null;
-        String slotCode = roomSlotId == null ? null : roomSlots.getById(roomSlotId).slotCode();
+        String slotCode = roomSlotId == null ? null : slotCode(room.id(), roomSlotId);
         boolean representative = tenantId != null && tenantId.equals(contract.tenantId());
         return new ActiveTenancySnapshot(tenantId, contract.id(), null, representative, room.branchId(), branchName,
                 room.id(), room.roomNumber(), roomSlotId, slotCode, contract.startDate(), contract.endDate());
+    }
+
+    /** RoomSlotService.getById is not implemented yet, so look the slot up among the room's slots. */
+    private String slotCode(String roomId, String roomSlotId) {
+        return roomSlots.search(new RoomSlotFilterRequest(roomId, null, null), PageRequest.of(0, MAX_SLOTS_PER_ROOM))
+                .getContent().stream()
+                .filter(slot -> roomSlotId.equals(slot.id()))
+                .map(RoomSlotResponse::slotCode)
+                .findFirst().orElse(null);
     }
 }
