@@ -21,6 +21,7 @@ export function TenantStatus({ value }: { value: string }) {
                 'PARTIAL',
                 'REVIEW',
                 'CANCEL_REQUESTED',
+                'STOP_PENDING',
                 'OPEN',
                 'WAITING_INFO',
                 'INFO_SUPPLEMENTED',

@@ -12,6 +12,7 @@ import {
   tenantContractSchema,
   type ReportInput,
   type MaintenanceReport,
+  type TenantService,
 } from '@/interfaces/tenant'
 
 import { provider } from './config'
@@ -72,6 +73,15 @@ function adaptReportRequest(item: ReportRequestItem, tenancyId?: string): Mainte
 
 const path = (id: string, resource: string) =>
   `/api/tenant/tenancies/${encodeURIComponent(id)}/${resource}`
+
+export type ServiceRegistrationValue = {
+  serviceId: string
+  proposedDate: string
+  note: string
+  contractEndDate: string
+}
+export type ServiceStopValue = { subscriptionId: string; proposedDate: string; note: string }
+
 export const tenantApi = {
   manualPay: (id: string, invoiceId: string, value: unknown) => request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}/manual-payments`), tenantPaymentSchema, write('POST', value)),
   prepay: (id: string, value: unknown) =>
@@ -124,102 +134,66 @@ export const tenantApi = {
       tenantPaymentSchema,
       write('POST', value),
     ),
-  services: async (id: string, tenancyContext?: { roomId?: string; contractId?: string }) => {
+  services: async (id: string): Promise<TenantService[]> => {
     if (provider('utilities') === 'real') {
-      const roomId = tenancyContext?.roomId
-      const contractId = tenancyContext?.contractId
-      if (!roomId || !contractId) {
-        return []
-      }
-      const roomServices = await utilitiesService.roomServices.listByRoom(roomId)
-      const contractServices = await utilitiesService.contractServices.listByContract(contractId)
-      const csByRoomServiceId = new Map(contractServices.map((cs) => [cs.roomServiceId, cs]))
-
-      return roomServices.map((rs) => {
-        const cs = csByRoomServiceId.get(rs.id)
-        return {
-          id: rs.id,
-          name: rs.serviceName,
-          mandatory: Boolean(rs.mandatory),
-          unit: rs.unit || 'tháng',
-          unitPrice: rs.unitPrice,
-          subscriptionId: cs ? cs.id : null,
-          status: cs ? cs.status : null,
-          startDate: cs ? cs.startDate : rs.startDate,
-          endDate: (cs ? cs.endDate : rs.endDate) ?? null,
-          note: cs?.reason || '',
-          history: cs?.processedAt
-            ? [
-                {
-                  status: cs.status,
-                  at: cs.processedAt,
-                  note: cs.reason || 'Đã xử lý',
-                },
-              ]
-            : [],
-        }
-      })
+      // BE tự xác định phòng / chỗ của người thuê từ token, FE không gửi roomId / contractId.
+      const items = await utilitiesService.serviceRequests.catalog()
+      return items.map((s) => ({
+        id: s.serviceId,
+        name: s.name,
+        mandatory: false,
+        unit: s.unit,
+        unitPrice: s.subscription?.unitPrice ?? s.unitPrice,
+        subscriptionId: s.subscription?.id ?? null,
+        requestId: s.openRequest?.id ?? null,
+        status: s.displayStatus,
+        allowedActions: s.allowedActions,
+        startDate: s.subscription?.startDate ?? s.openRequest?.proposedDate ?? null,
+        endDate: s.subscription?.endDate ?? null,
+        note: '',
+        history: [],
+      }))
     }
     return request('tenant', path(id, 'services'), z.array(serviceSchema))
   },
-  registerService: async (id: string, value: unknown) => {
+  registerService: async (id: string, value: ServiceRegistrationValue) => {
     if (provider('utilities') === 'real') {
-      const v = value as {
-        serviceId: string
-        startDate: string
-        endDate: string
-        note?: string
-        contractId: string
-        roomServiceId?: string
-      }
-      const item = await utilitiesService.contractServices.register({
-        contractId: v.contractId,
-        contractTenantId: id,
-        roomServiceId: v.roomServiceId || v.serviceId,
-        startDate: v.startDate,
-        endDate: v.endDate,
-        reason: v.note,
+      return utilitiesService.serviceRequests.register({
+        serviceId: value.serviceId,
+        proposedDate: value.proposedDate,
+        note: value.note || undefined,
       })
-      return {
-        id: item.id,
-        name: item.serviceName,
-        mandatory: false,
-        unit: '',
-        unitPrice: item.agreedUnitPrice,
-        subscriptionId: item.id,
-        status: item.status,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        note: item.reason || '',
-        history: [],
-      }
     }
-    return request('tenant', path(id, 'services'), serviceSchema, write('POST', value))
+    // Mock engine dùng dạng cũ: khoảng ngày sử dụng trong thời hạn thuê.
+    return request(
+      'tenant',
+      path(id, 'services'),
+      serviceSchema,
+      write('POST', {
+        serviceId: value.serviceId,
+        startDate: value.proposedDate,
+        endDate: value.contractEndDate,
+        note: value.note,
+      }),
+    )
   },
-  cancelService: async (id: string, serviceId: string) => {
+  stopService: async (id: string, value: ServiceStopValue) => {
     if (provider('utilities') === 'real') {
-      const item = await utilitiesService.contractServices.cancel(serviceId)
-      return {
-        id: item.id,
-        name: item.serviceName,
-        mandatory: false,
-        unit: '',
-        unitPrice: item.agreedUnitPrice,
-        subscriptionId: item.id,
-        status: item.status,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        note: item.reason || '',
-        history: [],
-      }
+      return utilitiesService.serviceRequests.terminate({
+        subscriptionId: value.subscriptionId,
+        proposedDate: value.proposedDate,
+        note: value.note || undefined,
+      })
     }
     return request(
       'tenant',
-      path(id, `services/${encodeURIComponent(serviceId)}/cancel`),
+      path(id, `services/${encodeURIComponent(value.subscriptionId)}/cancel`),
       serviceSchema,
       write('POST'),
     )
   },
+  cancelServiceRequest: async (_id: string, requestId: string) =>
+    utilitiesService.serviceRequests.cancel(requestId),
   utilities: (id: string) => request('tenant', path(id, 'utilities'), z.array(chargeSchema)),
   allocations: (id: string) => request('tenant', path(id, 'allocations'), z.array(proposalSchema)),
   propose: async (id: string, value: unknown) => {

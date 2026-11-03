@@ -2,7 +2,8 @@ import { Field, InlineError, Notice } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import {
   proposalInputSchema,
-  serviceInputSchema,
+  serviceRegistrationFormSchema,
+  serviceStopFormSchema,
   type TenantService,
   type UtilityCharge,
 } from '@/interfaces/tenant'
@@ -15,7 +16,9 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Facts, TenantLink } from './components'
-import { isActive, useTenant, useTenantMutation } from './context'
+import { isActive, useServiceContract, useTenant, useTenantMutation } from './context'
+
+const today = () => new Date().toISOString().slice(0, 10)
 
 export function RegisterService({
   service: s,
@@ -24,19 +27,14 @@ export function RegisterService({
   service: TenantService
   onSuccess: () => void
 }) {
-  const { tenancy: t } = useTenant(),
-    form = useForm<z.infer<typeof serviceInputSchema>>({
-      resolver: zodResolver(serviceInputSchema),
-      defaultValues: {
-        serviceId: s.id,
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: t.endDate,
-        note: '',
-      },
+  const contract = useServiceContract(),
+    form = useForm<z.infer<typeof serviceRegistrationFormSchema>>({
+      resolver: zodResolver(serviceRegistrationFormSchema),
+      defaultValues: { serviceId: s.id, proposedDate: today(), note: '' },
     }),
     mutation = useTenantMutation(
-      (id, value: z.infer<typeof serviceInputSchema>) =>
-        tenantApi.registerService(id, { ...value, contractId: t.contractId, roomServiceId: s.id }),
+      (id, value: z.infer<typeof serviceRegistrationFormSchema>) =>
+        tenantApi.registerService(id, { ...value, contractEndDate: contract.endDate ?? '' }),
       onSuccess,
     )
   return (
@@ -44,7 +42,10 @@ export function RegisterService({
       className="grid min-w-0 grid-cols-1 gap-5"
       onSubmit={form.handleSubmit((value) => mutation.mutate(value))}
     >
-      <Notice>Đăng ký cần quản lý duyệt trước khi sử dụng.</Notice>
+      <Notice>
+        Ngày bạn chọn chỉ là ngày đề nghị. Quản lý duyệt rồi xác nhận ngày lắp đặt; phí chỉ tính từ
+        ngày lắp đặt được xác nhận.
+      </Notice>
       <Facts
         items={[
           ['Dịch vụ', s.name],
@@ -52,39 +53,73 @@ export function RegisterService({
         ]}
       />
       <Field
-        id="service-start"
-        label="Bắt đầu sử dụng"
-        error={form.formState.errors.startDate?.message}
+        id="service-proposed-date"
+        label="Ngày đề nghị lắp đặt"
+        error={form.formState.errors.proposedDate?.message}
       >
         <input
-          id="service-start"
+          id="service-proposed-date"
           type="date"
           className="input"
-          min={new Date().toISOString().slice(0, 10)}
-          max={t.endDate}
-          {...form.register('startDate')}
-        />
-      </Field>
-      <Field
-        id="service-end"
-        label="Kết thúc (không gồm ngày này)"
-        error={form.formState.errors.endDate?.message}
-      >
-        <input
-          id="service-end"
-          type="date"
-          className="input"
-          min={t.startDate}
-          max={t.endDate}
-          {...form.register('endDate')}
+          min={today()}
+          max={contract.endDate}
+          {...form.register('proposedDate')}
         />
       </Field>
       <Field id="service-note" label="Ghi chú" error={form.formState.errors.note?.message}>
         <textarea id="service-note" className="input min-h-24" {...form.register('note')} />
       </Field>
       <InlineError error={mutation.error} />
-      <Button type="submit" loading={mutation.isPending} disabled={!isActive(t)}>
+      <Button type="submit" loading={mutation.isPending} disabled={!contract.active}>
         Gửi đăng ký
+      </Button>
+    </form>
+  )
+}
+
+export function StopService({
+  service: s,
+  onSuccess,
+}: {
+  service: TenantService
+  onSuccess: () => void
+}) {
+  const contract = useServiceContract(),
+    form = useForm<z.infer<typeof serviceStopFormSchema>>({
+      resolver: zodResolver(serviceStopFormSchema),
+      defaultValues: { proposedDate: today(), note: '' },
+    }),
+    mutation = useTenantMutation(
+      (id, value: z.infer<typeof serviceStopFormSchema>) =>
+        tenantApi.stopService(id, { ...value, subscriptionId: s.subscriptionId || s.id }),
+      onSuccess,
+    )
+  return (
+    <form
+      className="grid min-w-0 grid-cols-1 gap-5"
+      onSubmit={form.handleSubmit((value) => mutation.mutate(value))}
+    >
+      <Notice>Dịch vụ vẫn được tính phí đến ngày kết thúc mà quản lý xác nhận.</Notice>
+      <Field
+        id="service-stop-date"
+        label="Ngày đề nghị ngừng"
+        error={form.formState.errors.proposedDate?.message}
+      >
+        <input
+          id="service-stop-date"
+          type="date"
+          className="input"
+          min={s.startDate && s.startDate > today() ? s.startDate : today()}
+          max={contract.endDate}
+          {...form.register('proposedDate')}
+        />
+      </Field>
+      <Field id="service-stop-note" label="Lý do / ghi chú" error={form.formState.errors.note?.message}>
+        <textarea id="service-stop-note" className="input min-h-24" {...form.register('note')} />
+      </Field>
+      <InlineError error={mutation.error} />
+      <Button type="submit" variant="outline" loading={mutation.isPending} disabled={!contract.active}>
+        Gửi yêu cầu ngừng dịch vụ
       </Button>
     </form>
   )

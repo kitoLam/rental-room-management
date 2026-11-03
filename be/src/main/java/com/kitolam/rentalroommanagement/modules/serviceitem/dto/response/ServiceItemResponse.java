@@ -15,6 +15,7 @@ public record ServiceItemResponse(
         BigDecimal unitPrice,
         CalculationType calculationType,
         ServiceScope scope,
+        boolean mandatory,
         ServiceStatus status,
         Instant createdAt,
         Instant updatedAt

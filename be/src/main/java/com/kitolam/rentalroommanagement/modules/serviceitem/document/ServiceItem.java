@@ -34,5 +34,8 @@ public class ServiceItem extends BaseDocument {
 
     private ServiceScope scope;
 
+    /** Always applied to the room / slot; tenants cannot register or stop it. */
+    private boolean mandatory;
+
     private ServiceStatus status = ServiceStatus.ACTIVE;
 }

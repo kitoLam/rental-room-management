@@ -5,7 +5,14 @@ import { formatVnd } from '@/lib/format'
 import type { Room } from '@/interfaces/domain'
 import { estimateMonthlyCost } from '../lib/cost-estimate'
 
-export function RoomCostEstimator({ room }: { room: Room }) {
+export function RoomCostEstimator({
+  room,
+  extras = [],
+}: {
+  room: Room
+  /** Dịch vụ không tính theo chỉ số đã chọn ở mục "Dịch vụ tham khảo". */
+  extras?: { label: string; cost: number }[]
+}) {
   const id = useId()
   const [values, setValues] = useState({
     people: '1',
@@ -54,7 +61,7 @@ export function RoomCostEstimator({ room }: { room: Room }) {
     return undefined
   }
   const valid = fields.every(({ key }) => !errorFor(key))
-  const costs =
+  const base =
     valid && missingRates.length === 0
       ? estimateMonthlyCost({
           rent: room.price,
@@ -65,6 +72,12 @@ export function RoomCostEstimator({ room }: { room: Room }) {
           parkingRate: rates.parkingRate ?? 0,
         })
       : null
+  const extraTotal = extras.reduce((sum, item) => sum + item.cost, 0)
+  const costs = base && {
+    ...base,
+    total: base.total + extraTotal,
+    perPerson: (base.total + extraTotal) / numbers.people,
+  }
   const money = (value: number) => formatVnd(Math.round(value))
 
   return (
@@ -151,6 +164,7 @@ export function RoomCostEstimator({ room }: { room: Room }) {
                   ['Tiền điện', costs.electricity],
                   ['Tiền nước', costs.water],
                   ['Tiền gửi xe', costs.parking],
+                  ...extras.map((item) => [item.label, item.cost] as const),
                 ] as const
               ).map(([label, cost]) => (
                 <div key={label} className="flex flex-wrap justify-between gap-2">
@@ -177,8 +191,8 @@ export function RoomCostEstimator({ room }: { room: Room }) {
         )}
       </div>
       <p className="mt-4 text-xs leading-6 text-muted-foreground">
-        Ước tính gồm tiền thuê, điện, nước và gửi xe; chưa gồm tiền cọc và các dịch vụ khác. Chi phí
-        thực tế phụ thuộc mức sử dụng và thỏa thuận thuê.
+        Ước tính gồm tiền thuê, điện, nước, gửi xe và các dịch vụ đã chọn ở mục Dịch vụ tham khảo; chưa
+        gồm tiền cọc. Chi phí thực tế phụ thuộc mức sử dụng và thỏa thuận thuê.
       </p>
     </section>
   )

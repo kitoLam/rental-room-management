@@ -14,6 +14,8 @@ public record RoomServiceResponse(
         LocalDate startDate,
         LocalDate endDate,
         RoomServiceStatus status,
+        String stopReason,
+        String sourceRequestId,
         Instant createdAt,
         Instant updatedAt
 ) {

@@ -144,9 +144,10 @@ export const rooms: Room[] = titles.map((title, index) => {
       ...(isSlot ? ['Tủ cá nhân'] : ['Bếp riêng']),
     ],
     services: [
-      { name: 'Điện', price: 3500, unit: 'kWh' },
-      { name: 'Nước', price: 18000, unit: 'm³' },
-      { name: 'Internet', price: 100000, unit: 'phòng/tháng' },
+      { name: 'Điện', price: 3500, unit: 'kWh', mandatory: true, calculationType: 'METERED' },
+      { name: 'Nước', price: 18000, unit: 'm³', mandatory: true, calculationType: 'METERED' },
+      { name: 'Vệ sinh / rác', price: 30000, unit: 'phòng/tháng', mandatory: true, calculationType: 'FIXED' },
+      { name: 'Internet', price: 100000, unit: 'phòng/tháng', mandatory: false, calculationType: 'FIXED' },
     ],
   }
 })

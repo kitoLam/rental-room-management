@@ -114,6 +114,7 @@ export function ManagerStatus({ value }: { value: string }) {
                 'OPEN',
                 'AWAITING_PAYMENT',
                 'CANCEL_REQUESTED',
+                'STOP_PENDING',
                 'WAITING_INFO',
                 'INFO_SUPPLEMENTED',
                 'REQUESTED_INFO',

@@ -52,11 +52,28 @@ export const roomSchema = z.object({
   floor: z.number().nullable(),
   description: z.string(),
   amenities: z.array(z.string()),
-  services: z.array(z.object({ name: z.string(), price: z.number(), unit: z.string() })),
+  services: z.array(
+    z.object({
+      name: z.string(),
+      price: z.number(),
+      unit: z.string(),
+      mandatory: z.boolean().optional(),
+      calculationType: z.string().optional(),
+    }),
+  ),
   utilityRates: utilityRatesSchema.nullish(),
   ownerName: z.string().optional(),
 })
 export type Room = z.infer<typeof roomSchema>
+// Mục "Dịch vụ tham khảo": bắt buộc luôn tích sẵn; tùy chọn tự tích và chỉnh số lượng. Đơn giá chỉ xem.
+export type RoomServiceOption = {
+  id: string
+  name: string
+  unit: string
+  price: number
+  mandatory: boolean
+  calculationType: string
+}
 export const policySchema = z.object({
   id: z.string().uuid(),
   branchId: z.string().uuid(),

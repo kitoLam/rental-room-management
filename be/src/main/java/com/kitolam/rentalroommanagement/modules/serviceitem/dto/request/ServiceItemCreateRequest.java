@@ -14,6 +14,8 @@ public record ServiceItemCreateRequest(
         @NotBlank String unit,
         @NotNull @PositiveOrZero BigDecimal unitPrice,
         @NotNull CalculationType calculationType,
-        @NotNull ServiceScope scope
+        @NotNull ServiceScope scope,
+        /** Optional, default false. Metered services are always mandatory. */
+        Boolean mandatory
 ) {
 }

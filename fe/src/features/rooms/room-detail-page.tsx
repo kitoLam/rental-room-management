@@ -31,6 +31,8 @@ import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
 import { RoomCostEstimator } from './components/room-cost-estimator'
+import { RoomServicePicker } from './components/room-service-picker'
+import { selectedServiceCosts, type ServiceSelection } from './lib/cost-estimate'
 import { useSession } from '@/features/auth/session-store'
 import { managerApi } from '@/services/manager'
 
@@ -50,6 +52,12 @@ export default function RoomDetailPage() {
     queryKey: ['rooms', roomId],
     queryFn: () => catalogService.room(roomId),
     enabled: validRoomId,
+  })
+  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>({})
+  const roomServices = useQuery({
+    queryKey: ['room-services', roomId, room.data?.rentalMode],
+    queryFn: () => catalogService.services(room.data!),
+    enabled: !!room.data,
   })
   const range = dateRangeSchema.safeParse({ startDate, endDate })
   const bookingAvailabilityEnabled =
@@ -200,27 +208,29 @@ export default function RoomDetailPage() {
                 </section>
                 <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-4 text-xl font-bold">Dịch vụ tham khảo</h2>
-                  {r.services.length ? (
-                    <dl className="divide-y divide-border">
-                      {r.services.map((s) => (
-                        <div
-                          key={s.name}
-                          className="flex flex-wrap justify-between gap-3 py-3 text-sm"
-                        >
-                          <dt>{s.name}</dt>
-                          <dd>
-                            {formatVnd(s.price)} / {s.unit}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
+                  {roomServices.data?.length ? (
+                    <>
+                      <p className="mb-2 text-sm text-muted-foreground">
+                        Dịch vụ bắt buộc luôn được áp dụng. Tích chọn dịch vụ tùy chọn để cộng vào dự
+                        tính chi phí bên dưới; lựa chọn chỉ để tham khảo.
+                      </p>
+                      <RoomServicePicker
+                        services={roomServices.data}
+                        selection={serviceSelection}
+                        onChange={setServiceSelection}
+                      />
+                    </>
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       Liên hệ chi nhánh để được cung cấp giá dịch vụ.
                     </p>
                   )}
                 </section>
-                <RoomCostEstimator key={r.id} room={r} />
+                <RoomCostEstimator
+                  key={r.id}
+                  room={r}
+                  extras={selectedServiceCosts(roomServices.data ?? [], serviceSelection)}
+                />
                 {branches.data?.some((branch) => branch.id === r.branchId) && <Button asChild variant="outline" className="mt-4">
                   <Link to={`/rooms/${r.id}/utility-rates`}>Cấu hình đơn giá điện, nước và gửi xe</Link>
                 </Button>}
