@@ -113,7 +113,7 @@ src/main/java/com/kitolam/rentalroommanagement
 
 > `servicerequest` là luồng đăng ký / ngừng dịch vụ. `room_services` / `slot_services` chỉ được tạo hoặc ngừng khi quản lý xác nhận ngày lắp đặt / kết thúc, nên phí luôn tính theo ngày đã xác nhận. Phòng / chỗ của người thuê lấy từ hợp đồng `ACTIVE` đang hiệu lực (qua `ContractService`); không có hợp đồng thì trả 403. `SERVICE_REQUEST_TENANCY_STUB_ENABLED=true` chỉ là fallback để demo không cần ký hợp đồng (xem `.env.example`).
 
-> Dịch vụ có cờ `mandatory`: dịch vụ bắt buộc (điện, nước `METERED` luôn bắt buộc; vệ sinh/rác do admin đánh dấu) luôn áp dụng, không đăng ký / ngừng qua `servicerequest`. `GET /api/v1/public/services?roomMode=ROOM|SLOT` (không cần đăng nhập) trả danh mục đang cung cấp cho mục "Dịch vụ tham khảo" ở trang chi tiết phòng; lựa chọn ở đó chỉ dùng để ước tính chi phí, không lưu.
+> Dịch vụ có cờ `mandatory`: dịch vụ bắt buộc (điện, nước `METERED` luôn bắt buộc; vệ sinh/rác do admin đánh dấu) luôn áp dụng, không đăng ký / ngừng qua `servicerequest`. `GET /api/v1/public/services?serviceScope=ROOM|SLOT` (không cần đăng nhập) trả danh mục đang cung cấp cho mục "Dịch vụ tham khảo" ở trang chi tiết phòng; lựa chọn ở đó chỉ dùng để ước tính chi phí.
 
 ## 3. Quy ước code
 

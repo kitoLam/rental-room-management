@@ -20,6 +20,7 @@ import {
   type AppointmentInput,
   type BookingInput,
   type RoomSlotBookingInput,
+  type BookingHoldInput,
   type PaymentScenario,
   type RoomFilters,
 } from '@/interfaces/domain'
@@ -93,6 +94,7 @@ const publicServiceSchema = z.object({
   unit: z.string(),
   unitPrice: z.coerce.number(),
   calculationType: z.string(),
+  quantityRule: z.enum(['FIXED_ONE', 'PER_SLOT', 'USER_INPUT', 'METERED']).nullable().optional(),
   mandatory: z.boolean(),
 })
 const publicRoomSchema = z.object({
@@ -102,7 +104,6 @@ const publicRoomSchema = z.object({
     branchId: databaseIdSchema,
     roomTypeId: databaseIdSchema,
     code: z.string(),
-    rentalMode: z.enum(['ROOM', 'SLOT']),
     capacity: z.number(),
     areaSqm: z.number().nullable(),
     floorNumber: z.number().nullable(),
@@ -137,7 +138,7 @@ function adaptRoom(data: RealRoom) {
     capacity: r.capacity,
     sizeM2: r.areaSqm,
     floor: r.floorNumber,
-    rentalMode: r.rentalMode,
+    rentalMode: 'SLOT',
     roomTypeId: r.roomTypeId,
     roomTypeName: data.roomTypeName,
     operationalStatus:
@@ -181,7 +182,7 @@ function query(filters: RoomFilters) {
   }
   if (filters.branchId) params.set('branchId', filters.branchId)
   if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
-  for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea', 'minCapacity'] as const)
+  for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea'] as const)
     if (filters[key] !== undefined) params.set(key, String(filters[key]))
   if (provider('catalog') === 'mock') {
     params.set('rentalMode', filters.mode)
@@ -189,8 +190,6 @@ function query(filters: RoomFilters) {
     params.set('area', filters.area)
     params.set('sort', filters.sort)
   } else {
-    if (filters.mode === 'ROOM') params.set('roomMode', 'WHOLE_ROOM')
-    if (filters.mode === 'SLOT') params.set('roomMode', 'PER_SLOT')
     if (filters.area && !filters.q) params.set('address', filters.area)
     const sorts: Record<string, string> = {
       recommended: 'roomNumber,asc',
@@ -244,20 +243,28 @@ export const catalogService = {
         price: s.price,
         mandatory: s.mandatory ?? false,
         calculationType: s.calculationType ?? 'FIXED',
+        quantityRule: 'FIXED_ONE',
       }))
     const items = await request(
       'catalog',
-      `/api/v1/public/services?${new URLSearchParams({ roomMode: room.rentalMode })}`,
+      `/api/v1/public/services?${new URLSearchParams({ serviceScope: 'SLOT' })}`,
       z.array(publicServiceSchema),
     )
-    return items.map((s) => ({
-      id: s.id,
-      name: s.name,
-      unit: s.unit,
-      price: s.unitPrice,
-      mandatory: s.mandatory,
-      calculationType: s.calculationType,
-    }))
+    return items.map((s) => {
+      const unit = s.unit.trim().toLocaleLowerCase('vi-VN') === 'người/tháng' ? 'slot/tháng' : s.unit
+      return {
+        id: s.id,
+        name: s.name,
+        unit,
+        price: s.unitPrice,
+        mandatory: s.mandatory,
+        calculationType: s.calculationType,
+        quantityRule: s.quantityRule ?? (s.calculationType === 'METERED' ? 'METERED'
+          : ['PER_SLOT', 'PER_PERSON'].includes(s.calculationType) ? 'PER_SLOT'
+            : ['xe/tháng', 'chỗ/tháng'].includes(unit.trim().toLocaleLowerCase('vi-VN')) ? 'USER_INPUT'
+              : 'FIXED_ONE'),
+      }
+    })
   },
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }
@@ -294,6 +301,18 @@ const backendBookingSchema = z.object({
   tenantId: databaseIdSchema,
   roomSlotId: databaseIdSchema,
   slotCode: z.string(),
+  roomSlotIds: z.array(databaseIdSchema).optional(),
+  slotCodes: z.array(z.string()).optional(),
+  selectedServices: z.array(z.object({
+    serviceId: databaseIdSchema,
+    name: z.string(),
+    unit: z.string(),
+    unitPrice: z.number(),
+    quantity: z.number().nullable(),
+    calculationType: z.string().nullable().optional(),
+    quantityRule: z.string().nullable().optional(),
+    mandatory: z.boolean().optional(),
+  })).optional(),
   expectedMoveInDate: z.string().nullable(),
   expectedMoveOutDate: z.string().nullable(),
   holdingDepositAmount: z.number().nullable(),
@@ -340,7 +359,7 @@ const backendPaymentSchema = z.object({
   amount: z.number(),
   transactionCode: z.string(),
   method: z.string(),
-  status: z.enum(['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED']),
+  status: z.enum(['PENDING', 'SUCCESS', 'LATE_PAID', 'FAILED', 'REFUNDED']),
   createdAt: z.string().nullable(),
   paidAt: z.string().nullable(),
   paymentUrl: z.string().nullable(),
@@ -348,13 +367,14 @@ const backendPaymentSchema = z.object({
 const backendContractSchema = z.object({
   id: databaseIdSchema,
   roomId: databaseIdSchema,
-  roomSlotId: databaseIdSchema,
+  roomSlotId: databaseIdSchema.nullable(),
+  roomSlotIds: z.array(databaseIdSchema).optional(),
   bookingId: databaseIdSchema,
   tenantId: databaseIdSchema,
   managerId: databaseIdSchema,
   contractNumber: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
   rentPrice: z.number(),
   contractDepositAmount: z.number(),
   landlordName: z.string().nullable().optional(),
@@ -364,7 +384,6 @@ const backendContractSchema = z.object({
   tenantIdNumber: z.string().nullable().optional(),
   tenantAddress: z.string().nullable().optional(),
   roomAddress: z.string().nullable().optional(),
-  roomMode: z.string().nullable().optional(),
   electricityInitialReading: z.number().nullable().optional(),
   waterInitialReading: z.number().nullable().optional(),
   electricityRate: z.number().nullable().optional(),
@@ -374,10 +393,20 @@ const backendContractSchema = z.object({
   paymentDueDay: z.number().nullable(),
   terms: z.string().nullable(),
   signedFileUrl: z.string().nullable(),
+  signedEvidenceUrl: z.string().nullable().optional(),
+  termMonths: z.number().nullable().optional(),
+  signedDate: z.string().nullable().optional(),
+  firstBillingStartDate: z.string().nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(),
+  evidenceDeadline: z.string().nullable().optional(),
+  evidenceResubmissionCount: z.number().nullable().optional(),
+  evidenceNote: z.string().nullable().optional(),
+  templateDownloadUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   services: z.array(z.object({
     serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
-    calculationType: z.string(), mandatory: z.boolean(), selected: z.boolean(),
+    calculationType: z.string().nullable().optional(), quantity: z.number().nullable().optional(),
+    mandatory: z.boolean(), selected: z.boolean(),
   })).default([]),
 }).passthrough()
 const toBackendBookingStatus = (status: string) => status
@@ -394,7 +423,10 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     branchId: b.branchId,
     branchName: b.branchName || '',
     roomSlotId: b.roomSlotId,
+    roomSlotIds: b.roomSlotIds || [b.roomSlotId],
     slotLabel: b.slotCode,
+    slotLabels: b.slotCodes || [b.slotCode],
+    hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
@@ -423,6 +455,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     createdAt,
     timeline: b.timeline,
     contractId: b.contractId || null,
+    selectedServices: b.selectedServices || [],
   })
 }
 function adaptPayment(p: z.infer<typeof backendPaymentSchema>) {
@@ -431,7 +464,7 @@ function adaptPayment(p: z.infer<typeof backendPaymentSchema>) {
     bookingId: p.bookingId,
     amount: p.amount,
     reference: p.transactionCode,
-    status: p.status === 'SUCCESS' ? 'VERIFIED' : p.status === 'REFUNDED' ? 'REVIEW' : p.status,
+    status: p.status === 'SUCCESS' ? 'VERIFIED' : ['REFUNDED', 'LATE_PAID'].includes(p.status) ? 'REVIEW' : p.status,
     environment: 'PRODUCTION',
     createdAt: p.createdAt || new Date(0).toISOString(),
     verifiedAt: p.paidAt,
@@ -457,16 +490,22 @@ export const bookingService = {
   get: async (id: string) => provider('leasing') === 'real'
     ? adaptBooking(await request('leasing', `/api/v1/bookings/${id}`, backendBookingSchema))
     : request('leasing', `/api/bookings/${id}`, mockBookingSchema),
-  create: async (input: BookingInput | RoomSlotBookingInput) => {
+  create: async (input: BookingInput | RoomSlotBookingInput | BookingHoldInput) => {
     if (provider('leasing') === 'real') {
-      if (!input.roomSlotId) throw new ApiError('Chọn một slot trước khi gửi yêu cầu.', 400)
+      if (!('roomSlotIds' in input) || input.roomSlotIds.length === 0) throw new ApiError('Chọn ít nhất một slot trước khi giữ chỗ.', 400)
       return adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
-        roomSlotId: input.roomSlotId,
-        expectedMoveInDate: input.startDate,
-        expectedMoveOutDate: input.endDate,
+        roomSlotIds: input.roomSlotIds,
+        selectedServices: input.selectedServices,
       })))
     }
     if (!('roomId' in input)) throw new ApiError('Thiếu roomId cho dữ liệu mô phỏng.', 400)
+    if ('roomSlotIds' in input) {
+      const now = new Date().toISOString().slice(0, 10)
+      return request('leasing', '/api/bookings', mockBookingSchema, write('POST', {
+        roomId: input.roomId, roomSlotId: input.roomSlotIds[0], rentalMode: 'SLOT',
+        startDate: now, endDate: now, policyId: undefined,
+      }))
+    }
     return request('leasing', '/api/bookings', mockBookingSchema, write('POST', input))
   },
   cancel: async (id: string) => provider('leasing') === 'real'
@@ -548,6 +587,10 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>
     request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
+  submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number; signedDate?: string }) =>
+    request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
+  reviewEvidence: (id: string, value: { approved: boolean; note?: string; adjustedSignedDate?: string; firstBillingStartDate?: string }) =>
+    request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
 }
 export const profileService = {
   get: async (): Promise<User> => {

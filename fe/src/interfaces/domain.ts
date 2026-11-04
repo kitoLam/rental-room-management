@@ -73,6 +73,7 @@ export type RoomServiceOption = {
   price: number
   mandatory: boolean
   calculationType: string
+  quantityRule: 'FIXED_ONE' | 'PER_SLOT' | 'USER_INPUT' | 'METERED'
 }
 export const policySchema = z.object({
   id: z.string().uuid(),
@@ -159,7 +160,10 @@ export const bookingSchema = z.object({
   branchId: databaseIdSchema,
   branchName: z.string(),
   roomSlotId: databaseIdSchema.nullable(),
+  roomSlotIds: z.array(databaseIdSchema).default([]),
   slotLabel: z.string().nullable(),
+  slotLabels: z.array(z.string()).default([]),
+  hasRentalDates: z.boolean().default(true),
   rentalMode: modeSchema,
   startDate: z.string(),
   endDate: z.string(),
@@ -177,6 +181,13 @@ export const bookingSchema = z.object({
   createdAt: z.string(),
   timeline: timelineSchema,
   contractId: databaseIdSchema.nullable(),
+  selectedServices: z.array(z.object({
+    serviceId: databaseIdSchema,
+    name: z.string(),
+    unit: z.string(),
+    unitPrice: z.number(),
+    quantity: z.number().nullable(),
+  })).default([]),
 })
 export type Booking = z.infer<typeof bookingSchema>
 export const mockBookingSchema = bookingSchema.extend({ roomId: databaseIdSchema })
@@ -257,6 +268,12 @@ export type BookingInput = {
   policyId?: string
   policyVersion?: number
   acknowledged?: boolean
+}
+export type BookingHoldInput = {
+  roomSlotIds: string[]
+  selectedServices: { serviceId: string; quantity?: number }[]
+  roomId: string
+  rentalMode?: RentalMode
 }
 export type RoomSlotBookingInput = Omit<BookingInput, 'roomId' | 'rentalMode'> & {
   roomSlotId: string

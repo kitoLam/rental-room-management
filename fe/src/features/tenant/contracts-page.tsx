@@ -31,8 +31,8 @@ function contractCards(items: TenantContract[] | Tenancy[], selectedContractId: 
         status: item.status,
         roomName: item.roomSlotId ? 'Chỗ ở theo slot' : 'Phòng thuê',
         branchName: item.roomAddress || 'Địa chỉ chưa cập nhật',
-        startDate: item.startDate,
-        endDate: item.endDate,
+        startDate: item.startDate || '',
+        endDate: item.endDate || '',
         role: '',
         selectedTenancy: item.id === selectedContractId,
       }

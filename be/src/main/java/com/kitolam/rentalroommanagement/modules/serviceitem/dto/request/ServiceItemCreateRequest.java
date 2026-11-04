@@ -2,6 +2,7 @@ package com.kitolam.rentalroommanagement.modules.serviceitem.dto.request;
 
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceScope;
+import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -14,6 +15,7 @@ public record ServiceItemCreateRequest(
         @NotBlank String unit,
         @NotNull @PositiveOrZero BigDecimal unitPrice,
         @NotNull CalculationType calculationType,
+        @NotNull QuantityRule quantityRule,
         @NotNull ServiceScope scope,
         /** Optional, default false. Metered services are always mandatory. */
         Boolean mandatory

@@ -84,7 +84,6 @@ export default function PaymentPage() {
   const canPay =
     b?.status === 'AWAITING_PAYMENT' &&
     seconds > 0 &&
-    !!b?.termsAcceptedAt &&
     !payments.data?.some((p) => p.status === 'VERIFIED' ||
       (provider('leasing') === 'mock' && p.status === 'PENDING'))
   const mock = provider('leasing') === 'mock'
@@ -114,9 +113,7 @@ export default function PaymentPage() {
                 {b.branchName}
                 {b.slotLabel ? ` · ${b.slotLabel}` : ''}
               </p>
-              <p className="mt-3 text-sm">
-                {dateOnly(b.startDate)} → {dateOnly(b.endDate)}
-              </p>
+              {b.hasRentalDates && <p className="mt-3 text-sm">{dateOnly(b.startDate)} → {dateOnly(b.endDate)}</p>}
               <div className="my-7 rounded-xl bg-primary-soft p-5">
                 <p className="text-xs text-primary">
                   KHOẢN GIỮ CHỖ
@@ -201,7 +198,7 @@ export default function PaymentPage() {
                   </Notice>
                 ) : b.status === 'CONFIRMED' ? (
                   <Notice tone="success">
-                    Đã xác minh khoản giữ chỗ. Yêu cầu đã được xác nhận.
+                    Đã xác minh khoản giữ chỗ. Hợp đồng tạm đã được tạo để bạn nộp bằng chứng chữ ký.
                   </Notice>
                 ) : p?.status === 'PENDING' ? (
                   <Notice>

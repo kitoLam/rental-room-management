@@ -14,9 +14,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  Field,
-  InlineError,
   Modal,
+  InlineError,
   Notice,
   Page,
   Panel,
@@ -25,7 +24,6 @@ import {
 import { StatusBadge } from '@/components/common/status-badge'
 import { bookingService, catalogService } from '@/services/guest-user'
 import { provider } from '@/services/config'
-import { addDays, dateRangeSchema } from '@/lib/validation'
 import { databaseIdSchema } from '@/interfaces/domain'
 import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
@@ -36,6 +34,10 @@ import { selectedServiceCosts, type ServiceSelection } from './lib/cost-estimate
 import { useSession } from '@/features/auth/session-store'
 import { managerApi } from '@/services/manager'
 
+const readJson = <T,>(raw: string | null, fallback: T): T => {
+  try { return raw ? JSON.parse(raw) as T : fallback } catch { return fallback }
+}
+
 export default function RoomDetailPage() {
   const { roomId = '' } = useParams()
   const user = useSession((state) => state.user)
@@ -45,29 +47,29 @@ export default function RoomDetailPage() {
   const [params] = useSearchParams()
   const [gallery, setGallery] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
-  const [startDate, setStart] = useState(params.get('startDate') || addDays(1))
-  const [endDate, setEnd] = useState(params.get('endDate') || addDays(31))
-  const [slot, setSlot] = useState(params.get('slot') || '')
+  const [selectedSlots, setSelectedSlots] = useState<string[]>(() => readJson(params.get('slots'), []))
   const room = useQuery({
     queryKey: ['rooms', roomId],
     queryFn: () => catalogService.room(roomId),
     enabled: validRoomId,
   })
-  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>({})
+  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>(() => readJson(params.get('services'), {}))
   const roomServices = useQuery({
-    queryKey: ['room-services', roomId, room.data?.rentalMode],
+    queryKey: ['room-services', roomId],
     queryFn: () => catalogService.services(room.data!),
     enabled: !!room.data,
   })
-  const range = dateRangeSchema.safeParse({ startDate, endDate })
   const bookingAvailabilityEnabled =
     provider('catalog') === 'mock' || provider('leasing') === 'real'
   const available = useQuery({
-    queryKey: ['availability', roomId, startDate, endDate],
-    queryFn: () => provider('catalog') === 'mock'
-      ? catalogService.availability(roomId, startDate, endDate)
-      : bookingService.availabilityForRoom(roomId, startDate, endDate),
-    enabled: validRoomId && range.success && bookingAvailabilityEnabled,
+    queryKey: ['availability', roomId],
+    queryFn: () => {
+      const today = new Date().toISOString().slice(0, 10)
+      return provider('catalog') === 'mock'
+        ? catalogService.availability(roomId, today, '9999-12-31')
+        : bookingService.availabilityForRoom(roomId, today, '9999-12-31')
+    },
+    enabled: validRoomId && bookingAvailabilityEnabled,
   })
   if (!validRoomId)
     return (
@@ -79,10 +81,10 @@ export default function RoomDetailPage() {
   const badge = r ? getRoomBadge(r) : null
   const bookable =
     r &&
-    range.success &&
     available.data?.available &&
-    available.data.slots.some((s) => s.id === slot && s.available)
-  const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ startDate, endDate, ...(slot ? { slot } : {}) })}`
+    selectedSlots.length > 0 &&
+    selectedSlots.every((id) => available.data.slots.some((s) => s.id === id && s.available))
+  const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
   return (
     <Page
       wide
@@ -155,16 +157,13 @@ export default function RoomDetailPage() {
             </div>
             <div className="mb-8 flex flex-wrap gap-3">
               <StatusBadge tone={badge!.tone}>{badge!.label}</StatusBadge>
-              <StatusBadge tone="neutral">
-                {r.rentalMode === 'ROOM' ? 'Nguyên phòng' : 'Theo chỗ / ở ghép'}
-              </StatusBadge>
             </div>
             <div className="grid items-start gap-8 pb-24 lg:grid-cols-[minmax(0,1fr)_380px] lg:pb-0 xl:gap-10 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-8">
                 <dl className="grid grid-cols-2 gap-5 rounded-2xl border border-border/70 bg-surface p-6 sm:grid-cols-4 sm:p-8">
                   {[
                     [Ruler, 'Diện tích', r.sizeM2 === null ? 'Chưa cập nhật' : `${r.sizeM2} m²`],
-                    [Users, 'Sức chứa', `${r.capacity} người`],
+                    [Users, 'Số slot', String(r.capacity)],
                     [Building2, 'Tầng', r.floor === null ? 'Chưa cập nhật' : String(r.floor)],
                     [KeyRound, 'Loại phòng', r.roomTypeName],
                   ].map(([Icon, label, value]) => {
@@ -208,7 +207,9 @@ export default function RoomDetailPage() {
                 </section>
                 <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-4 text-xl font-bold">Dịch vụ tham khảo</h2>
-                  {roomServices.data?.length ? (
+                  {roomServices.isPending ? <p className="text-sm text-muted-foreground">Đang tải danh sách dịch vụ…</p>
+                    : roomServices.error ? <InlineError error={roomServices.error} />
+                      : roomServices.data?.length ? (
                     <>
                       <p className="mb-2 text-sm text-muted-foreground">
                         Dịch vụ bắt buộc luôn được áp dụng. Tích chọn dịch vụ tùy chọn để cộng vào dự
@@ -217,10 +218,11 @@ export default function RoomDetailPage() {
                       <RoomServicePicker
                         services={roomServices.data}
                         selection={serviceSelection}
+                        slotCount={selectedSlots.length}
                         onChange={setServiceSelection}
                       />
                     </>
-                  ) : (
+                      ) : (
                     <p className="text-sm text-muted-foreground">
                       Liên hệ chi nhánh để được cung cấp giá dịch vụ.
                     </p>
@@ -229,7 +231,8 @@ export default function RoomDetailPage() {
                 <RoomCostEstimator
                   key={r.id}
                   room={r}
-                  extras={selectedServiceCosts(roomServices.data ?? [], serviceSelection)}
+                  slotCount={selectedSlots.length}
+                  extras={selectedServiceCosts(roomServices.data ?? [], serviceSelection, selectedSlots.length)}
                 />
                 {branches.data?.some((branch) => branch.id === r.branchId) && <Button asChild variant="outline" className="mt-4">
                   <Link to={`/rooms/${r.id}/utility-rates`}>Cấu hình đơn giá điện, nước và gửi xe</Link>
@@ -264,56 +267,24 @@ export default function RoomDetailPage() {
                     Giá thuê chính thức được thỏa thuận khi lập hợp đồng. Khoản giữ chỗ được thông
                     báo riêng.
                   </p>
-                  <div className="mt-6 grid min-w-0 grid-cols-2 gap-3 border-t border-border pt-6">
-                    <Field id="detail-start" label="Ngày bắt đầu">
-                      <input
-                        className="input"
-                        id="detail-start"
-                        type="date"
-                        min={addDays(0)}
-                        value={startDate}
-                        onChange={(e) => {
-                          setStart(e.target.value)
-                          setSlot('')
-                        }}
-                      />
-                    </Field>
-                    <Field id="detail-end" label="Ngày kết thúc">
-                      <input
-                        className="input"
-                        id="detail-end"
-                        type="date"
-                        min={startDate}
-                        value={endDate}
-                        onChange={(e) => {
-                          setEnd(e.target.value)
-                          setSlot('')
-                        }}
-                      />
-                    </Field>
-                  </div>
-                  {!range.success && (
-                    <div className="mt-3">
-                      <InlineError error={new Error(range.error.issues[0].message)} />
-                    </div>
-                  )}
                   {available.data && (
                     <fieldset className="mt-5">
-                      <legend className="mb-3 text-sm font-bold">Chọn chỗ ở</legend>
+                      <legend className="mb-3 text-sm font-bold">Chọn các slot muốn thuê</legend>
                       <div className="grid grid-cols-2 gap-2">
                         {available.data.slots.map((s) => (
                           <label
                             key={s.id}
-                            className={`flex min-h-12 items-center gap-2 rounded-lg border p-3 text-sm ${slot === s.id ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
+                            className={`flex min-h-12 items-center gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
                           >
                             <input
-                              type="radio"
-                              name="detail-slot"
+                              type="checkbox"
                               className="accent-primary"
                               value={s.id}
-                              checked={slot === s.id}
+                              checked={selectedSlots.includes(s.id)}
                               disabled={!s.available}
-                              onChange={() => setSlot(s.id)}
+                              onChange={(event) => setSelectedSlots((current) => event.target.checked
+                                ? [...current, s.id]
+                                : current.filter((id) => id !== s.id))}
                             />
                             {s.label}
                             {!s.available && ' · Đã kín'}
@@ -330,7 +301,7 @@ export default function RoomDetailPage() {
                         : available.error
                           ? available.error.message
                           : available.data?.available
-                            ? 'Phòng còn trống trong khoảng ngày đã chọn.'
+                            ? 'Chọn slot còn trống để giữ trong 24 giờ.'
                             : available.data?.reason || 'Không có lịch trống phù hợp với khoảng ngày đã chọn.'}
                   </div>
                   <div className="grid gap-3">
@@ -363,7 +334,7 @@ export default function RoomDetailPage() {
                   </div>
                   {!bookable && available.data?.available && (
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Chọn một chỗ còn trống để tiếp tục.
+                      Chọn ít nhất một slot còn trống để tiếp tục.
                     </p>
                   )}
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">

@@ -8,6 +8,8 @@ import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractUpd
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractDraftRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractServiceSelectionRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.response.ContractResponse;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
@@ -71,6 +73,22 @@ public class ContractController {
     public StandardResponse<ContractResponse> completeCheckIn(@PathVariable String id,
             @Valid @RequestBody ContractCheckInRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success(contractService.completeCheckIn(id, request, principal));
+    }
+
+    @PostMapping("/{id}/evidence")
+    @Operation(summary = "Tenant nộp bằng chứng hợp đồng đã ký")
+    @PreAuthorize("hasRole('TENANT')")
+    public StandardResponse<ContractResponse> submitEvidence(@PathVariable String id,
+            @Valid @RequestBody ContractEvidenceRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(contractService.submitEvidence(id, request, principal));
+    }
+
+    @PostMapping("/{id}/evidence/review")
+    @Operation(summary = "Manager/Admin duyệt hoặc yêu cầu gửi lại bằng chứng hợp đồng")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public StandardResponse<ContractResponse> reviewEvidence(@PathVariable String id,
+            @Valid @RequestBody ContractEvidenceReviewRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(contractService.reviewEvidence(id, request, principal));
     }
 
     @GetMapping("/{id}")

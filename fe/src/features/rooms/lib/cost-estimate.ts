@@ -15,12 +15,19 @@ export type ServiceSelection = Record<string, number>
 
 /** Chi phí tháng của dịch vụ đã chọn; dịch vụ tính theo chỉ số (điện, nước) đã có ở phần ước tính riêng. */
 export function selectedServiceCosts(
-  services: { id: string; name: string; price: number; mandatory: boolean; calculationType: string }[],
+  services: { id: string; name: string; unit?: string; price: number; mandatory: boolean; calculationType: string; quantityRule?: string }[],
   selection: ServiceSelection,
+  slotCount = 1,
 ) {
   return services
-    .filter((s) => s.calculationType !== 'METERED' && (s.mandatory || selection[s.id] != null))
-    .map((s) => ({ label: s.name, cost: s.price * (s.mandatory ? 1 : selection[s.id]) }))
+    .filter((s) => s.unit?.trim().toLocaleLowerCase('vi-VN') !== 'lần'
+      && s.calculationType !== 'METERED' && (s.mandatory || (selection[s.id] ?? 0) > 0))
+    .map((s) => {
+      const quantity = s.quantityRule === 'PER_SLOT' ? slotCount
+        : s.quantityRule === 'FIXED_ONE' ? 1
+          : s.mandatory ? 1 : selection[s.id]
+      return { label: s.name, cost: s.price * (quantity || 0) }
+    })
 }
 
 export function estimateMonthlyCost(input: CostEstimateInput) {

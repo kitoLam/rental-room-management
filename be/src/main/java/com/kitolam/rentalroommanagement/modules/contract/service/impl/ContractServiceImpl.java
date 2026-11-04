@@ -19,6 +19,8 @@ import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.document.ContractServiceSnapshot;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractDraftRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractFilterRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractServiceSelectionRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCreateRequest;
@@ -31,7 +33,6 @@ import com.kitolam.rentalroommanagement.modules.contracttenant.document.Contract
 import com.kitolam.rentalroommanagement.modules.contracttenant.enums.ContractTenantStatus;
 import com.kitolam.rentalroommanagement.modules.contracttenant.repository.ContractTenantRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
-import com.kitolam.rentalroommanagement.modules.room.enums.RoomMode;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
@@ -56,10 +57,13 @@ import org.bson.types.ObjectId;
 import org.bson.Document;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +71,8 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class ContractServiceImpl implements ContractService {
+
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final ContractRepository contractRepository;
     private final BookingRepository bookingRepository;
@@ -80,6 +86,15 @@ public class ContractServiceImpl implements ContractService {
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
+    @Transactional
+    public void expireEvidenceRequests() {
+        Instant now = clock.instant();
+        contractRepository.findByStatusAndEvidenceDeadlineLessThanEqualAndIsDeletedFalse(ContractStatus.DRAFT, now)
+                .stream().filter(contract -> contract.getEvidenceSubmittedAt() == null)
+                .forEach(this::expireEvidenceContract);
+    }
 
     @Override
     @Transactional
@@ -99,9 +114,6 @@ public class ContractServiceImpl implements ContractService {
         if (occupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
                 .noneMatch(item -> item.getRoomSlotId().equals(slot.getId()) && item.getStatus() == OccupancyStatus.RESERVED))
             throw new ConflictException("Booking không còn reservation đang hoạt động");
-        int maxAllowed = room.getRoomMode() == RoomMode.PER_SLOT || room.getMaxOccupants() == null ? 1 : room.getMaxOccupants();
-        if (request.maxOccupants() > maxAllowed)
-            throw new BadRequestException("Số người tối đa trong hợp đồng vượt sức chứa của phòng/chỗ");
         var existing = contractRepository.findByBookingIdAndIsDeletedFalse(bookingId).orElse(null);
         if (existing != null) {
             if (existing.getStatus() == ContractStatus.DRAFT) return response(existing);
@@ -116,6 +128,7 @@ public class ContractServiceImpl implements ContractService {
         contract.setBookingId(booking.getId());
         contract.setRoomId(room.getId());
         contract.setRoomSlotId(slot.getId());
+        contract.setRoomSlotIds(List.of(slot.getId()));
         contract.setTenantId(tenant.getId());
         contract.setManagerId(principal.userId());
         contract.setContractNumber(nextContractNumber());
@@ -132,13 +145,13 @@ public class ContractServiceImpl implements ContractService {
         contract.setTenantIdNumber(tenant.getIdCardNumber());
         contract.setTenantAddress(tenant.getAddress());
         contract.setRoomAddress(branch.getAddress() + " · " + room.getRoomNumber());
-        contract.setRoomMode(room.getRoomMode().name());
         contract.setElectricityInitialReading(request.electricityInitialReading());
         contract.setWaterInitialReading(request.waterInitialReading());
         contract.setElectricityRate(request.electricityRate());
         contract.setWaterRate(request.waterRate());
         contract.setParkingRate(request.parkingRate());
-        contract.setMaxOccupants(request.maxOccupants());
+        contract.setMaxOccupants(booking.getRoomSlotIds() == null || booking.getRoomSlotIds().isEmpty()
+                ? 1 : booking.getRoomSlotIds().size());
         contract.setServices(serviceSnapshots(request.services()));
         contract.setStatus(ContractStatus.DRAFT);
         contract.setId(new ObjectId().toHexString());
@@ -192,6 +205,8 @@ public class ContractServiceImpl implements ContractService {
         if (contract.getStatus() != ContractStatus.DRAFT || booking.getStatus() != BookingStatus.CONFIRMED
                 || booking.getDepositStatus() != DepositStatus.PAID)
             throw new ConflictException("Hợp đồng hoặc booking không ở trạng thái cho phép bàn giao");
+        if (booking.getExpectedMoveInDate() == null)
+            throw new ConflictException("Hợp đồng mới cần nộp và duyệt bằng chứng chữ ký trước khi kích hoạt");
         if (booking.getCheckInDeadline() == null || !booking.getCheckInDeadline().isAfter(clock.instant()))
             throw new ConflictException("Đã quá hạn check-in của booking");
         if (contract.getServices() != null && contract.getServices().stream().anyMatch(s -> s.isMandatory() && !s.isSelected()))
@@ -205,6 +220,8 @@ public class ContractServiceImpl implements ContractService {
                     created.setIsRepresentative(true);
                     created.setRentAmount(contract.getRentPrice());
                     created.setJoinedAt(booking.getExpectedMoveInDate());
+                    created.setRoomSlotIds(contract.getRoomSlotIds());
+                    created.setServices(contract.getServices());
                     created.setStatus(ContractTenantStatus.ACTIVE);
                     return contractTenantRepository.save(created);
                 });
@@ -225,6 +242,138 @@ public class ContractServiceImpl implements ContractService {
         eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(),
                 booking.getStatus(), booking.getDepositStatus(), "Bàn giao phòng hoàn tất."));
         return response(saved);
+    }
+
+    @Override
+    @Transactional
+    public ContractResponse submitEvidence(String id, ContractEvidenceRequest request, AuthPrincipal principal) {
+        Contract contract = find(id);
+        requireTenant(contract, principal);
+        if (contract.getStatus() != ContractStatus.DRAFT || contract.getBookingId() == null)
+            throw new ConflictException("Chỉ hợp đồng tạm đang chờ bằng chứng mới nhận hồ sơ");
+        Instant now = clock.instant();
+        if (contract.getEvidenceDeadline() == null || !contract.getEvidenceDeadline().isAfter(now))
+            throw new ConflictException("Hạn nộp bằng chứng hợp đồng đã hết");
+        if (!List.of(3, 6, 8, 12).contains(request.termMonths()))
+            throw new BadRequestException("Kỳ hạn hợp đồng chỉ gồm 3, 6, 8 hoặc 12 tháng");
+        Booking booking = booking(contract.getBookingId());
+        LocalDate receivedDate = LocalDate.ofInstant(now, VIETNAM_ZONE);
+        LocalDate signedDate = request.signedDate() == null ? receivedDate : request.signedDate();
+        validateSignedDate(signedDate, booking, receivedDate);
+        contract.setSignedEvidenceUrl(request.evidenceUrl().trim());
+        contract.setTermMonths(request.termMonths());
+        contract.setSignedDate(signedDate);
+        contract.setStartDate(signedDate.plusDays(1));
+        contract.setEndDate(contract.getStartDate().plusMonths(request.termMonths()));
+        contract.setEvidenceSubmittedAt(now);
+        contract.setEvidenceDeadline(null);
+        contract.setEvidenceNote(null);
+        return response(contractRepository.save(contract));
+    }
+
+    @Override
+    @Transactional
+    public ContractResponse reviewEvidence(String id, ContractEvidenceReviewRequest request, AuthPrincipal principal) {
+        Contract contract = find(id);
+        requireManager(room(contract.getRoomId()), principal);
+        Booking booking = booking(contract.getBookingId());
+        if (contract.getStatus() != ContractStatus.DRAFT || contract.getEvidenceSubmittedAt() == null)
+            throw new ConflictException("Hợp đồng chưa có bằng chứng đang chờ duyệt");
+        if (!request.approved()) {
+            String note = request.note() == null ? "" : request.note().trim();
+            if (note.isBlank()) throw new BadRequestException("Cần ghi rõ lý do yêu cầu gửi lại bằng chứng");
+            int resubmissions = contract.getEvidenceResubmissionCount() == null ? 0 : contract.getEvidenceResubmissionCount();
+            if (resubmissions >= 2) {
+                expireEvidenceContract(contract);
+                return response(contractRepository.findByIdAndIsDeletedFalse(id).orElse(contract));
+            }
+            contract.setEvidenceResubmissionCount(resubmissions + 1);
+            contract.setSignedEvidenceUrl(null);
+            contract.setEvidenceSubmittedAt(null);
+            contract.setTermMonths(null);
+            contract.setSignedDate(null);
+            contract.setStartDate(null);
+            contract.setEndDate(null);
+            contract.setEvidenceDeadline(clock.instant().plusSeconds(24 * 60 * 60));
+            contract.setEvidenceNote(note);
+            return response(contractRepository.save(contract));
+        }
+
+        LocalDate today = LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE);
+        LocalDate signedDate = request.adjustedSignedDate() == null ? contract.getSignedDate() : request.adjustedSignedDate();
+        validateSignedDate(signedDate, booking, today);
+        LocalDate effectiveDate = signedDate.plusDays(1);
+        LocalDate firstBillingStartDate = request.firstBillingStartDate();
+        if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate))
+            throw new BadRequestException("Kỳ tính tiền đầu tiên cần được xác nhận vào ngày hiệu lực hợp đồng hoặc sau đó");
+        contract.setSignedDate(signedDate);
+        contract.setStartDate(effectiveDate);
+        contract.setEndDate(effectiveDate.plusMonths(contract.getTermMonths()));
+        contract.setFirstBillingStartDate(firstBillingStartDate);
+        contract.setSignedFileUrl(contract.getSignedEvidenceUrl());
+        contract.setStatus(ContractStatus.ACTIVE);
+        ContractTenant contractTenant = contractTenantRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
+                .orElseGet(() -> {
+                    ContractTenant created = new ContractTenant();
+                    created.setContractId(contract.getId());
+                    created.setTenantId(booking.getTenantId());
+                    created.setBookingId(booking.getId());
+                    created.setIsRepresentative(true);
+                    created.setRentAmount(contract.getRentPrice());
+                    created.setJoinedAt(effectiveDate);
+                    created.setRoomSlotIds(contract.getRoomSlotIds());
+                    created.setServices(contract.getServices());
+                    created.setStatus(ContractTenantStatus.ACTIVE);
+                    return contractTenantRepository.save(created);
+                });
+        List<RoomSlotOccupancy> reservations = occupancyRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED).toList();
+        if (reservations.size() != contract.getRoomSlotIds().size())
+            throw new ConflictException("Không tìm thấy đủ slot đang được giữ bởi booking");
+        reservations.forEach(item -> {
+            item.setContractTenantId(contractTenant.getId());
+            item.setStartDate(effectiveDate);
+            item.setEndDate(contract.getEndDate());
+            item.setStatus(OccupancyStatus.ACTIVE);
+            occupancyRepository.save(item);
+        });
+        contract.setMaxOccupants(contract.getRoomSlotIds().size());
+        Contract saved = contractRepository.save(contract);
+        booking.setStatus(BookingStatus.CONVERTED);
+        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
+        booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.CONVERTED.name(), clock.instant(), "Manager đã duyệt bằng chứng hợp đồng."));
+        bookingRepository.save(booking);
+        refreshRoomStatus(room(contract.getRoomId()));
+        eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(), booking.getStatus(),
+                booking.getDepositStatus(), "Bằng chứng hợp đồng đã được duyệt; tenancy đã kích hoạt."));
+        return response(saved);
+    }
+
+    private void validateSignedDate(LocalDate signedDate, Booking booking, LocalDate receivedDate) {
+        LocalDate bookingDate = LocalDate.ofInstant(booking.getCreatedAt(), VIETNAM_ZONE);
+        if (signedDate.isAfter(receivedDate) || signedDate.isBefore(receivedDate.minusDays(7)) || signedDate.isBefore(bookingDate))
+            throw new BadRequestException("Ngày ký phải từ ngày tạo booking đến 7 ngày trước ngày nhận bằng chứng, và không được ở tương lai");
+    }
+
+    private void expireEvidenceContract(Contract contract) {
+        Booking booking = booking(contract.getBookingId());
+        contract.setStatus(ContractStatus.TERMINATED);
+        contract.setTerminatedAt(clock.instant());
+        contract.setTerminationReason("Quá hạn nộp bằng chứng hợp đồng; booking hết hiệu lực và tiền cọc chờ hoàn.");
+        contract.setEvidenceDeadline(null);
+        contractRepository.save(contract);
+        booking.setStatus(BookingStatus.EXPIRED);
+        booking.setDepositStatus(DepositStatus.PAID);
+        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
+        booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.EXPIRED.name(), clock.instant(), contract.getTerminationReason()));
+        bookingRepository.save(booking);
+        occupancyRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED).forEach(item -> {
+                    item.setStatus(OccupancyStatus.ENDED);
+                    occupancyRepository.save(item);
+                });
+        eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(), booking.getStatus(),
+                booking.getDepositStatus(), "Hạn nộp bằng chứng hợp đồng đã hết; cần xử lý hoàn cọc."));
     }
 
     @Override
@@ -312,6 +461,7 @@ public class ContractServiceImpl implements ContractService {
             snapshot.setName(item.name().trim());
             snapshot.setUnit(item.unit().trim());
             snapshot.setUnitPrice(item.unitPrice());
+            snapshot.setQuantity(item.quantity());
             snapshot.setCalculationType(item.calculationType().trim());
             snapshot.setMandatory(item.mandatory());
             snapshot.setSelected(item.mandatory());
@@ -320,7 +470,8 @@ public class ContractServiceImpl implements ContractService {
         return result;
     }
 
-    private String nextContractNumber() {
+    @Override
+    public String nextContractNumber() {
         while (true) {
             Document sequence;
             try {
@@ -350,13 +501,9 @@ public class ContractServiceImpl implements ContractService {
         List<String> slotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(List.of(room.getId())).stream()
                 .map(RoomSlot::getId).toList();
         if (slotIds.isEmpty()) return;
-        if (room.getRoomMode() == RoomMode.WHOLE_ROOM) {
-            room.setStatus(RoomStatus.OCCUPIED);
-        } else {
-            var active = occupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(slotIds, List.of(OccupancyStatus.ACTIVE));
-            boolean allUsed = slotIds.stream().allMatch(slotId -> active.stream().anyMatch(item -> slotId.equals(item.getRoomSlotId())));
-            room.setStatus(allUsed ? RoomStatus.OCCUPIED : RoomStatus.AVAILABLE);
-        }
+        var active = occupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(slotIds, List.of(OccupancyStatus.ACTIVE));
+        boolean allUsed = slotIds.stream().allMatch(slotId -> active.stream().anyMatch(item -> slotId.equals(item.getRoomSlotId())));
+        room.setStatus(allUsed ? RoomStatus.OCCUPIED : RoomStatus.AVAILABLE);
         roomRepository.save(room);
     }
 
@@ -390,12 +537,15 @@ public class ContractServiceImpl implements ContractService {
     }
 
     private ContractResponse response(Contract c) {
-        return new ContractResponse(c.getId(), c.getRoomId(), c.getRoomSlotId(), c.getBookingId(), c.getTenantId(), c.getManagerId(),
+        return new ContractResponse(c.getId(), c.getRoomId(), c.getRoomSlotId(), c.getRoomSlotIds() == null ? List.of() : List.copyOf(c.getRoomSlotIds()),
+                c.getBookingId(), c.getTenantId(), c.getManagerId(),
                 c.getContractNumber(), c.getStartDate(), c.getEndDate(), c.getRentPrice(), c.getContractDepositAmount(),
                 c.getLandlordName(), c.getLandlordIdNumber(), c.getLandlordAddress(), c.getTenantName(), c.getTenantIdNumber(),
-                c.getTenantAddress(), c.getRoomAddress(), c.getRoomMode(), c.getElectricityInitialReading(), c.getWaterInitialReading(),
+                c.getTenantAddress(), c.getRoomAddress(), c.getElectricityInitialReading(), c.getWaterInitialReading(),
                 c.getElectricityRate(), c.getWaterRate(), c.getParkingRate(), c.getMaxOccupants(),
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
+                c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
+                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), c.getTemplateDownloadUrl(),
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
     }
 }

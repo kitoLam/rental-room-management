@@ -65,10 +65,10 @@ export function ManagerBookingDetail() {
                     `${query.data.roomTitle} · ${query.data.slotLabel || 'Nguyên phòng'}`,
                   ],
                   ['Trạng thái', <ManagerStatus value={query.data.status} />],
-                  [
+                  ...(query.data.hasRentalDates ? [[
                     'Thời hạn thuê',
                     `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`,
-                  ],
+                  ] as [string, string]] : []),
                   ['Khoản giữ', formatVnd(query.data.holdAmount)],
                   [
                     'Người đặt',
@@ -153,13 +153,12 @@ export function ManagerBookingDetail() {
               electricityRate: z.number().nonnegative(),
               waterRate: z.number().nonnegative(),
               parkingRate: z.number().nonnegative(),
-              maxOccupants: z.number().int().positive(),
               checkInDeadline: z.iso.datetime(),
               serviceDefinitions: z.array(z.string()),
             })}
             defaults={{ terms: '', rentPrice: 0, contractDepositAmount: 0, paymentDueDay: 5,
               landlordName: '', landlordIdNumber: '', landlordAddress: '', electricityInitialReading: 0,
-              waterInitialReading: 0, electricityRate: 0, waterRate: 0, parkingRate: 0, maxOccupants: 1,
+              waterInitialReading: 0, electricityRate: 0, waterRate: 0, parkingRate: 0,
               checkInDeadline: toLocalInput(query.data?.checkInDeadline), serviceDefinitions: [] }}
             fields={[
               { name: 'landlordName', label: 'Bên cho thuê · họ tên' },
@@ -174,7 +173,6 @@ export function ManagerBookingDetail() {
               { name: 'electricityRate', label: 'Đơn giá điện (VND/kWh)', kind: 'number', min: 0 },
               { name: 'waterRate', label: 'Đơn giá nước (VND/m³)', kind: 'number', min: 0 },
               { name: 'parkingRate', label: 'Đơn giá gửi xe (VND/tháng)', kind: 'number', min: 0 },
-              { name: 'maxOccupants', label: 'Số người tối đa theo hợp đồng', kind: 'number', min: 1 },
               { name: 'checkInDeadline', label: 'Hạn check-in / bàn giao', kind: 'datetime-local' },
               { name: 'serviceDefinitions', label: 'Dịch vụ: mỗi dòng Service ID|tên|đơn vị|đơn giá|cách tính|MANDATORY/OPTIONAL', kind: 'list', hint: 'Nhập Service ID Mongo 24 ký tự từ catalog. Các dịch vụ MANDATORY được Tenant chọn sẵn và không thể bỏ.' },
             ]}

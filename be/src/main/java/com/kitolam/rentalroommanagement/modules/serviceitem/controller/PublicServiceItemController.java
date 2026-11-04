@@ -26,9 +26,9 @@ public class PublicServiceItemController {
 
     @GetMapping
     @Operation(summary = "Dịch vụ đang cung cấp cho phòng thuê nguyên phòng (ROOM) hoặc theo chỗ (SLOT)")
-    public StandardResponse<List<ServiceItemResponse>> list(@RequestParam(defaultValue = "ROOM") ServiceScope roomMode) {
+    public StandardResponse<List<ServiceItemResponse>> list(@RequestParam(defaultValue = "ROOM") ServiceScope serviceScope) {
         // A slot tenant also shares the room-level services, same rule as the service request catalog.
-        EnumSet<ServiceScope> scopes = roomMode == ServiceScope.SLOT ? EnumSet.allOf(ServiceScope.class) : EnumSet.of(ServiceScope.ROOM);
+        EnumSet<ServiceScope> scopes = serviceScope == ServiceScope.SLOT ? EnumSet.allOf(ServiceScope.class) : EnumSet.of(ServiceScope.ROOM);
         return StandardResponse.success(serviceItemService.listPublic(scopes));
     }
 }

@@ -3,6 +3,7 @@ package com.kitolam.rentalroommanagement.modules.serviceitem.dto.response;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceScope;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceStatus;
+import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,6 +15,7 @@ public record ServiceItemResponse(
         String unit,
         BigDecimal unitPrice,
         CalculationType calculationType,
+        QuantityRule quantityRule,
         ServiceScope scope,
         boolean mandatory,
         ServiceStatus status,

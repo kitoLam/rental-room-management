@@ -12,7 +12,6 @@ import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.PublicRoomResponse;
-import com.kitolam.rentalroommanagement.modules.room.enums.RoomMode;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
@@ -51,12 +50,10 @@ public class PublicRoomService {
             String branchId,
             String roomTypeId,
             String address,
-            String roomMode,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             BigDecimal minArea,
             BigDecimal maxArea,
-            Integer minCapacity,
             int page,
             int size,
             String sort
@@ -152,13 +149,6 @@ public class PublicRoomService {
             roomFilters.add(Criteria.where("roomTypeId").is(MongoQueryHelper.toObjectId(roomTypeId)));
         }
 
-        // 3. Lọc theo Hình thức (Nhà riêng / Căn hộ nguyên căn vs Ở ghép theo slot)
-        if (StringUtils.hasText(roomMode) && !"ALL".equalsIgnoreCase(roomMode)) {
-            RoomMode mode = "SLOT".equalsIgnoreCase(roomMode) || "PER_SLOT".equalsIgnoreCase(roomMode)
-                    ? RoomMode.PER_SLOT : RoomMode.WHOLE_ROOM;
-            roomFilters.add(Criteria.where("roomMode").is(mode.name()));
-        }
-
         // 4. Lọc kéo khoảng giá (500.000 - 20.000.000)
         if (minPrice != null || maxPrice != null) {
             Criteria price = Criteria.where("listedRentPrice");
@@ -175,18 +165,10 @@ public class PublicRoomService {
             roomFilters.add(area);
         }
 
-        // 6. Lọc sức chứa tối thiểu
-        if (minCapacity != null) {
-            if (minCapacity < 1) {
-                throw new BadRequestException("Sức chứa tối thiểu phải lớn hơn 0");
-            }
-            roomFilters.add(Criteria.where("maxOccupants").gte(minCapacity));
-        }
-
         Criteria roomCriteria = new Criteria().andOperator(roomFilters);
         Sort roomSort = parseSort(sort).and(Sort.by(Sort.Direction.ASC, "id"));
         long total = mongoTemplate.count(Query.query(roomCriteria), Room.class);
-        Set<String> fullyOccupiedIds = fullyOccupiedPerSlotRoomIds(roomCriteria);
+        Set<String> fullyOccupiedIds = fullyOccupiedRoomIds(roomCriteria);
         List<Criteria> occupiedFilters = new ArrayList<>();
         occupiedFilters.add(roomCriteria);
         occupiedFilters.add(Criteria.where("id").in(fullyOccupiedIds.stream()
@@ -277,13 +259,11 @@ public class PublicRoomService {
         return Sort.by(direction, property);
     }
 
-    private Set<String> fullyOccupiedPerSlotRoomIds(Criteria roomCriteria) {
-        Criteria perSlotCriteria = new Criteria().andOperator(roomCriteria,
-                Criteria.where("roomMode").is(RoomMode.PER_SLOT.name()));
-        List<Room> perSlotRooms = mongoTemplate.find(Query.query(perSlotCriteria), Room.class);
-        if (perSlotRooms.isEmpty()) return Set.of();
+    private Set<String> fullyOccupiedRoomIds(Criteria roomCriteria) {
+        List<Room> inventoryRooms = mongoTemplate.find(Query.query(roomCriteria), Room.class);
+        if (inventoryRooms.isEmpty()) return Set.of();
 
-        List<String> roomIds = perSlotRooms.stream().map(Room::getId).toList();
+        List<String> roomIds = inventoryRooms.stream().map(Room::getId).toList();
         List<RoomSlot> slots = mongoTemplate.find(Query.query(new Criteria().andOperator(
                 Criteria.where("isDeleted").is(false), Criteria.where("roomId").in(roomIds.stream()
                         .map(MongoQueryHelper::toObjectId).toList()))), RoomSlot.class);
@@ -328,8 +308,9 @@ public class PublicRoomService {
                 room.getBranchId(),
                 room.getRoomTypeId(),
                 room.getRoomNumber(),
-                room.getRoomMode() == RoomMode.PER_SLOT ? "SLOT" : "ROOM",
-                room.getMaxOccupants() == null ? 1 : room.getMaxOccupants(),
+                (int) mongoTemplate.count(Query.query(new Criteria().andOperator(
+                        Criteria.where("roomId").is(MongoQueryHelper.toObjectId(room.getId())),
+                        Criteria.where("isDeleted").is(false))), RoomSlot.class),
                 room.getArea(),
                 room.getFloor(),
                 room.getListedRentPrice() == null ? BigDecimal.ZERO : room.getListedRentPrice(),

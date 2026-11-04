@@ -289,7 +289,7 @@ export const handlers = [
         const filters: RoomFilters = {
           q: params.get('q') || params.get('keyword') || params.get('address') || '',
           area: params.get('area') || '',
-          mode: (params.get('rentalMode') || (params.get('roomMode') === 'WHOLE_ROOM' ? 'ROOM' : params.get('roomMode') === 'PER_SLOT' ? 'SLOT' : undefined) || 'ALL') as RoomFilters['mode'],
+          mode: (params.get('rentalMode') || 'ALL') as RoomFilters['mode'],
           minPrice: params.has('minPrice') ? Number(params.get('minPrice')) : undefined,
           maxPrice: params.has('maxPrice') ? Number(params.get('maxPrice')) : undefined,
           minArea: params.has('minArea') ? Number(params.get('minArea')) : undefined,

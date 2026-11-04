@@ -6,6 +6,7 @@ import com.kitolam.rentalroommanagement.modules.serviceitem.dto.request.ServiceI
 import com.kitolam.rentalroommanagement.modules.serviceitem.dto.response.ServiceItemResponse;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceScope;
+import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
 import com.kitolam.rentalroommanagement.modules.serviceitem.service.ServiceItemService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,15 +29,15 @@ import java.util.List;
 public class ServiceCatalogSeeder implements CommandLineRunner {
 
     private static final List<ServiceItemCreateRequest> CATALOG = List.of(
-            item("DIEN", "Điện", "kWh", 3_500, CalculationType.METERED, ServiceScope.ROOM, true),
-            item("NUOC", "Nước", "m³", 18_000, CalculationType.METERED, ServiceScope.ROOM, true),
-            item("RAC", "Vệ sinh / rác", "phòng/tháng", 30_000, CalculationType.FIXED, ServiceScope.ROOM, true),
-            item("THANG_MAY", "Thang máy", "người/tháng", 20_000, CalculationType.PER_PERSON, ServiceScope.ROOM, true),
-            item("WIFI", "Wi-Fi", "phòng/tháng", 100_000, CalculationType.FIXED, ServiceScope.ROOM, false),
-            item("GUI_XE", "Gửi xe máy", "xe/tháng", 100_000, CalculationType.FIXED, ServiceScope.ROOM, false),
-            item("GIAT_SAY", "Giặt sấy", "người/tháng", 80_000, CalculationType.PER_PERSON, ServiceScope.ROOM, false),
-            item("DON_PHONG", "Dọn phòng định kỳ", "lần", 60_000, CalculationType.FIXED, ServiceScope.ROOM, false),
-            item("TU_DO", "Tủ đồ cá nhân", "chỗ/tháng", 50_000, CalculationType.PER_SLOT, ServiceScope.SLOT, false)
+            item("DIEN", "Điện", "kWh", 3_500, CalculationType.METERED, QuantityRule.METERED, ServiceScope.ROOM, true),
+            item("NUOC", "Nước", "m³", 18_000, CalculationType.METERED, QuantityRule.METERED, ServiceScope.ROOM, true),
+            item("RAC", "Vệ sinh / rác", "phòng/tháng", 30_000, CalculationType.FIXED, QuantityRule.FIXED_ONE, ServiceScope.ROOM, true),
+            item("THANG_MAY", "Thang máy", "slot/tháng", 20_000, CalculationType.PER_SLOT, QuantityRule.PER_SLOT, ServiceScope.ROOM, true),
+            item("WIFI", "Wi-Fi", "phòng/tháng", 100_000, CalculationType.FIXED, QuantityRule.FIXED_ONE, ServiceScope.ROOM, false),
+            item("GUI_XE", "Gửi xe máy", "xe/tháng", 100_000, CalculationType.FIXED, QuantityRule.USER_INPUT, ServiceScope.ROOM, false),
+            item("GIAT_SAY", "Giặt sấy", "slot/tháng", 80_000, CalculationType.FIXED, QuantityRule.USER_INPUT, ServiceScope.ROOM, false),
+            item("DON_PHONG", "Dọn phòng định kỳ", "lần", 60_000, CalculationType.FIXED, QuantityRule.USER_INPUT, ServiceScope.ROOM, false),
+            item("TU_DO", "Tủ đồ cá nhân", "chỗ/tháng", 50_000, CalculationType.FIXED, QuantityRule.USER_INPUT, ServiceScope.SLOT, false)
     );
 
     private final ServiceItemService serviceItems;
@@ -63,7 +64,7 @@ public class ServiceCatalogSeeder implements CommandLineRunner {
     }
 
     private static ServiceItemCreateRequest item(String code, String name, String unit, long price,
-                                                 CalculationType type, ServiceScope scope, boolean mandatory) {
-        return new ServiceItemCreateRequest(code, name, unit, BigDecimal.valueOf(price), type, scope, mandatory);
+                                                 CalculationType type, QuantityRule quantityRule, ServiceScope scope, boolean mandatory) {
+        return new ServiceItemCreateRequest(code, name, unit, BigDecimal.valueOf(price), type, quantityRule, scope, mandatory);
     }
 }
