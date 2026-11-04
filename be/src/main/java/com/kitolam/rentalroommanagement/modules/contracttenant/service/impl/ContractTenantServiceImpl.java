@@ -188,6 +188,7 @@ public class ContractTenantServiceImpl implements ContractTenantService {
 
     private ContractTenantResponse response(ContractTenant item, Tenant tenant) {
         return new ContractTenantResponse(item.getId(), item.getContractId(), item.getTenantId(), item.getBookingId(),
+                item.getRoomSlotIds(), item.getServices(),
                 tenant.getFullName(), tenant.getEmail(), item.getIsRepresentative(), item.getRentAmount(), item.getJoinedAt(),
                 item.getLeftAt(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
     }

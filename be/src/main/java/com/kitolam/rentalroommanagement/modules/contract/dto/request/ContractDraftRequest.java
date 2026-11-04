@@ -27,7 +27,6 @@ public record ContractDraftRequest(
         @NotNull @PositiveOrZero BigDecimal electricityRate,
         @NotNull @PositiveOrZero BigDecimal waterRate,
         @NotNull @PositiveOrZero BigDecimal parkingRate,
-        @NotNull @Min(1) Integer maxOccupants,
         @NotNull Instant checkInDeadline,
         @Valid List<ContractServiceRequest> services
 ) {
@@ -37,6 +36,7 @@ public record ContractDraftRequest(
             @NotBlank String unit,
             @NotNull @PositiveOrZero BigDecimal unitPrice,
             @NotBlank String calculationType,
-            boolean mandatory
+            boolean mandatory,
+            @NotNull @jakarta.validation.constraints.PositiveOrZero Integer quantity
     ) {}
 }

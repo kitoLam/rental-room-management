@@ -72,7 +72,8 @@ public class ServiceItemServiceImpl implements ServiceItemService {
     public ServiceItemResponse update(String id, ServiceItemUpdateRequest request) {
         ServiceItem serviceItem = find(id);
         boolean changesBilling = (request.scope() != null && request.scope() != serviceItem.getScope())
-                || (request.calculationType() != null && request.calculationType() != serviceItem.getCalculationType());
+                || (request.calculationType() != null && request.calculationType() != serviceItem.getCalculationType())
+                || (request.quantityRule() != null && request.quantityRule() != serviceItem.getQuantityRule());
         if (changesBilling && inUse(id)) {
             throw new ConflictException("Dịch vụ đang được sử dụng, không thể đổi phạm vi hoặc cách tính phí");
         }

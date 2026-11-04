@@ -121,19 +121,6 @@ function Filters({
         </select>
       </Field>
 
-      <Field label="Loại hình (Nhà riêng hay Căn hộ)" id={`${id}-mode`}>
-        <select
-          id={`${id}-mode`}
-          className="input"
-          name="mode"
-          defaultValue={filters.mode}
-        >
-          <option value="ALL">Tất cả hình thức</option>
-          <option value="ROOM">Nhà riêng / Căn hộ nguyên căn</option>
-          <option value="SLOT">Phòng ở ghép / Theo chỗ (Slot)</option>
-        </select>
-      </Field>
-
       <Field label="Loại phòng" id={`${id}-type`}>
         <select
           id={`${id}-type`}
@@ -315,22 +302,6 @@ function Filters({
         </div>
       </fieldset>
 
-      <Field label="Sức chứa tối thiểu" id={`${id}-capacity`}>
-        <select
-          id={`${id}-capacity`}
-          className="input"
-          name="minCapacity"
-          defaultValue={filters.minCapacity || ''}
-        >
-          <option value="">Không yêu cầu</option>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <option key={n} value={n}>
-              {n} người trở lên
-            </option>
-          ))}
-        </select>
-      </Field>
-
       <label className="flex min-h-11 items-center gap-3 text-sm cursor-pointer select-none">
         <input
           type="checkbox"
@@ -450,8 +421,7 @@ export default function RoomSearchPage() {
             </div>
 
             {/* Chips lọc đang áp dụng */}
-            {(filters.mode !== 'ALL' ||
-              filters.area ||
+            {(filters.area ||
               filters.branchId ||
               filters.roomTypeId ||
               filters.minPrice !== undefined ||
@@ -459,15 +429,6 @@ export default function RoomSearchPage() {
               filters.minArea !== undefined ||
               filters.maxArea !== undefined) && (
               <div className="mb-5 flex flex-wrap gap-2 items-center">
-                {filters.mode !== 'ALL' && (
-                  <button
-                    className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"
-                    onClick={() => apply({ ...filters, mode: 'ALL', page: 1 })}
-                  >
-                    {filters.mode === 'ROOM' ? 'Căn hộ / Nhà riêng' : 'Ở ghép'}
-                    <X size={12} />
-                  </button>
-                )}
                 {(filters.minPrice !== undefined || filters.maxPrice !== undefined) && (
                   <button
                     className="flex min-h-8 items-center gap-1.5 rounded-lg bg-primary-soft px-3 text-xs text-primary font-medium"

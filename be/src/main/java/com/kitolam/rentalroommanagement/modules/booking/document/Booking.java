@@ -33,6 +33,10 @@ public class Booking extends BaseDocument {
 
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> roomSlotIds = new ArrayList<>();
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
     private String contractId;
 
     private LocalDate expectedMoveInDate;
@@ -43,6 +47,8 @@ public class Booking extends BaseDocument {
     private BigDecimal holdingDepositAmount;
 
     private Instant paymentDeadline;
+
+    private List<SelectedServiceSnapshot> selectedServices = new ArrayList<>();
 
     private Instant holdExpiresAt;
 

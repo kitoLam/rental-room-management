@@ -31,19 +31,17 @@ public class PublicRoomController {
             @RequestParam(required = false) String branchId,
             @RequestParam(required = false) String roomTypeId,
             @RequestParam(required = false) String address,
-            @RequestParam(required = false) String roomMode,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) BigDecimal minArea,
             @RequestParam(required = false) BigDecimal maxArea,
-            @RequestParam(required = false) Integer minCapacity,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "roomNumber,asc") String sort
     ) {
         String effectiveKeyword = StringUtils.hasText(keyword) ? keyword : q;
         return StandardResponse.success(publicRoomService.search(
-                effectiveKeyword, branchId, roomTypeId, address, roomMode, minPrice, maxPrice, minArea, maxArea, minCapacity, page, size, sort
+                effectiveKeyword, branchId, roomTypeId, address, minPrice, maxPrice, minArea, maxArea, page, size, sort
         ));
     }
 

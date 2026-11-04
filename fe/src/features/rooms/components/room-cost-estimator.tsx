@@ -8,21 +8,21 @@ import { estimateMonthlyCost } from '../lib/cost-estimate'
 export function RoomCostEstimator({
   room,
   extras = [],
+  slotCount = 0,
 }: {
   room: Room
   /** Dịch vụ không tính theo chỉ số đã chọn ở mục "Dịch vụ tham khảo". */
   extras?: { label: string; cost: number }[]
+  slotCount?: number
 }) {
   const id = useId()
   const [values, setValues] = useState({
-    people: '1',
     vehicles: '0',
     electricity: '0',
     water: '0',
   })
   type Key = keyof typeof values
   const fields: { key: Key; label: string; unit: string; min: number; step: number }[] = [
-    { key: 'people', label: 'Số người ở', unit: 'người', min: 1, step: 1 },
     { key: 'vehicles', label: 'Số xe', unit: 'xe', min: 0, step: 1 },
     { key: 'electricity', label: 'Điện dự kiến / tháng', unit: 'kWh', min: 0, step: 1 },
     { key: 'water', label: 'Nước dự kiến / tháng', unit: 'm³', min: 0, step: 0.1 },
@@ -45,7 +45,8 @@ export function RoomCostEstimator({
   const rates = room.utilityRates ?? { electricityRate: null, waterRate: null, parkingRate: null }
   const numbers = Object.fromEntries(
     Object.entries(values).map(([key, value]) => [key, Number(value)]),
-  ) as Record<Key, number>
+  ) as Record<Key, number> & { people: number }
+  numbers.people = slotCount
   const missingRates = rateFields.filter(
     ({ key, usage }) => rates[key] == null && numbers[usage] > 0,
   )
@@ -56,8 +57,8 @@ export function RoomCostEstimator({
     if (value === '') return 'Nhập giá trị để tính chi phí.'
     if (!Number.isFinite(number) || number < field.min) return `Nhập số từ ${field.min} trở lên.`
     if (key !== 'water' && !Number.isInteger(number)) return 'Vui lòng nhập số nguyên.'
-    if (key === 'people' && room.capacity > 0 && number > room.capacity)
-      return `Phòng có sức chứa tối đa ${room.capacity} người.`
+    if (key === 'vehicles' && slotCount > 0 && number > slotCount)
+      return `Số xe không được vượt quá ${slotCount} slot đã chọn.`
     return undefined
   }
   const valid = fields.every(({ key }) => !errorFor(key))
@@ -65,7 +66,7 @@ export function RoomCostEstimator({
     valid && missingRates.length === 0
       ? estimateMonthlyCost({
           rent: room.price,
-          rentalMode: room.rentalMode,
+          rentalMode: 'SLOT',
           ...numbers,
           electricityRate: rates.electricityRate ?? 0,
           waterRate: rates.waterRate ?? 0,
@@ -76,7 +77,7 @@ export function RoomCostEstimator({
   const costs = base && {
     ...base,
     total: base.total + extraTotal,
-    perPerson: (base.total + extraTotal) / numbers.people,
+          perPerson: slotCount > 0 ? (base.total + extraTotal) / slotCount : 0,
   }
   const money = (value: number) => formatVnd(Math.round(value))
 
@@ -94,13 +95,12 @@ export function RoomCostEstimator({
         </h2>
       </div>
       <p className="mb-6 text-sm leading-7 text-muted-foreground">
-        Tiền thuê lấy từ giá tham khảo của phòng. Nhập số xe và lượng điện, nước dự kiến dùng chung
-        cho tất cả người ở. Đơn giá do Owner/Manager cấu hình.
-        {room.rentalMode === 'SLOT' && ' Giá thuê theo chỗ được nhân với số người.'}
+        Tiền thuê lấy từ giá tham khảo nhân với số slot đã chọn. Nhập số xe và lượng điện, nước dự kiến;
+        số xe tối đa bằng số slot. Đơn giá do Owner/Manager cấu hình.
       </p>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-background p-4">
         <span className="text-sm text-muted-foreground">
-          {room.rentalMode === 'SLOT' ? 'Tiền thuê / người / tháng' : 'Tiền thuê / phòng / tháng'}
+          Tiền thuê / slot / tháng · {slotCount} slot
         </span>
         <strong className="text-lg text-primary">{money(room.price)}</strong>
       </div>
@@ -113,7 +113,7 @@ export function RoomCostEstimator({
                 type="number"
                 min={min}
                 step={step}
-                max={key === 'people' && room.capacity > 0 ? room.capacity : undefined}
+                max={key === 'vehicles' && slotCount > 0 ? slotCount : undefined}
                 className="input pr-24"
                 value={values[key]}
                 aria-invalid={!!errorFor(key)}
@@ -178,8 +178,8 @@ export function RoomCostEstimator({
               <p className="text-[1.75rem] font-bold text-primary">{money(costs.total)}</p>
             </div>
             <p className="mt-2 text-sm">
-              Chia đều {numbers.people} người:{' '}
-              <strong>{money(costs.perPerson)} / người / tháng</strong>
+              Chi phí bình quân theo {slotCount} slot:{' '}
+              <strong>{money(costs.perPerson)} / slot / tháng</strong>
             </p>
           </>
         ) : (

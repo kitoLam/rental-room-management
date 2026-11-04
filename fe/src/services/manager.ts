@@ -23,43 +23,48 @@ const roomDto = z.object({
   id: databaseIdSchema,
   branchId: databaseIdSchema,
   roomTypeId: databaseIdSchema,
-  code: z.string(),
-  rentalMode: z.enum(['ROOM', 'SLOT']),
-  capacity: z.number(),
-  areaSqm: z.number().nullable(),
-  floorNumber: z.number().nullable(),
-  referencePrice: z.number(),
-  description: z.string().nullable(),
+  managerId: databaseIdSchema.nullable().optional(),
+  roomNumber: z.string(),
+  floor: z.number().nullable(),
+  area: z.number().nullable(),
+  listedRentPrice: z.number(),
+  listedDepositAmount: z.number().nullable(),
   amenities: z.array(z.string()).nullable(),
-  imageRefs: z.unknown(),
-  operationalStatus: z.enum(['AVAILABLE', 'MAINTENANCE', 'INACTIVE']),
-  isPublic: z.boolean(),
+  images: z.array(z.string()).nullable(),
+  rules: z.string().nullable(),
+  status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
 })
 const backendContractDto = z.object({
-  id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), bookingId: z.string().nullable().optional(),
-  tenantId: z.string().nullable().optional(), managerId: z.string(), contractNumber: z.string(), startDate: z.string(),
-  endDate: z.string(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
+  id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), roomSlotIds: z.array(z.string()).optional(), bookingId: z.string().nullable().optional(),
+  tenantId: z.string().nullable().optional(), managerId: z.string(), contractNumber: z.string(), startDate: z.string().nullable(),
+  endDate: z.string().nullable(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
-  tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), roomMode: z.string().nullable().optional(),
+  tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
+  termMonths: z.number().nullable().optional(), signedDate: z.string().nullable().optional(), firstBillingStartDate: z.string().nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), templateDownloadUrl: z.string().nullable().optional(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
   electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
   electricityRate: z.number().nullable().optional(), waterRate: z.number().nullable().optional(), parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
-  services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean() })).optional(),
+  services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
 }).passthrough()
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomId,
-    startDate: value.startDate, endDate: value.endDate, terms: value.terms || '',
+    startDate: value.startDate || new Date().toISOString().slice(0, 10), endDate: value.endDate || new Date().toISOString().slice(0, 10), terms: value.terms || '',
     landlordName: value.landlordName, landlordIdNumber: value.landlordIdNumber, landlordAddress: value.landlordAddress,
     tenantName: value.tenantName, tenantIdNumber: value.tenantIdNumber, tenantAddress: value.tenantAddress,
     roomAddress: value.roomAddress, paymentDueDay: value.paymentDueDay, rentPrice: value.rentPrice,
     contractDepositAmount: value.contractDepositAmount,
     electricityInitialReading: value.electricityInitialReading, waterInitialReading: value.waterInitialReading,
     electricityRate: value.electricityRate, waterRate: value.waterRate, parkingRate: value.parkingRate,
-    maxOccupants: value.maxOccupants, services: value.services,
-    rentalMode: value.roomMode === 'WHOLE_ROOM' ? 'ROOM' : 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
+    maxOccupants: value.maxOccupants, services: value.services, roomSlotIds: value.roomSlotIds,
+    signedEvidenceUrl: value.signedEvidenceUrl, termMonths: value.termMonths, signedDate: value.signedDate,
+    firstBillingStartDate: value.firstBillingStartDate, evidenceSubmittedAt: value.evidenceSubmittedAt,
+    evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
+    evidenceNote: value.evidenceNote, templateDownloadUrl: value.templateDownloadUrl,
+    rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
 }
@@ -96,41 +101,40 @@ const normalizePage = <T>(page: {
 }) => ({ ...page, number: page.number - 1 })
 const roomImageRefs = (images: unknown) => (Array.isArray(images) ? images : [])
 function roomView(r: z.infer<typeof roomDto>, typeName: string) {
-  const images = roomImageRefs(r.imageRefs).filter(
+  const images = roomImageRefs(r.images).filter(
     (x): x is string => typeof x === 'string' && /^https?:\/\//.test(x),
   )
-  const status = r.operationalStatus === 'AVAILABLE' ? 'ACTIVE' : r.operationalStatus
   return {
     id: r.id,
-    code: r.code,
-    title: `${typeName} ${r.code}`,
+    code: r.roomNumber,
+    title: `${typeName} ${r.roomNumber}`,
     branchId: r.branchId,
     branchName: '',
     address: '',
     areaKey: '',
-    price: r.referencePrice,
-    capacity: r.capacity,
-    sizeM2: r.areaSqm,
+    price: r.listedRentPrice,
+    capacity: 0,
+    sizeM2: r.area,
     availableSlots: null,
-    floor: r.floorNumber,
-    rentalMode: r.rentalMode,
+    floor: r.floor,
+    rentalMode: 'SLOT',
     roomTypeId: r.roomTypeId,
     roomTypeName: typeName,
-    operationalStatus: status,
+    operationalStatus: r.status === 'MAINTENANCE' ? 'MAINTENANCE' : r.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
     status:
-      r.operationalStatus === 'MAINTENANCE'
+      r.status === 'MAINTENANCE'
         ? 'MAINTENANCE'
-        : r.operationalStatus === 'INACTIVE'
+        : r.status === 'INACTIVE'
           ? 'INACTIVE'
-          : 'UNKNOWN',
-    isPublic: r.isPublic,
+          : r.status === 'OCCUPIED' ? 'OCCUPIED' : 'AVAILABLE',
+    isPublic: true,
     availability: null,
     occupiedResources: null,
     heldResources: null,
     imageUrl: images[0] || '',
-    imageAlt: `${typeName} ${r.code}`,
+    imageAlt: `${typeName} ${r.roomNumber}`,
     images,
-    description: r.description || '',
+    description: r.rules || '',
     amenities: r.amenities || [],
     services: [],
   }
@@ -154,17 +158,14 @@ function roomPayload(value: Record<string, unknown>, branchId: string) {
   return {
     branchId,
     roomTypeId: value.roomTypeId,
-    roomCode: value.code,
-    rentalMode: value.rentalMode,
-    capacity: value.capacity,
-    areaSqm: value.sizeM2,
-    floorNumber: value.floor,
-    referencePrice: value.price,
-    description: value.description,
+    roomNumber: value.code,
+    area: value.sizeM2,
+    floor: value.floor,
+    listedRentPrice: value.price,
+    rules: value.description,
     amenities: value.amenities,
     imageRefs: value.images,
-    operationalStatus: value.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : value.operationalStatus,
-    isPublic: value.isPublic,
+    status: value.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : value.operationalStatus,
   }
 }
 const slotListPage = (slots: z.infer<typeof slotDto>[]) => ({
@@ -882,6 +883,8 @@ export const managerApi = {
       const v = value as { signedFileUrl: string }
       return contractService.completeCheckIn(id, v.signedFileUrl)
     }
+    if (resource === 'contracts' && provider('manager') === 'real' && id && action === 'review-evidence')
+      return contractService.reviewEvidence(id, value as { approved: boolean; note?: string; adjustedSignedDate?: string; firstBillingStartDate?: string })
     if (resource === 'services' && provider('utilities') === 'real') {
       if (method === 'DELETE' && id) {
         await utilitiesService.catalog.delete(id)

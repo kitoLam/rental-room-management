@@ -8,6 +8,9 @@ import java.util.Collection;
 import java.util.List;
 
 public interface RoomSlotOccupancyRepository extends BaseRepository<RoomSlotOccupancy> {
+    List<RoomSlotOccupancy> findByRoomSlotIdAndStatusInAndIsDeletedFalse(
+            String roomSlotId, Collection<OccupancyStatus> statuses);
+
     List<RoomSlotOccupancy> findByRoomSlotIdAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
             String roomSlotId, Collection<OccupancyStatus> statuses, LocalDate requestedEnd, LocalDate requestedStart);
 

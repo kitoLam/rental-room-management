@@ -6,5 +6,8 @@ import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 public interface ContractRepository extends BaseRepository<Contract> {
     java.util.Optional<Contract> findByBookingIdAndIsDeletedFalse(String bookingId);
 
+    java.util.List<Contract> findByStatusAndEvidenceDeadlineLessThanEqualAndIsDeletedFalse(
+            com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus status, java.time.Instant deadline);
+
     boolean existsByContractNumberAndIsDeletedFalse(String contractNumber);
 }

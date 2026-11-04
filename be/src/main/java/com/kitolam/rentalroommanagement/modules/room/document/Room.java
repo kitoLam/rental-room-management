@@ -1,7 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.room.document;
 
 import com.kitolam.rentalroommanagement.common.base.BaseDocument;
-import com.kitolam.rentalroommanagement.modules.room.enums.RoomMode;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,11 +46,6 @@ public class Room extends BaseDocument {
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal listedDepositAmount;
-
-    private RoomMode roomMode;
-
-    /** WHOLE_ROOM: max people in the room. PER_SLOT: number of slots. See {@link RoomMode}. */
-    private Integer maxOccupants;
 
     private List<String> amenities = new ArrayList<>();
 

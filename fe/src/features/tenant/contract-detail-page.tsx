@@ -5,9 +5,14 @@ import { tenantApi } from '@/services/tenant'
 import type { TenantContract, Tenancy } from '@/interfaces/tenant'
 import { ExternalLink } from 'lucide-react'
 import { useParams } from 'react-router'
+import { useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { EmptyRows, Facts, TenantLink, TenantPage, TenantStatus } from './components'
 import { useTenant, useTenantQuery } from './context'
 import { PrepaidPanel } from './prepaid-panel'
+import { catalogService, contractService, roomSlotService } from '@/services/guest-user'
+import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/common/page'
 
 export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
   const { contractId = '' } = useParams(),
@@ -19,8 +24,43 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     ),
     payments = useTenantQuery('payments', tenantApi.payments),
     contract = query.data && 'contractNumber' in query.data ? query.data : null
+  const [evidenceUrl, setEvidenceUrl] = useState('')
+  const [termMonths, setTermMonths] = useState('3')
+  const [signedDate, setSignedDate] = useState('')
+  const roomQuery = useQuery({
+    queryKey: ['contract-room', contract?.roomId],
+    queryFn: () => catalogService.room(contract!.roomId),
+    enabled: Boolean(contract?.roomId && !terms),
+    retry: false,
+  })
+  const slotsQuery = useQuery({
+    queryKey: ['contract-room-slots', contract?.roomId],
+    queryFn: async () => (await roomSlotService.list(contract!.roomId)).content,
+    enabled: Boolean(contract?.roomId && contract.roomSlotIds?.length && !terms),
+    retry: false,
+  })
+  const submitEvidence = useMutation({
+    mutationFn: () => contractService.submitEvidence(contract!.id, {
+      evidenceUrl: evidenceUrl.trim(),
+      termMonths: Number(termMonths),
+      ...(signedDate ? { signedDate } : {}),
+    }),
+    onSuccess: async () => {
+      setEvidenceUrl('')
+      await query.refetch()
+    },
+  })
   const prepaid = (payments.data || []).filter((p) => p.status === 'VERIFIED' && !p.invoiceId)
   const tenancyMatchesContract = Boolean(contract && contract.id === t.contractId)
+  const slotCodes = (contract?.roomSlotIds || []).map((id) =>
+    slotsQuery.data?.find((slot) => slot.id === id)?.slotCode,
+  ).filter((code): code is string => Boolean(code))
+  const roomName = roomQuery.data?.title || contract?.roomAddress?.split(' · ').at(-1) || 'Phòng thuê'
+  const placeName = slotCodes.length
+    ? `${roomName} · ${slotCodes.join(', ')}`
+    : contract?.roomSlotIds?.length
+      ? `${roomName} · ${contract.roomSlotIds.length} slot`
+      : roomName
   return (
     <TenantPage
       title={terms ? 'Điều khoản cá nhân' : 'Chi tiết hợp đồng'}
@@ -55,29 +95,12 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                       ]
                     : [
                         [contract ? 'Địa chỉ thuê' : 'Chi nhánh', contract?.roomAddress || t.branchName],
-                        [
-                          'Phòng / chỗ ở',
-                          tenancyMatchesContract
-                            ? `${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`
-                            : contract?.roomSlotId
-                              ? 'Chỗ ở theo hợp đồng'
-                              : contract
-                                ? 'Phòng thuê'
-                                : t.roomName,
-                        ],
-                        [
-                          'Hình thức thuê',
-                          contract?.roomMode === 'PER_SLOT'
-                            ? 'Thuê chỗ'
-                            : contract?.roomMode === 'WHOLE_ROOM'
-                              ? 'Thuê nguyên phòng'
-                              : t.rentalMode === 'SLOT'
-                                ? 'Thuê chỗ'
-                                : 'Thuê nguyên phòng',
-                        ],
+                        ['Phòng / chỗ ở', contract ? placeName : `${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`],
                         [
                           'Thời hạn',
-                          `${dateOnly(contract?.startDate || t.startDate)} – ${dateOnly(contract?.endDate || t.endDate)} (không gồm ngày kết thúc)`,
+                          contract?.startDate && contract.endDate
+                            ? `${dateOnly(contract.startDate)} – ${dateOnly(contract.endDate)} (không gồm ngày kết thúc)`
+                            : 'Manager chưa duyệt thời hạn hợp đồng',
                         ],
                         ...(tenancyMatchesContract
                           ? [
@@ -97,6 +120,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                   <Facts
                     items={[
                       ['Địa chỉ thuê', contract.roomAddress || t.branchName],
+                      ['Phòng / chỗ ở', placeName],
                       ['Bên cho thuê', `${contract.landlordName || '—'} · CCCD/CMND ${contract.landlordIdNumber || '—'}`],
                       ['Bên thuê', `${contract.tenantName || '—'} · CCCD/CMND ${contract.tenantIdNumber || '—'}`],
                       ['Giá thuê / tháng', contract.rentPrice == null ? '—' : formatVnd(contract.rentPrice)],
@@ -168,6 +192,15 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
             ) : (
               <Panel>
                 <h2 className="mb-3 font-bold">Văn bản hợp đồng</h2>
+                <a
+                  href={contract?.templateDownloadUrl || 'https://www.youtube.com/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-primary"
+                >
+                  Tải mẫu hợp đồng
+                  <ExternalLink size={16} />
+                </a>
                 {contract?.signedFileUrl ? (
                   <a
                     href={contract.signedFileUrl}
@@ -191,10 +224,28 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     {contract?.status === 'DRAFT'
-                      ? 'Hợp đồng đang ở trạng thái nháp; quản lý sẽ cập nhật bản đã ký sau khi bàn giao.'
+                      ? 'Hợp đồng đang ở trạng thái nháp; hãy tải mẫu, ký và gửi bằng chứng để quản lý duyệt.'
                       : 'Chưa có văn bản được cung cấp. Liên hệ quản lý để nhận bản hợp đồng.'}
                   </p>
                 )}
+                {contract?.evidenceNote && <div className="mt-4"><Notice tone="warning">Manager yêu cầu gửi lại: {contract.evidenceNote}</Notice></div>}
+                {contract?.evidenceDeadline && !contract.evidenceSubmittedAt && <div className="mt-4"><Notice>Hạn nộp bằng chứng: {new Date(contract.evidenceDeadline).toLocaleString('vi-VN')}</Notice></div>}
+                {contract?.evidenceSubmittedAt && <div className="mt-4"><Notice>Đã nhận bằng chứng; đang chờ manager duyệt.</Notice></div>}
+                {contract?.bookingId && contract.status === 'DRAFT' && !contract.evidenceSubmittedAt && <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); submitEvidence.mutate() }}>
+                  <label className="grid gap-1 text-sm">Link ảnh/PDF hợp đồng đã ký
+                    <input className="input" type="url" autoComplete="off" placeholder="https://..." required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} />
+                  </label>
+                  <label className="grid gap-1 text-sm">Thời hạn hợp đồng
+                    <select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>
+                      {[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">Ngày ký (để trống nếu ký hôm nay)
+                    <input className="input" type="date" value={signedDate} onChange={(event) => setSignedDate(event.target.value)} />
+                  </label>
+                  <InlineError error={submitEvidence.error} />
+                  <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>
+                </form>}
               </Panel>
             )}
           </>

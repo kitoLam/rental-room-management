@@ -43,7 +43,7 @@ export function ManagerRoomEditor() {
         .filter((t) => t.active)
         .map((t) => ({ value: t.id, label: t.name })),
     },
-    {
+    ...(provider('manager') === 'mock' ? [{
       name: 'rentalMode',
       label: 'Hình thức thuê',
       kind: 'select',
@@ -51,8 +51,7 @@ export function ManagerRoomEditor() {
         { value: 'ROOM', label: 'Nguyên phòng' },
         { value: 'SLOT', label: 'Thuê chỗ' },
       ],
-    },
-    { name: 'capacity', label: 'Sức chứa (người)', kind: 'number', min: 1 },
+    } as FieldSpec, { name: 'capacity', label: 'Số slot', kind: 'number', min: 1 } as FieldSpec] : []),
     { name: 'sizeM2', label: 'Diện tích (m²)', kind: 'number', min: 1, step: 0.1, nullable: true },
     { name: 'floor', label: 'Tầng', kind: 'number', min: 0, nullable: true },
     { name: 'price', label: 'Giá tham khảo (VND)', kind: 'number', min: 0 },
@@ -91,7 +90,7 @@ export function ManagerRoomEditor() {
           <ManagerForm
             schema={
               provider('manager') === 'real'
-                ? roomInputSchema.omit({ images: true, title: true })
+                ? roomInputSchema.omit({ images: true, title: true, rentalMode: true, capacity: true })
                 : roomInputSchema.omit({ images: true })
             }
             defaults={
@@ -148,7 +147,7 @@ export function ManagerRoomEditor() {
               items={[
                 ['Chi nhánh', branch.name],
                 ['Mã phòng', String(preview.code)],
-                ['Hình thức', preview.rentalMode === 'SLOT' ? 'Thuê chỗ' : 'Nguyên phòng'],
+                ...(provider('manager') === 'mock' ? [['Hình thức', preview.rentalMode === 'SLOT' ? 'Thuê chỗ' : 'Nguyên phòng'] as [string, string]] : []),
                 ['Giá tham khảo', formatVnd(Number(preview.price))],
               ]}
             />

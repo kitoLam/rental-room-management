@@ -25,4 +25,6 @@ public class ContractServiceSnapshot {
     private String calculationType;
     private boolean mandatory;
     private boolean selected;
+
+    private Integer quantity;
 }

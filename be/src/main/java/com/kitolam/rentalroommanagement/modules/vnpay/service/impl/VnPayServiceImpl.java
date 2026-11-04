@@ -296,7 +296,7 @@ public class VnPayServiceImpl implements VnPayService {
         if (payment.getStatus() == PaymentStatus.REFUNDED) {
             throw new ConflictException("Giao dịch này đã được hoàn tiền trước đó");
         }
-        if (payment.getStatus() != PaymentStatus.SUCCESS) {
+        if (payment.getStatus() != PaymentStatus.SUCCESS && payment.getStatus() != PaymentStatus.LATE_PAID) {
             throw new BadRequestException("Chỉ có thể hoàn tiền cho giao dịch đã thanh toán THÀNH CÔNG (Trạng thái hiện tại: " + payment.getStatus() + ")");
         }
 

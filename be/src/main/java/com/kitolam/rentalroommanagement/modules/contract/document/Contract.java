@@ -30,6 +30,9 @@ public class Contract extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomSlotId;
 
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> roomSlotIds = new ArrayList<>();
+
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String bookingId;
@@ -45,8 +48,6 @@ public class Contract extends BaseDocument {
     private String tenantIdNumber;
     private String tenantAddress;
     private String roomAddress;
-    private String roomMode;
-
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String managerId;
@@ -88,6 +89,24 @@ public class Contract extends BaseDocument {
     private String terms;
 
     private String signedFileUrl;
+
+    private String signedEvidenceUrl;
+
+    private Integer termMonths;
+
+    private LocalDate signedDate;
+
+    private LocalDate firstBillingStartDate;
+
+    private Instant evidenceSubmittedAt;
+
+    private Instant evidenceDeadline;
+
+    private Integer evidenceResubmissionCount = 0;
+
+    private String evidenceNote;
+
+    private String templateDownloadUrl;
 
     private Instant terminatedAt;
 

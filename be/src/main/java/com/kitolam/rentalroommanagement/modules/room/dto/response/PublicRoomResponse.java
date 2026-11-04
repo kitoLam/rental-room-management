@@ -29,7 +29,6 @@ public record PublicRoomResponse(
             String branchId,
             String roomTypeId,
             String code,
-            String rentalMode,
             Integer capacity,
             BigDecimal areaSqm,
             Integer floorNumber,

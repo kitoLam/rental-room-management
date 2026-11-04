@@ -98,7 +98,6 @@ public class RoomServiceImpl implements RoomService {
         MongoQueryHelper.addObjectIdEquals(criteria, "branchId", filter.branchId());
         MongoQueryHelper.addObjectIdEquals(criteria, "roomTypeId", filter.roomTypeId());
         MongoQueryHelper.addObjectIdEquals(criteria, "managerId", filter.managerId());
-        MongoQueryHelper.addEquals(criteria, "roomMode", filter.roomMode());
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addKeyword(criteria, filter.keyword(), "roomNumber");
         return PagedResponse.from(MongoQueryHelper.page(mongo, criteria, pageable, Room.class), mapper::toResponse);

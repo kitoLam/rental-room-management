@@ -14,6 +14,8 @@ public record BookingResponse(
         String tenantId,
         String roomSlotId,
         String slotCode,
+        List<String> roomSlotIds,
+        List<String> slotCodes,
         LocalDate expectedMoveInDate,
         LocalDate expectedMoveOutDate,
         BigDecimal holdingDepositAmount,
@@ -35,6 +37,7 @@ public record BookingResponse(
         String roomTitle,
         String branchId,
         String branchName,
-        List<BookingTimelineEntry> timeline
+        List<BookingTimelineEntry> timeline,
+        List<com.kitolam.rentalroommanagement.modules.booking.document.SelectedServiceSnapshot> selectedServices
 ) {
 }

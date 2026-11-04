@@ -4,6 +4,7 @@ import com.kitolam.rentalroommanagement.common.base.BaseDocument;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceScope;
 import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceStatus;
+import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -31,6 +32,8 @@ public class ServiceItem extends BaseDocument {
     private BigDecimal unitPrice;
 
     private CalculationType calculationType;
+
+    private QuantityRule quantityRule;
 
     private ServiceScope scope;
 
