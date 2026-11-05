@@ -1,5 +1,5 @@
 import { Notice, Panel, QueryState } from '@/components/common/page'
-import { dateOnly } from '@/lib/activity'
+import { dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import type { TenantContract, Tenancy } from '@/interfaces/tenant'
@@ -26,7 +26,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     contract = query.data && 'contractNumber' in query.data ? query.data : null
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [termMonths, setTermMonths] = useState('3')
-  const [signedDate, setSignedDate] = useState('')
   const roomQuery = useQuery({
     queryKey: ['contract-room', contract?.roomId],
     queryFn: () => catalogService.room(contract!.roomId),
@@ -43,7 +42,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     mutationFn: () => contractService.submitEvidence(contract!.id, {
       evidenceUrl: evidenceUrl.trim(),
       termMonths: Number(termMonths),
-      ...(signedDate ? { signedDate } : {}),
     }),
     onSuccess: async () => {
       setEvidenceUrl('')
@@ -94,8 +92,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                         ],
                       ]
                     : [
-                        [contract ? 'Địa chỉ thuê' : 'Chi nhánh', contract?.roomAddress || t.branchName],
-                        ['Phòng / chỗ ở', contract ? placeName : `${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`],
                         [
                           'Thời hạn',
                           contract?.startDate && contract.endDate
@@ -121,11 +117,8 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                     items={[
                       ['Địa chỉ thuê', contract.roomAddress || t.branchName],
                       ['Phòng / chỗ ở', placeName],
-                      ['Bên cho thuê', `${contract.landlordName || '—'} · CCCD/CMND ${contract.landlordIdNumber || '—'}`],
-                      ['Bên thuê', `${contract.tenantName || '—'} · CCCD/CMND ${contract.tenantIdNumber || '—'}`],
                       ['Giá thuê / tháng', contract.rentPrice == null ? '—' : formatVnd(contract.rentPrice)],
                       ['Tiền cọc hợp đồng', contract.contractDepositAmount == null ? '—' : formatVnd(contract.contractDepositAmount)],
-                      ['Ngày thanh toán hàng tháng', contract.paymentDueDay ?? '—'],
                       ['Chỉ số điện đầu kỳ', contract.electricityInitialReading ?? '—'],
                       ['Chỉ số nước đầu kỳ', contract.waterInitialReading ?? '—'],
                     ]}
@@ -228,9 +221,25 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                       : 'Chưa có văn bản được cung cấp. Liên hệ quản lý để nhận bản hợp đồng.'}
                   </p>
                 )}
-                {contract?.evidenceNote && <div className="mt-4"><Notice tone="warning">Manager yêu cầu gửi lại: {contract.evidenceNote}</Notice></div>}
                 {contract?.evidenceDeadline && !contract.evidenceSubmittedAt && <div className="mt-4"><Notice>Hạn nộp bằng chứng: {new Date(contract.evidenceDeadline).toLocaleString('vi-VN')}</Notice></div>}
-                {contract?.evidenceSubmittedAt && <div className="mt-4"><Notice>Đã nhận bằng chứng; đang chờ manager duyệt.</Notice></div>}
+                {!!contract?.evidenceHistory?.length && <section className="mt-5 rounded-xl border p-4">
+                  <h3 className="mb-4 font-semibold">Lịch sử xử lý bằng chứng</h3>
+                  <ol className="space-y-4 border-l border-border pl-4">
+                    {contract.evidenceHistory.map((entry, index) => {
+                      const labels = {
+                        SUBMITTED: 'Bạn đã gửi bằng chứng hợp đồng',
+                        APPROVED: 'Manager/admin đã duyệt và kích hoạt hợp đồng',
+                        RESUBMISSION_REQUESTED: 'Manager/admin yêu cầu gửi lại bằng chứng',
+                        EXPIRED: 'Hồ sơ bằng chứng đã hết hạn',
+                      }
+                      return <li key={`${entry.action}-${entry.at}-${index}`} className="relative">
+                        <p className="font-medium">{labels[entry.action]}</p>
+                        {entry.at && <p className="mt-1 text-xs text-muted-foreground">{dateTime(entry.at)}</p>}
+                        {entry.note && <p className="mt-2 text-sm text-muted-foreground">{entry.note}</p>}
+                      </li>
+                    })}
+                  </ol>
+                </section>}
                 {contract?.bookingId && contract.status === 'DRAFT' && !contract.evidenceSubmittedAt && <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); submitEvidence.mutate() }}>
                   <label className="grid gap-1 text-sm">Link ảnh/PDF hợp đồng đã ký
                     <input className="input" type="url" autoComplete="off" placeholder="https://..." required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} />
@@ -239,9 +248,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                     <select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>
                       {[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}
                     </select>
-                  </label>
-                  <label className="grid gap-1 text-sm">Ngày ký (để trống nếu ký hôm nay)
-                    <input className="input" type="date" value={signedDate} onChange={(event) => setSignedDate(event.target.value)} />
                   </label>
                   <InlineError error={submitEvidence.error} />
                   <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>

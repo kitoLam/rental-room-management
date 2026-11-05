@@ -1,13 +1,13 @@
 import { ConfirmAction, InlineError, Notice, Page, Panel, QueryState, RecordStatus } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { dateTime } from '@/lib/activity'
+import { dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { bookingService, contractService } from '@/services/guest-user'
 import { provider } from '@/services/config'
 import { useSession } from '@/features/auth/session-store'
 import { invalidateActivity } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Timeline } from './activity-shared'
 
@@ -17,7 +17,6 @@ export function BookingDetailPage() {
   const canManage = user?.roles.some((role) => ['ADMIN', 'OWNER', 'MANAGER'].includes(role)) || false
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [termMonths, setTermMonths] = useState('3')
-  const [signedDate, setSignedDate] = useState('')
   const [managerNote, setManagerNote] = useState('')
   const [firstBillingStartDate, setFirstBillingStartDate] = useState('')
   const recordQuery = useQuery({
@@ -39,7 +38,7 @@ export function BookingDetailPage() {
   const cancel = useMutation({ mutationFn: () => bookingService.cancel(bookingId), onSuccess: refresh })
   const submitEvidence = useMutation({
     mutationFn: () => contractService.submitEvidence(record!.contractId!, {
-      evidenceUrl: evidenceUrl.trim(), termMonths: Number(termMonths), ...(signedDate ? { signedDate } : {}),
+      evidenceUrl: evidenceUrl.trim(), termMonths: Number(termMonths),
     }),
     onSuccess: async () => { setEvidenceUrl(''); await refresh() },
   })
@@ -47,11 +46,20 @@ export function BookingDetailPage() {
     mutationFn: (approved: boolean) => contractService.reviewEvidence(record!.contractId!, {
       approved,
       ...(managerNote.trim() ? { note: managerNote.trim() } : {}),
-      ...(signedDate ? { adjustedSignedDate: signedDate } : {}),
       ...(firstBillingStartDate ? { firstBillingStartDate } : {}),
     }),
     onSuccess: refresh,
   })
+  const billingDateMinimum = contractQuery.data?.evidenceSubmittedAt
+    ? suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt)
+    : ''
+  const validFirstBillingStartDate = Boolean(
+    firstBillingStartDate && firstBillingStartDate >= billingDateMinimum && firstBillingStartDate.endsWith('-01'),
+  )
+  useEffect(() => {
+    if (contractQuery.data?.evidenceSubmittedAt)
+      setFirstBillingStartDate(suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt))
+  }, [contractQuery.data?.evidenceSubmittedAt])
   if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/user/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
 
   return (
@@ -99,17 +107,15 @@ export function BookingDetailPage() {
             {!canManage && contractQuery.data.status === 'DRAFT' && !contractQuery.data.evidenceSubmittedAt && <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); submitEvidence.mutate() }}>
               <label className="grid gap-1 text-sm">Link ảnh/PDF hợp đồng đã ký<input className="input" type="url" required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} /></label>
               <label className="grid gap-1 text-sm">Thời hạn hợp đồng<select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>{[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}</select></label>
-              <label className="grid gap-1 text-sm">Ngày ký (để trống nếu ký hôm nay)<input className="input" type="date" value={signedDate} onChange={(event) => setSignedDate(event.target.value)} /></label>
               <InlineError error={submitEvidence.error} />
               <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>
             </form>}
             {canManage && contractQuery.data.evidenceSubmittedAt && <div className="grid gap-4">
               {contractQuery.data.signedEvidenceUrl && <a className="text-sm text-primary underline" href={contractQuery.data.signedEvidenceUrl} target="_blank" rel="noreferrer">Xem evidence đã gửi</a>}
-              <label className="grid gap-1 text-sm">Ngày ký đã xác minh (tùy chỉnh)<input className="input" type="date" value={signedDate} onChange={(event) => setSignedDate(event.target.value)} /></label>
-              <label className="grid gap-1 text-sm">Ngày bắt đầu kỳ tính tiền đầu tiên<input className="input" type="date" required value={firstBillingStartDate} onChange={(event) => setFirstBillingStartDate(event.target.value)} /></label>
+              <label className="grid gap-1 text-sm">Ngày bắt đầu kỳ tính tiền đầu tiên<input className="input disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" type="date" required min={billingDateMinimum} value={firstBillingStartDate} disabled /></label>
               <label className="grid gap-1 text-sm">Ghi chú / lý do gửi lại<textarea className="input min-h-20" value={managerNote} onChange={(event) => setManagerNote(event.target.value)} /></label>
               <InlineError error={reviewEvidence.error} />
-              <div className="flex flex-wrap gap-3"><Button loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(true)}>Duyệt evidence</Button><Button variant="outline" loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(false)}>Yêu cầu gửi lại</Button></div>
+              <div className="flex flex-wrap gap-3"><Button disabled={!validFirstBillingStartDate} loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(true)}>Duyệt evidence</Button><Button variant="outline" loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(false)}>Yêu cầu gửi lại</Button></div>
             </div>}
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               <div><dt className="font-semibold">Giá thuê theo tháng</dt><dd>{formatVnd(contractQuery.data.rentPrice)}</dd></div>
