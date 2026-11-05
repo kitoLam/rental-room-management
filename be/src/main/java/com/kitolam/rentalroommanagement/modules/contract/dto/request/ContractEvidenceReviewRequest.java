@@ -8,7 +8,6 @@ import java.time.LocalDate;
 public record ContractEvidenceReviewRequest(
         @NotNull Boolean approved,
         @Size(max = 500) String note,
-        LocalDate adjustedSignedDate,
         LocalDate firstBillingStartDate
 ) {
 }

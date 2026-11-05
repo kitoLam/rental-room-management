@@ -20,6 +20,27 @@ export const dateTime = (value: string) =>
   })
 export const dateOnly = (value: string) =>
   new Date(`${value}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Date()) => {
+  const vietnamDate = (value: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(value)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+    return `${part('year')}-${part('month')}-${part('day')}`
+  }
+  const submittedDate = new Date(`${vietnamDate(new Date(evidenceSubmittedAt))}T00:00:00Z`)
+  submittedDate.setUTCDate(submittedDate.getUTCDate() + 1)
+  const today = new Date(`${vietnamDate(now)}T00:00:00Z`)
+  const earliest = submittedDate > today ? submittedDate : today
+  if (earliest.getUTCDate() !== 1) {
+    earliest.setUTCDate(1)
+    earliest.setUTCMonth(earliest.getUTCMonth() + 1)
+  }
+  return earliest.toISOString().slice(0, 10)
+}
 export function referenceLink(type: string | null, id: string | null, tenancyId?: string, branchId?:string) {
   if(type==='ADMIN_VERIFICATION'&&id)return `/admin/owner-verifications/${encodeURIComponent(id)}`
   if(type==='ADMIN_USER'&&id)return `/admin/users/${encodeURIComponent(id)}`

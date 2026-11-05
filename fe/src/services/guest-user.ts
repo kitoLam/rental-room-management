@@ -398,6 +398,10 @@ const backendContractSchema = z.object({
   signedDate: z.string().nullable().optional(),
   firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
+  evidenceHistory: z.array(z.object({
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    at: z.string().nullable(), note: z.string().nullable(),
+  })).optional(),
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
@@ -587,9 +591,9 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>
     request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
-  submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number; signedDate?: string }) =>
+  submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number }) =>
     request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
-  reviewEvidence: (id: string, value: { approved: boolean; note?: string; adjustedSignedDate?: string; firstBillingStartDate?: string }) =>
+  reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
 }
 export const profileService = {

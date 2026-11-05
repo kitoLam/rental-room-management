@@ -16,6 +16,7 @@ import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractEvidenceHistoryEntry;
 import com.kitolam.rentalroommanagement.modules.contract.document.ContractServiceSnapshot;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractDraftRequest;
@@ -256,18 +257,15 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Hạn nộp bằng chứng hợp đồng đã hết");
         if (!List.of(3, 6, 8, 12).contains(request.termMonths()))
             throw new BadRequestException("Kỳ hạn hợp đồng chỉ gồm 3, 6, 8 hoặc 12 tháng");
-        Booking booking = booking(contract.getBookingId());
-        LocalDate receivedDate = LocalDate.ofInstant(now, VIETNAM_ZONE);
-        LocalDate signedDate = request.signedDate() == null ? receivedDate : request.signedDate();
-        validateSignedDate(signedDate, booking, receivedDate);
         contract.setSignedEvidenceUrl(request.evidenceUrl().trim());
         contract.setTermMonths(request.termMonths());
-        contract.setSignedDate(signedDate);
-        contract.setStartDate(signedDate.plusDays(1));
-        contract.setEndDate(contract.getStartDate().plusMonths(request.termMonths()));
+        contract.setSignedDate(null);
+        contract.setStartDate(null);
+        contract.setEndDate(null);
         contract.setEvidenceSubmittedAt(now);
         contract.setEvidenceDeadline(null);
         contract.setEvidenceNote(null);
+        addEvidenceHistory(contract, "SUBMITTED", now, null);
         return response(contractRepository.save(contract));
     }
 
@@ -282,6 +280,7 @@ public class ContractServiceImpl implements ContractService {
         if (!request.approved()) {
             String note = request.note() == null ? "" : request.note().trim();
             if (note.isBlank()) throw new BadRequestException("Cần ghi rõ lý do yêu cầu gửi lại bằng chứng");
+            addEvidenceHistory(contract, "RESUBMISSION_REQUESTED", clock.instant(), note);
             int resubmissions = contract.getEvidenceResubmissionCount() == null ? 0 : contract.getEvidenceResubmissionCount();
             if (resubmissions >= 2) {
                 expireEvidenceContract(contract);
@@ -299,19 +298,17 @@ public class ContractServiceImpl implements ContractService {
             return response(contractRepository.save(contract));
         }
 
-        LocalDate today = LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE);
-        LocalDate signedDate = request.adjustedSignedDate() == null ? contract.getSignedDate() : request.adjustedSignedDate();
-        validateSignedDate(signedDate, booking, today);
-        LocalDate effectiveDate = signedDate.plusDays(1);
+        LocalDate effectiveDate = LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
         LocalDate firstBillingStartDate = request.firstBillingStartDate();
-        if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate))
-            throw new BadRequestException("Kỳ tính tiền đầu tiên cần được xác nhận vào ngày hiệu lực hợp đồng hoặc sau đó");
-        contract.setSignedDate(signedDate);
+        if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate) || firstBillingStartDate.getDayOfMonth() != 1)
+            throw new BadRequestException("Ngày bắt đầu tính tiền kỳ đầu phải là mùng 1 của tháng, không trước ngày hiệu lực hợp đồng");
+        contract.setSignedDate(null);
         contract.setStartDate(effectiveDate);
         contract.setEndDate(effectiveDate.plusMonths(contract.getTermMonths()));
         contract.setFirstBillingStartDate(firstBillingStartDate);
         contract.setSignedFileUrl(contract.getSignedEvidenceUrl());
         contract.setStatus(ContractStatus.ACTIVE);
+        addEvidenceHistory(contract, "APPROVED", clock.instant(), null);
         ContractTenant contractTenant = contractTenantRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
                 .orElseGet(() -> {
                     ContractTenant created = new ContractTenant();
@@ -349,14 +346,9 @@ public class ContractServiceImpl implements ContractService {
         return response(saved);
     }
 
-    private void validateSignedDate(LocalDate signedDate, Booking booking, LocalDate receivedDate) {
-        LocalDate bookingDate = LocalDate.ofInstant(booking.getCreatedAt(), VIETNAM_ZONE);
-        if (signedDate.isAfter(receivedDate) || signedDate.isBefore(receivedDate.minusDays(7)) || signedDate.isBefore(bookingDate))
-            throw new BadRequestException("Ngày ký phải từ ngày tạo booking đến 7 ngày trước ngày nhận bằng chứng, và không được ở tương lai");
-    }
-
     private void expireEvidenceContract(Contract contract) {
         Booking booking = booking(contract.getBookingId());
+        addEvidenceHistory(contract, "EXPIRED", clock.instant(), "Hạn nộp bằng chứng hợp đồng đã hết.");
         contract.setStatus(ContractStatus.TERMINATED);
         contract.setTerminatedAt(clock.instant());
         contract.setTerminationReason("Quá hạn nộp bằng chứng hợp đồng; booking hết hiệu lực và tiền cọc chờ hoàn.");
@@ -537,6 +529,18 @@ public class ContractServiceImpl implements ContractService {
     }
 
     private ContractResponse response(Contract c) {
+        List<ContractEvidenceHistoryEntry> evidenceHistory = c.getEvidenceHistory() == null
+                ? new ArrayList<>() : new ArrayList<>(c.getEvidenceHistory());
+        if (evidenceHistory.isEmpty()) {
+            if (c.getEvidenceSubmittedAt() != null) {
+                evidenceHistory.add(new ContractEvidenceHistoryEntry("SUBMITTED", c.getEvidenceSubmittedAt(), null));
+                if (c.getStatus() == ContractStatus.ACTIVE)
+                    evidenceHistory.add(new ContractEvidenceHistoryEntry("APPROVED",
+                            c.getUpdatedAt() == null ? c.getEvidenceSubmittedAt() : c.getUpdatedAt(), null));
+            } else if (c.getEvidenceNote() != null && !c.getEvidenceNote().isBlank()) {
+                evidenceHistory.add(new ContractEvidenceHistoryEntry("RESUBMISSION_REQUESTED", c.getUpdatedAt(), c.getEvidenceNote()));
+            }
+        }
         return new ContractResponse(c.getId(), c.getRoomId(), c.getRoomSlotId(), c.getRoomSlotIds() == null ? List.of() : List.copyOf(c.getRoomSlotIds()),
                 c.getBookingId(), c.getTenantId(), c.getManagerId(),
                 c.getContractNumber(), c.getStartDate(), c.getEndDate(), c.getRentPrice(), c.getContractDepositAmount(),
@@ -545,7 +549,14 @@ public class ContractServiceImpl implements ContractService {
                 c.getElectricityRate(), c.getWaterRate(), c.getParkingRate(), c.getMaxOccupants(),
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
-                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), c.getTemplateDownloadUrl(),
+                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getTemplateDownloadUrl(),
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
+    }
+
+    private void addEvidenceHistory(Contract contract, String action, Instant at, String note) {
+        if (contract.getEvidenceHistory() == null) contract.setEvidenceHistory(new ArrayList<>());
+        if (contract.getEvidenceHistory().isEmpty() && contract.getEvidenceSubmittedAt() != null && !"SUBMITTED".equals(action))
+            contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry("SUBMITTED", contract.getEvidenceSubmittedAt(), null));
+        contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry(action, at, note));
     }
 }
