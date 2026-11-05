@@ -175,11 +175,8 @@ export const defaultFilters: RoomFilters = {
 }
 function query(filters: RoomFilters) {
   const params = new URLSearchParams({ page: String(filters.page - 1), size: '6' })
-  if (filters.q) {
-    params.set('q', filters.q)
-    params.set('keyword', filters.q)
-    params.set('address', filters.q)
-  }
+  const keyword = filters.q.trim()
+  if (keyword) params.set(provider('catalog') === 'mock' ? 'q' : 'keyword', keyword)
   if (filters.branchId) params.set('branchId', filters.branchId)
   if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
   for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea'] as const)
@@ -190,7 +187,8 @@ function query(filters: RoomFilters) {
     params.set('area', filters.area)
     params.set('sort', filters.sort)
   } else {
-    if (filters.area && !filters.q) params.set('address', filters.area)
+    // Area keys come from the URL; the public API searches human-readable addresses.
+    if (filters.area) params.set('address', filters.area.replaceAll('-', ' '))
     const sorts: Record<string, string> = {
       recommended: 'roomNumber,asc',
       'price-asc': 'referencePrice,asc',

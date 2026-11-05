@@ -108,7 +108,7 @@ public class PublicRoomService {
             for (String token : tokens) {
                 if (token.isBlank()) continue;
                 String regexPattern = toVietnameseRegexPattern(token);
-                Pattern compiled = Pattern.compile(regexPattern, Pattern.CASE_INSENSITIVE);
+                Pattern compiled = Pattern.compile(regexPattern, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
                 // Chủ nhà có tên khớp với từ khóa
                 Set<String> matchingOwnerIds = owners.stream()
