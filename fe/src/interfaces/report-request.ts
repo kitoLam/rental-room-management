@@ -65,9 +65,13 @@ export const reportRequestResponseSchema = z.object({
   id: z.string(),
   tenantId: z.string().nullish().transform((v) => v || ''),
   roomId: z.string().nullish().transform((v) => v || ''),
+  roomName: z.string().nullable().optional(),
+  slotName: z.string().nullable().optional(),
   branchId: z.string().nullable().optional(),
   contractId: z.string().nullable().optional(),
   managerId: z.string().nullable().optional(),
+  assigneeName: z.string().nullable().optional(),
+  assigneePhone: z.string().nullable().optional(),
   type: z.string().nullish().transform((v) => (v || 'REPAIR') as ReportRequestType),
   title: z.string().nullish().transform((v) => v || ''),
   content: z.string().nullish().transform((v) => v || ''),
@@ -91,6 +95,20 @@ export const reportRequestResponseSchema = z.object({
   timeline: z.array(reportRecordResponseSchema).nullish().transform((v) => v ?? []),
 })
 export type ReportRequestItem = z.infer<typeof reportRequestResponseSchema>
+
+export function formatReportAssignee(item?: {
+  assigneeName?: string | null
+  assigneePhone?: string | null
+  managerId?: string | null
+}): string | null {
+  if (!item) return null
+  if (item.assigneeName && item.assigneeName.trim()) {
+    const name = item.assigneeName.trim()
+    const phone = item.assigneePhone?.trim()
+    return phone ? `${name} (${phone})` : name
+  }
+  return item.managerId ? 'Quản lý phụ trách' : null
+}
 
 export interface CreateReportRequestInput {
   tenantId?: string

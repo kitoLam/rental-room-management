@@ -6,6 +6,7 @@ import type { InternalReport } from '@/mocks/tenant-fixtures'
 import {
   reportRequestResponseSchema,
   reportRecordResponseSchema,
+  formatReportAssignee,
   type ReportRequestItem,
   type ReportRecordItem,
   type CreateReportRequestInput,
@@ -43,6 +44,8 @@ function toItem(r: MockReportLike, tenancy?: Tenancy): ReportRequestItem {
     branchId: r.branchId || tenancy?.branchId || 'branch-id',
     contractId: r.contractId || tenancy?.contractId || 'contract-id',
     managerId: r.assignedTo ? 'manager-1' : 'manager-id',
+    assigneeName: r.assignedTo || null,
+    assigneePhone: null,
     type: r.category || 'REPAIR',
     title: r.title || '',
     content: r.content || r.description || '',
@@ -179,7 +182,7 @@ async function upsertMockFromItem(item: ReportRequestItem, fromMutation = false)
         url,
       })),
       createdAt: item.createdAt,
-      assignedTo: item.managerId ? 'Quản lý chi nhánh' : null,
+      assignedTo: formatReportAssignee(item),
       solutionResult: item.solutionResult || null,
       rejectReason: item.rejectReason || null,
       requestedInfoNote: item.requestedInfoNote || null,
@@ -364,13 +367,6 @@ export const reportRequestService = {
         }
       }
 
-      for (const le of localEntries) {
-        if (le.item.id && !seen.has(le.item.id)) {
-          seen.add(le.item.id)
-          merged.push(le.item)
-        }
-      }
-
       const filtered = filterItems(merged, filter)
       const page = filter.page || 0
       const size = filter.size || 20
@@ -383,10 +379,14 @@ export const reportRequestService = {
       }
     } catch (err) {
       console.warn('Real report-requests search failed, falling back to mock:', err)
-      const filtered = filterItems(
-        getLocalItems().map((x) => x.item),
-        filter,
-      )
+      const { useSession } = await import('@/features/auth/session-store')
+      const currentUser = useSession.getState().user
+      const rawLocal = getLocalItems().map((x) => x.item)
+      const roleScopedLocal =
+        feature === 'tenant' && currentUser
+          ? rawLocal.filter((x) => x.tenantId === currentUser.id)
+          : rawLocal
+      const filtered = filterItems(roleScopedLocal, filter)
       const page = filter.page || 0
       const size = filter.size || 20
       return {
@@ -501,13 +501,16 @@ export const reportRequestService = {
     }
   },
 
-  startProcessing: async (id: string): Promise<ReportRequestItem> => {
+  startProcessing: async (
+    id: string,
+    payload?: { assigneeName?: string; assigneePhone?: string; managerId?: string },
+  ): Promise<ReportRequestItem> => {
     try {
       const item = await request(
         'manager',
         `/api/v1/report-requests/${encodeURIComponent(id)}/start`,
         reportRequestResponseSchema,
-        write('POST'),
+        write('POST', payload || {}),
       )
       await upsertMockFromItem(item, true)
       return item
@@ -516,13 +519,56 @@ export const reportRequestService = {
       const { tenantDb, r, tenancy } = await findMockReport(id)
       if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
       r.status = 'IN_PROGRESS'
-      r.assignedTo = 'Quản lý chi nhánh'
+      const assignedDisplay = payload?.assigneeName
+        ? payload.assigneePhone
+          ? `${payload.assigneeName} (${payload.assigneePhone})`
+          : payload.assigneeName
+        : 'Quản lý phụ trách'
+      r.assignedTo = assignedDisplay
       r.locallyModified = true
       r.records.push({
         id: crypto.randomUUID(),
         at: new Date().toISOString(),
         status: 'IN_PROGRESS',
-        description: 'Quản lý bắt đầu tiếp nhận và xử lý yêu cầu',
+        description: `Tiếp nhận và bắt đầu xử lý yêu cầu · Người phụ trách: ${assignedDisplay}`,
+        performedBy: payload?.assigneeName || 'Quản lý',
+        evidence: [],
+        cost: 0,
+        responsibleParty: null,
+        approvalStatus: null,
+      })
+      saveSharedReports(tenantDb)
+      return toItem(r, tenancy)
+    }
+  },
+
+  assign: async (
+    id: string,
+    payload: { assigneeName: string; assigneePhone?: string; managerId?: string },
+  ): Promise<ReportRequestItem> => {
+    try {
+      const item = await request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/assign`,
+        reportRequestResponseSchema,
+        write('POST', payload),
+      )
+      await upsertMockFromItem(item, true)
+      return item
+    } catch (err) {
+      console.warn('Real report-requests assign failed, falling back to mock:', err)
+      const { tenantDb, r, tenancy } = await findMockReport(id)
+      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
+      const assignedDisplay = payload.assigneePhone
+        ? `${payload.assigneeName} (${payload.assigneePhone})`
+        : payload.assigneeName
+      r.assignedTo = assignedDisplay
+      r.locallyModified = true
+      r.records.push({
+        id: crypto.randomUUID(),
+        at: new Date().toISOString(),
+        status: r.status,
+        description: `Phân công người phụ trách xử lý: ${assignedDisplay}`,
         performedBy: 'Quản lý',
         evidence: [],
         cost: 0,

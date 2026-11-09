@@ -18,7 +18,7 @@ import {
 import { provider } from './config'
 import { utilitiesService } from './utilities'
 import { reportRequestService } from './report-request'
-import type { ReportRequestItem } from '@/interfaces/report-request'
+import { formatReportAssignee, type ReportRequestItem } from '@/interfaces/report-request'
 import type {
   CreateCostAllocationProposalInput,
 } from '@/interfaces/utilities'
@@ -51,7 +51,7 @@ function adaptReportRequest(item: ReportRequestItem, tenancyId?: string): Mainte
     assetName: assetNameMap[item.type] || item.type,
     status: item.status as any,
     createdAt: item.createdAt,
-    assignedTo: item.managerId ? 'Quản lý khu trọ' : null,
+    assignedTo: formatReportAssignee(item),
     solutionResult: item.solutionResult,
     rejectReason: item.rejectReason,
     requestedInfoNote: item.requestedInfoNote,
@@ -82,19 +82,149 @@ export type ServiceRegistrationValue = {
 }
 export type ServiceStopValue = { subscriptionId: string; proposedDate: string; note: string }
 
+function contractToTenancy(
+  c: z.infer<typeof tenantContractSchema>,
+  userId?: string,
+  resolvedSlotName?: string | null,
+) {
+  const parts = (c.roomAddress || '').split(' · ')
+  const branchName = parts.length > 1 ? parts[0] : c.roomAddress || 'Chi nhánh đang thuê'
+  const roomName =
+    parts.length > 1
+      ? (() => {
+          const r = parts.slice(1).join(' · ').trim()
+          return r.startsWith('P.') || r.startsWith('Phòng') ? r : `P.${r}`
+        })()
+      : `P.${c.roomId.slice(-4).toUpperCase()}`
+  const rent = Math.max(0, Math.round(c.rentPrice || 0))
+  const deposit = Math.max(0, Math.round(c.contractDepositAmount || rent))
+  const status =
+    c.status === 'ACTIVE'
+      ? ('ACTIVE' as const)
+      : c.status === 'DRAFT'
+        ? ('DRAFT' as const)
+        : c.status === 'EXPIRED'
+          ? ('LEFT' as const)
+          : ('CANCELLED' as const)
+  const contractStatus =
+    c.status === 'ACTIVE'
+      ? ('ACTIVE' as const)
+      : c.status === 'DRAFT'
+        ? ('DRAFT' as const)
+        : c.status === 'EXPIRED'
+          ? ('ENDED' as const)
+          : ('CANCELLED' as const)
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultEnd = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10)
+  return tenancySchema.parse({
+    id: c.id,
+    userId: userId || c.tenantId || c.id,
+    contractId: c.id,
+    branchId: c.roomId,
+    roomId: c.roomId,
+    roomSlotId: c.roomSlotId || null,
+    branchName,
+    roomName,
+    slotName:
+      resolvedSlotName !== undefined
+        ? resolvedSlotName
+        : c.roomSlotId
+          ? `Slot ${c.roomSlotId.slice(-4).toUpperCase()}`
+          : null,
+    rentalMode: c.roomSlotId ? 'SLOT' : 'ROOM',
+    status,
+    contractStatus,
+    code: c.contractNumber,
+    role: 'REPRESENTATIVE',
+    startDate: c.startDate || today,
+    endDate: c.endDate || defaultEnd,
+    actualLeaveDate: null,
+    monthlyRent: rent,
+    firstMonthRent: rent,
+    lastMonthRent: rent,
+    prepaidFirstRequired: rent,
+    prepaidLastRequired: deposit,
+    terms: c.terms || 'Theo quy định hợp đồng thuê phòng.',
+    sharedTerms: c.terms || 'Theo nội quy chung của khu trọ.',
+    document: c.signedFileUrl
+      ? {
+          name: `Hợp đồng ${c.contractNumber}`,
+          url: c.signedFileUrl,
+          issuedAt: c.signedDate || today,
+        }
+      : null,
+  })
+}
+
 export const tenantApi = {
   manualPay: (id: string, invoiceId: string, value: unknown) => request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}/manual-payments`), tenantPaymentSchema, write('POST', value)),
   prepay: (id: string, value: unknown) =>
     request('tenant', path(id, 'prepaid-payments'), tenantPaymentSchema, write('POST', value)),
   tenancies: async () => {
+    if (provider('tenant') === 'mock') {
+      try {
+        return await request('tenant', '/api/tenant/tenancies', z.array(tenancySchema))
+      } catch {
+        const { tenantDb } = await import('@/mocks/tenant-engine')
+        const { useSession } = await import('@/features/auth/session-store')
+        const user = useSession.getState().user
+        return user ? tenantDb.state.tenancies.filter((t) => t.userId === user.id) : []
+      }
+    }
+    const { useSession } = await import('@/features/auth/session-store')
+    const user = useSession.getState().user
+    if (!user) return []
+    if (
+      !user.roles.includes('TENANT') &&
+      user.roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN')
+    ) {
+      return []
+    }
     try {
-      return await request('tenant', '/api/tenant/tenancies', z.array(tenancySchema))
+      const page = await request(
+        'leasing',
+        '/api/v1/contracts?page=0&size=100',
+        pageSchema(tenantContractSchema),
+      )
+      const today = new Date().toISOString().slice(0, 10)
+      const activeList = (page.content || [])
+        .filter(
+          (c) =>
+            c.status === 'ACTIVE' &&
+            (!c.startDate || c.startDate <= today) &&
+            (!c.endDate || c.endDate >= today),
+        )
+        .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+      const contracts =
+        activeList.length > 0
+          ? [activeList[0]]
+          : (page.content || []).filter((c) => c.status === 'ACTIVE').slice(0, 1)
+      const { roomSlotService } = await import('./guest-user')
+      return await Promise.all(
+        contracts.map(async (c) => {
+          let resolvedSlot: string | null | undefined = undefined
+          const slotIds = c.roomSlotId ? [c.roomSlotId] : c.roomSlotIds?.length ? [c.roomSlotIds[0]] : []
+          if (c.roomId && slotIds.length > 0) {
+            try {
+              const slotsPage = await roomSlotService.list(c.roomId)
+              const codes = slotIds
+                .map((sid) => slotsPage.content.find((s) => s.id === sid)?.slotCode)
+                .filter((code): code is string => Boolean(code))
+              if (codes.length > 0) {
+                resolvedSlot = codes
+                  .map((code) => (code.includes('-') ? code.split('-').at(-1)!.trim() : code.trim()))
+                  .join(', ')
+              }
+            } catch {
+              // ignore slot lookup error
+            }
+          }
+          return contractToTenancy(c, user.id, resolvedSlot)
+        }),
+      )
     } catch {
       const { tenantDb } = await import('@/mocks/tenant-engine')
-      const { useSession } = await import('@/features/auth/session-store')
-      const user = useSession.getState().user
-      const list = user ? tenantDb.state.tenancies.filter((t) => t.userId === user.id) : []
-      return list.length ? list : tenantDb.state.tenancies.slice(0, 1)
+      return tenantDb.state.tenancies.filter((t) => t.userId === user.id)
     }
   },
   contracts: async () => {
@@ -109,12 +239,52 @@ export const tenantApi = {
     return tenantApi.tenancies()
   },
   room: async (id: string) => {
+    if (provider('tenant') === 'mock') {
+      try {
+        return await request('tenant', path(id, 'room'), tenantRoomSchema)
+      } catch {
+        const { tenantDb } = await import('@/mocks/tenant-engine')
+        const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
+        return tenantDb.room(t)
+      }
+    }
+    const tenancies = await tenantApi.tenancies()
+    const t = tenancies.find((x) => x.id === id || x.contractId === id) || tenancies[0]
+    if (!t) {
+      throw new Error('Tài khoản chưa có phòng đang thuê.')
+    }
+    let contractServices: { id: string; name: string; category: 'SERVICE'; condition: string }[] = []
     try {
-      return await request('tenant', path(id, 'room'), tenantRoomSchema)
+      const c = await request(
+        'leasing',
+        `/api/v1/contracts/${encodeURIComponent(t.contractId)}`,
+        tenantContractSchema,
+      )
+      contractServices = (c.services || [])
+        .filter((s) => s.selected)
+        .map((s) => ({
+          id: s.serviceId,
+          name: s.name,
+          category: 'SERVICE' as const,
+          condition: 'Đang sử dụng',
+        }))
     } catch {
-      const { tenantDb } = await import('@/mocks/tenant-engine')
-      const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
-      return tenantDb.room(t)
+      // ignore
+    }
+    return {
+      tenancy: t,
+      images: ['/demo/room-1.webp', '/demo/room-2.webp', '/demo/room-3.webp'],
+      area: 25,
+      floor: 2,
+      roomType: 'Phòng tiêu chuẩn',
+      amenities: ['Điều hòa', 'Nóng lạnh', 'Tủ quần áo', 'Giường nệm', 'Wifi'],
+      rules: ['Yên tĩnh sau 22 giờ', 'Không hút thuốc trong phòng', 'Giữ sạch khu vực chung'],
+      manager: { name: 'Bộ phận quản lý chi nhánh', phone: '0900000999' },
+      zaloUrl: null,
+      assets: [
+        { id: t.roomId, name: 'Thiết bị nội thất trong phòng', category: 'FURNITURE' as const, condition: 'Đang sử dụng' },
+        ...contractServices,
+      ],
     }
   },
   contract: (id: string, contractId: string) =>
@@ -221,35 +391,29 @@ export const tenantApi = {
     return request('tenant', path(id, 'allocations'), proposalSchema, write('POST', value))
   },
   reports: async (id: string): Promise<MaintenanceReport[]> => {
-    const { tenantDb } = await import('@/mocks/tenant-engine')
-    const t = tenantDb.state.tenancies.find((x) => x.id === id) || tenantDb.state.tenancies[0]
-    const mockList = tenantDb.state.reports.filter(
-      (r) => !t || r.contractTenantId === t.id || r.contractTenantId === id || !r.contractTenantId,
-    )
-    const localList = mockList.length ? mockList : tenantDb.state.reports
-    // Attempt real API to get the latest list; merge with local items so newly created
-    // records (created via mock fallback) are always included.
     if (provider('tenant') === 'real') {
       try {
-        const p = await reportRequestService.search({ size: 100 })
+        const p = await reportRequestService.search({ size: 100 }, 'tenant')
         if (p && Array.isArray(p.content)) {
           const seen = new Set<string>()
-          const realItems = p.content
+          return p.content
             .filter((item) => {
               if (!item.id || seen.has(item.id)) return false
               seen.add(item.id)
               return true
             })
             .map((item) => adaptReportRequest(item, id))
-          // Prepend local-only records (those not returned by real API)
-          const localOnly = localList.filter((r) => !seen.has(r.id))
-          return [...localOnly, ...realItems]
         }
       } catch {
-        // Real API unavailable — fall through to local list
+        // Real API unavailable — fall through to user's own local list
       }
     }
-    return localList
+    const { tenantDb } = await import('@/mocks/tenant-engine')
+    const { useSession } = await import('@/features/auth/session-store')
+    const user = useSession.getState().user
+    const t = tenantDb.state.tenancies.find((x) => x.id === id && (!user || x.userId === user.id))
+    if (!t) return []
+    return tenantDb.state.reports.filter((r) => r.contractTenantId === t.id || r.contractTenantId === id)
   },
   report: async (id: string, reportId: string): Promise<MaintenanceReport> => {
     const { tenantDb } = await import('@/mocks/tenant-engine')

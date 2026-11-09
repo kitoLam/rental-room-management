@@ -37,6 +37,10 @@ public class ReportRequest extends BaseDocument {
     @Indexed
     private String managerId;
 
+    private String assigneeName;
+
+    private String assigneePhone;
+
     private ReportRequestType type;
 
     private String title;

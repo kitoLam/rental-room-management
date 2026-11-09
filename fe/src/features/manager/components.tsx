@@ -575,7 +575,7 @@ export function ActionDialog({
   fields?: FieldSpec[]
   defaults?: Record<string, unknown>
 }) {
-  const all = [...fields, { name: 'reason', label: 'Lý do / ghi chú', kind: 'textarea' as const }],
+  const all = fields,
     shape = Object.fromEntries(
       all.map((f) => [
         f.name,
@@ -584,7 +584,7 @@ export function ActionDialog({
           : z
               .string()
               .trim()
-              .min(f.name === 'reason' ? 10 : 1),
+              .min(1),
       ]),
     )
   return (
@@ -600,7 +600,7 @@ export function ActionDialog({
         schema={z.object(shape)}
         fields={all}
         defaults={{ reason: '', ...defaults }}
-        onSubmit={onConfirm}
+        onSubmit={(data) => onConfirm({ reason: 'Đã xác nhận thao tác', ...data })}
         pending={pending}
         error={error}
         submitLabel="Xác nhận"

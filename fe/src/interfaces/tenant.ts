@@ -55,12 +55,12 @@ export const tenantContractSchema = z.object({
 })
 export type TenantContract = z.infer<typeof tenantContractSchema>
 export const tenancySchema = z.object({
-  id,
-  userId: id,
-  contractId: id,
-  branchId: id,
-  roomId: id,
-  roomSlotId: id.nullable(),
+  id: databaseId,
+  userId: databaseId,
+  contractId: databaseId,
+  branchId: databaseId,
+  roomId: databaseId,
+  roomSlotId: databaseId.nullable(),
   branchName: z.string(),
   roomName: z.string(),
   slotName: z.string().nullable(),
@@ -79,11 +79,11 @@ export const tenancySchema = z.object({
   prepaidLastRequired: money,
   terms: z.string(),
   sharedTerms: z.string(),
-  document: z.object({ name: z.string(), url: z.string().url(), issuedAt: z.string() }).nullable(),
+  document: z.object({ name: z.string(), url: z.string(), issuedAt: z.string() }).nullable(),
 })
 export type Tenancy = z.infer<typeof tenancySchema>
 export const assetSchema = z.object({
-  id,
+  id: databaseId,
   name: z.string(),
   category: z.enum(['FURNITURE', 'SERVICE']),
   condition: z.string(),

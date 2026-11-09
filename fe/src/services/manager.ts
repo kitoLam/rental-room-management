@@ -417,7 +417,7 @@ export const managerApi = {
               id: item.id,
               contractTenantId: item.tenantId,
               roomId: item.roomId,
-              roomName: 'Phòng ' + (item.roomId?.slice(0, 6) || ''),
+              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
               tenantName: 'Khách thuê',
               assetId: item.roomId,
               category: item.type as any,
@@ -447,7 +447,13 @@ export const managerApi = {
                             : 'Yêu cầu hỗ trợ',
               status: item.status as any,
               createdAt: item.createdAt,
-              assignedTo: item.managerId ? 'Quản lý' : null,
+              assignedTo: item.assigneeName
+                ? item.assigneePhone
+                  ? `${item.assigneeName} (${item.assigneePhone})`
+                  : item.assigneeName
+                : item.managerId
+                  ? 'Quản lý phụ trách'
+                  : null,
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
@@ -604,7 +610,7 @@ export const managerApi = {
               id: item.id,
               contractTenantId: item.tenantId || t?.id || '',
               roomId: item.roomId || t?.roomId || '',
-              roomName: t?.roomName || 'Phòng ' + (item.roomId?.slice(0, 6) || 'trọ'),
+              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : (t?.roomName || `P.${(item.roomId || '').slice(-4).toUpperCase()}`),
               tenantName: 'Khách thuê',
               assetId: item.roomId || t?.roomId || '',
               category: item.type as any,
@@ -634,7 +640,13 @@ export const managerApi = {
                             : 'Yêu cầu hỗ trợ',
               status: item.status as any,
               createdAt: item.createdAt,
-              assignedTo: item.managerId ? 'Quản lý' : null,
+              assignedTo: item.assigneeName
+                ? item.assigneePhone
+                  ? `${item.assigneeName} (${item.assigneePhone})`
+                  : item.assigneeName
+                : item.managerId
+                  ? 'Quản lý phụ trách'
+                  : null,
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
@@ -808,8 +820,20 @@ export const managerApi = {
           return { id: item.id }
         }
         if (action === 'start' || action === 'accept') {
-          // Tiếp nhận yêu cầu và bắt đầu xử lý
-          const item = await reportRequestService.startProcessing(id)
+          // Tiếp nhận yêu cầu và bắt đầu xử lý kèm gán người phụ trách
+          const item = await reportRequestService.startProcessing(id, {
+            assigneeName: v.assigneeName || undefined,
+            assigneePhone: v.assigneePhone || undefined,
+            managerId: v.managerId || undefined,
+          })
+          return { id: item.id }
+        }
+        if (action === 'assign') {
+          const item = await reportRequestService.assign(id, {
+            assigneeName: v.assigneeName || 'Quản lý phụ trách',
+            assigneePhone: v.assigneePhone || undefined,
+            managerId: v.managerId || undefined,
+          })
           return { id: item.id }
         }
         if (action === 'progress' || action === 'record') {

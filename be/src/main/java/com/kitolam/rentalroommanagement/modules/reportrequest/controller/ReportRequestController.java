@@ -4,6 +4,7 @@ import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
+import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
@@ -75,12 +76,23 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/start")
-    @Operation(summary = "Manager bắt đầu xử lý yêu cầu (chuyển PENDING sang IN_PROGRESS)")
+    @Operation(summary = "Manager bắt đầu xử lý yêu cầu (chuyển PENDING sang IN_PROGRESS, kèm gắn người phụ trách)")
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
     public StandardResponse<ReportRequestResponse> start(
             @PathVariable String id,
+            @Valid @RequestBody(required = false) ReportRequestAssignRequest request,
             @AuthenticationPrincipal AuthPrincipal principal) {
-        return StandardResponse.success("Bắt đầu xử lý yêu cầu", reportRequestService.startProcessing(id, principal));
+        return StandardResponse.success("Bắt đầu xử lý yêu cầu", reportRequestService.startProcessing(id, request, principal));
+    }
+
+    @PostMapping("/{id}/assign")
+    @Operation(summary = "Manager phân công hoặc đổi người phụ trách xử lý yêu cầu")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
+    public StandardResponse<ReportRequestResponse> assign(
+            @PathVariable String id,
+            @Valid @RequestBody ReportRequestAssignRequest request,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Đã cập nhật người phụ trách", reportRequestService.assign(id, request, principal));
     }
 
     @PostMapping("/{id}/request-info")

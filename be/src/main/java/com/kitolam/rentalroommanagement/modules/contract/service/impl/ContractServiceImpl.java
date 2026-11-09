@@ -399,8 +399,10 @@ public class ContractServiceImpl implements ContractService {
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addKeyword(criteria, filter.keyword(), "contractNumber", "tenantName", "landlordName");
         if ("TENANT".equals(principal.role())) {
-            Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email())
-                    .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));
+            Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+            if (tenant == null) {
+                return PagedResponse.from(org.springframework.data.domain.Page.empty(pageable), this::response);
+            }
             List<Criteria> ownership = new ArrayList<>();
             ownership.add(new Criteria().orOperator(
                     Criteria.where("tenantId").is(MongoQueryHelper.toObjectId(tenant.getId())),

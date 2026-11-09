@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   LayoutDashboard,
@@ -31,7 +31,9 @@ const nav = [
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
 ] as const
 export function TenantLayout() {
-  const userId = useSession((s) => s.user!.id),
+  const user = useSession((s) => s.user!),
+    userId = user.id,
+    isManagerOnly = user.roles.includes('MANAGER') && !user.roles.includes('TENANT'),
     selected = useTenancySelection((s) => s.byUser[userId]),
     select = useTenancySelection((s) => s.select)
   const [params] = useSearchParams(),
@@ -50,6 +52,9 @@ export function TenantLayout() {
     mutationFn: tenantApi.reset,
     onSuccess: () => queryClient.invalidateQueries(),
   })
+  if (isManagerOnly && location.pathname.startsWith('/tenant/maintenance')) {
+    return <Navigate replace to={location.pathname.replace(/^\/tenant\/maintenance/, '/manager/maintenance')} />
+  }
   return (
     <Container wide className="py-7 sm:py-10">
       <QueryState
@@ -98,8 +103,8 @@ export function TenantLayout() {
                   {tenancies.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.roomName}
-                      {t.slotName ? ` · ${t.slotName}` : ''}
-                      {!isActive(t) ? ' · Lịch sử' : ''} — {t.branchName}
+                      {t.slotName ? ` - ${t.slotName}` : ''}
+                      {!isActive(t) ? ' · Lịch sử' : ''}
                     </option>
                   ))}
                 </select>

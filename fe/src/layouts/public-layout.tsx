@@ -24,6 +24,11 @@ export function SiteHeader() {
   const overlay = useHeaderOverlay(isHome)
   const [menu, setMenu] = useState(false)
   const user = useSession((s) => s.user)
+  const isStaffOnly = Boolean(
+    user &&
+      !user.roles.includes('TENANT') &&
+      user.roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN'),
+  )
   const navigate = useNavigate()
   const tenancies = useQuery({
     queryKey: ['tenant', user?.id, 'tenancies'],
@@ -93,7 +98,7 @@ export function SiteHeader() {
                     Quản lý chi nhánh
                   </Link>
                 )}
-                {(user.roles.includes('TENANT') || !!tenancies.data?.length) && (
+                {!isStaffOnly && (user.roles.includes('TENANT') || !!tenancies.data?.length) && (
                   <Link
                     to="/tenant/dashboard"
                     className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex"
@@ -157,7 +162,7 @@ export function SiteHeader() {
                 ...((user?.roles.includes('MANAGER') || assignments.data?.length) ? [['Quản lý chi nhánh', '/manager/dashboard']] : []),
                 ...(user?.roles.includes('OWNER') ? [['Không gian chủ trọ', '/owner/dashboard']] : []),
                 ...(user?.roles.includes('ADMIN') ? [['Quản trị hệ thống', '/admin/dashboard']] : []),
-                ...((user?.roles.includes('TENANT') || tenancies.data?.length) ? [['Không gian thuê', '/tenant/dashboard']] : []),
+                ...(!isStaffOnly && (user?.roles.includes('TENANT') || tenancies.data?.length) ? [['Không gian thuê', '/tenant/dashboard']] : []),
                 ['Tìm phòng', '/rooms'],
                 ['Lịch xem phòng', viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id })],
                 ['Yêu cầu giữ chỗ', '/user/bookings'],

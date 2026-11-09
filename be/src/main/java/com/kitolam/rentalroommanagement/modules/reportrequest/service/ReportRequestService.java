@@ -3,6 +3,7 @@ package com.kitolam.rentalroommanagement.modules.reportrequest.service;
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
+import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
@@ -34,7 +35,10 @@ public interface ReportRequestService {
     PagedResponse<ReportRequestResponse> search(ReportRequestFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
     /** Manager bắt đầu tiếp nhận và xử lý (chuyển PENDING sang IN_PROGRESS) */
-    ReportRequestResponse startProcessing(String id, AuthPrincipal principal);
+    ReportRequestResponse startProcessing(String id, ReportRequestAssignRequest request, AuthPrincipal principal);
+
+    /** Manager phân công / đổi người phụ trách xử lý yêu cầu */
+    ReportRequestResponse assign(String id, ReportRequestAssignRequest request, AuthPrincipal principal);
 
     /** Manager yêu cầu Tenant bổ sung thông tin (chuyển sang WAITING_INFO) */
     ReportRequestResponse requestInfo(String id, ReportRequestInfoRequest request, AuthPrincipal principal);

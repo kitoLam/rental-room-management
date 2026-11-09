@@ -6,7 +6,7 @@ import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import { reportRequestService } from '@/services/report-request'
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Upload, X } from 'lucide-react'
 import { imageAttachment, MAX_ATTACHMENT_COUNT } from './attachments'
 import { Facts, TenantLink, TenantPage, TenantStatus } from './components'
@@ -17,6 +17,7 @@ export function MaintenanceDetailPage() {
   const { reportId = '' } = useParams(),
     { tenancy: t } = useTenant(),
     isAdmin = useSession((s) => Boolean(s.user?.roles.includes('ADMIN') || s.activeRole === 'ADMIN')),
+    isManager = useSession((s) => Boolean(s.user?.roles.includes('MANAGER') || s.activeRole === 'MANAGER')),
     query = useTenantQuery('report', (id) => tenantApi.report(id, reportId), [reportId], true),
     [confirmCancel, setConfirmCancel] = useState(false),
     [confirmCloseModal, setConfirmCloseModal] = useState(false),
@@ -134,7 +135,7 @@ export function MaintenanceDetailPage() {
                 items={[
                   [
                     'Chỗ ở',
-                    `${t.branchName} · ${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`,
+                    `${t.roomName}${t.slotName ? ` - ${t.slotName}` : ''}`,
                   ],
                   ['Phạm vi / Mục', query.data.assetName],
                   ['Mức ưu tiên', tenantStatusLabel(query.data.priority)],
@@ -251,7 +252,15 @@ export function MaintenanceDetailPage() {
               )}
 
               {/* Action Buttons based on state (for Tenant) */}
-              {!isTerminal && query.data.status !== 'ESCALATED_ADMIN' && (
+              {/* Action Buttons based on state (for Tenant) */}
+              {isManager && (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button asChild>
+                    <Link to={`/manager/maintenance/${reportId}`}>Mở giao diện xử lý của Quản lý</Link>
+                  </Button>
+                </div>
+              )}
+              {!isManager && !isAdmin && !isTerminal && query.data.status !== 'ESCALATED_ADMIN' && (
                 <div className="mt-6 flex flex-wrap gap-3">
                   {/* PENDING: Huỷ */}
                   {query.data.status === 'PENDING' && (

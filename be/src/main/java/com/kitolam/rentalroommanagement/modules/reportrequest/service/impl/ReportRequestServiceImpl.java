@@ -23,6 +23,7 @@ import com.kitolam.rentalroommanagement.modules.reportrecord.enums.ReportRecordA
 import com.kitolam.rentalroommanagement.modules.reportrecord.repository.ReportRecordRepository;
 import com.kitolam.rentalroommanagement.modules.reportrequest.document.ReportRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
+import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
@@ -43,6 +44,9 @@ import com.kitolam.rentalroommanagement.modules.reportrequestfurniture.repositor
 import com.kitolam.rentalroommanagement.modules.reportrequestservice.document.ReportRequestServiceItem;
 import com.kitolam.rentalroommanagement.modules.reportrequestservice.repository.ReportRequestServiceItemRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
+import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
+import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
+import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
@@ -74,6 +78,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     private final ContractRepository contractRepository;
     private final ContractTenantRepository contractTenantRepository;
     private final RoomRepository roomRepository;
+    private final RoomSlotRepository roomSlotRepository;
     private final ManagerRepository managerRepository;
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
@@ -92,24 +97,24 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 // Ignore invalid ObjectId conversion when roomId is a frontend UUID
             }
         }
-        if (room == null) {
+
+        // 1. Kiểm tra Hợp đồng có hiệu lực của chính khách thuê đang đăng nhập
+        Contract validContract = findActiveContract(tenant.getId(), room != null ? room.getId() : request.roomId());
+        if (validContract == null) {
+            throw new BadRequestException("Bạn không có hợp đồng đang có hiệu lực cho phòng này.");
+        }
+
+        if (room == null && StringUtils.hasText(validContract.getRoomId())) {
             try {
-                room = roomRepository.findAll().stream()
-                        .filter(r -> !Boolean.TRUE.equals(r.getIsDeleted()))
-                        .findFirst()
-                        .orElse(null);
+                room = roomRepository.findByIdAndIsDeletedFalse(validContract.getRoomId()).orElse(null);
             } catch (Exception ignored) {
             }
         }
 
-        String resolvedRoomId = room != null && StringUtils.hasText(room.getId()) ? room.getId() : request.roomId();
+        String resolvedRoomId = room != null && StringUtils.hasText(room.getId())
+                ? room.getId()
+                : (StringUtils.hasText(validContract.getRoomId()) ? validContract.getRoomId() : request.roomId());
         String resolvedBranchId = room != null && StringUtils.hasText(room.getBranchId()) ? room.getBranchId() : null;
-
-        // 1. Kiểm tra Hợp đồng có hiệu lực
-        Contract validContract = findActiveContract(tenant.getId(), resolvedRoomId);
-        if (validContract == null) {
-            throw new BadRequestException("Bạn không có hợp đồng đang có hiệu lực cho phòng này.");
-        }
 
         // 2. Validate ảnh đính kèm
         validateAttachments(request.attachments());
@@ -202,7 +207,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 .stream()
                 .map(ReportRecordResponse::from)
                 .toList();
-        return ReportRequestResponse.from(report, timeline);
+        return buildResponse(report, timeline);
     }
 
     @Override
@@ -214,6 +219,9 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             MongoQueryHelper.addEquals(baseFilterCriteria, "priority", filter.priority());
             MongoQueryHelper.addEquals(baseFilterCriteria, "status", filter.status());
             MongoQueryHelper.addKeyword(baseFilterCriteria, filter.keyword(), "title", "content");
+            if (StringUtils.hasText(filter.tenantId())) {
+                MongoQueryHelper.addObjectIdEquals(baseFilterCriteria, "tenantId", filter.tenantId());
+            }
             if (StringUtils.hasText(filter.roomId())) {
                 MongoQueryHelper.addObjectIdEquals(baseFilterCriteria, "roomId", filter.roomId());
             }
@@ -243,6 +251,8 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 }
                 if (!tenantCriteria.isEmpty()) {
                     roleScopedCriteria.add(new Criteria().orOperator(tenantCriteria.toArray(new Criteria[0])));
+                } else {
+                    roleScopedCriteria.add(Criteria.where("tenantId").exists(false));
                 }
             } else if ("MANAGER".equals(principal.role())) {
                 Manager manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
@@ -303,13 +313,13 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                     .stream()
                     .map(ReportRecordResponse::from)
                     .toList();
-            return ReportRequestResponse.from(r, timeline);
+            return buildResponse(r, timeline);
         }));
     }
 
     @Override
     @Transactional
-    public ReportRequestResponse startProcessing(String id, AuthPrincipal principal) {
+    public ReportRequestResponse startProcessing(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
         ReportRequest report = findReport(id);
         ensureCanManage(report, principal);
 
@@ -320,16 +330,42 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         ReportRequestStatus previousStatus = report.getStatus();
         report.setStatus(ReportRequestStatus.IN_PROGRESS);
 
-        // Gán manager nếu chưa có
-        if (!StringUtils.hasText(report.getManagerId()) && principal != null) {
-            Manager manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+        Manager manager = null;
+        if (principal != null && StringUtils.hasText(principal.email())) {
+            manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+        }
+
+        if (request != null && StringUtils.hasText(request.managerId())) {
+            report.setManagerId(request.managerId().trim());
+        } else if (!StringUtils.hasText(report.getManagerId()) && principal != null) {
             if (manager != null) {
                 report.setManagerId(manager.getId());
             } else {
                 report.setManagerId(principal.userId());
             }
         }
+
+        String defaultAssigneeName = manager != null && StringUtils.hasText(manager.getFullName())
+                ? manager.getFullName()
+                : resolveActorName(principal, "Quản lý");
+        String defaultAssigneePhone = manager != null && StringUtils.hasText(manager.getPhone())
+                ? manager.getPhone()
+                : (principal != null ? principal.phone() : null);
+
+        String assigneeName = (request != null && StringUtils.hasText(request.assigneeName()))
+                ? request.assigneeName().trim()
+                : (StringUtils.hasText(report.getAssigneeName()) ? report.getAssigneeName() : defaultAssigneeName);
+        String assigneePhone = (request != null && request.assigneePhone() != null)
+                ? request.assigneePhone().trim()
+                : (StringUtils.hasText(report.getAssigneePhone()) ? report.getAssigneePhone() : defaultAssigneePhone);
+
+        report.setAssigneeName(assigneeName);
+        report.setAssigneePhone(StringUtils.hasText(assigneePhone) ? assigneePhone : null);
         reportRequestRepository.save(report);
+
+        String assigneeDisplay = StringUtils.hasText(report.getAssigneePhone())
+                ? report.getAssigneeName() + " (" + report.getAssigneePhone() + ")"
+                : report.getAssigneeName();
 
         createRecord(
                 report.getId(),
@@ -340,7 +376,57 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 ReportRecordAction.STATUS_CHANGED,
                 previousStatus,
                 ReportRequestStatus.IN_PROGRESS,
-                "Quản lý bắt đầu tiếp nhận và xử lý yêu cầu",
+                "Tiếp nhận và bắt đầu xử lý yêu cầu · Người phụ trách: " + assigneeDisplay,
+                List.of()
+        );
+
+        return getById(report.getId(), principal);
+    }
+
+    @Override
+    @Transactional
+    public ReportRequestResponse assign(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
+        ReportRequest report = findReport(id);
+        ensureCanManage(report, principal);
+
+        if (report.getStatus() == ReportRequestStatus.CLOSED ||
+                report.getStatus() == ReportRequestStatus.REJECTED ||
+                report.getStatus() == ReportRequestStatus.CANCELLED) {
+            throw new BadRequestException("Yêu cầu đã kết thúc, không thể thay đổi người phụ trách.");
+        }
+
+        String assigneeName = (request != null && StringUtils.hasText(request.assigneeName()))
+                ? request.assigneeName().trim()
+                : resolveActorName(principal, "Quản lý");
+        String assigneePhone = (request != null && StringUtils.hasText(request.assigneePhone()))
+                ? request.assigneePhone().trim()
+                : null;
+
+        if (request != null && StringUtils.hasText(request.managerId())) {
+            report.setManagerId(request.managerId().trim());
+        } else if (!StringUtils.hasText(report.getManagerId()) && principal != null) {
+            Manager manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+            report.setManagerId(manager != null ? manager.getId() : principal.userId());
+        }
+
+        report.setAssigneeName(assigneeName);
+        report.setAssigneePhone(assigneePhone);
+        reportRequestRepository.save(report);
+
+        String assigneeDisplay = StringUtils.hasText(assigneePhone)
+                ? assigneeName + " (" + assigneePhone + ")"
+                : assigneeName;
+
+        createRecord(
+                report.getId(),
+                principal != null ? principal.userId() : null,
+                principal != null ? principal.role() : "MANAGER",
+                resolveActorName(principal, "Quản lý"),
+                report.getManagerId(),
+                ReportRecordAction.ASSIGNED,
+                report.getStatus(),
+                report.getStatus(),
+                "Phân công người phụ trách xử lý: " + assigneeDisplay,
                 List.of()
         );
 
@@ -626,8 +712,8 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         requireRole(principal, "ADMIN");
         ReportRequest report = findReport(id);
 
-        if (report.getStatus() == ReportRequestStatus.CLOSED || report.getStatus() == ReportRequestStatus.CANCELLED) {
-            throw new BadRequestException("Yêu cầu hỗ trợ đã đóng hoặc đã hủy.");
+        if (report.getStatus() != ReportRequestStatus.ESCALATED_ADMIN) {
+            throw new BadRequestException("Chỉ có thể phân xử khi yêu cầu hỗ trợ đang ở trạng thái Chuyển Admin phân xử (ESCALATED_ADMIN).");
         }
 
         ReportRequestStatus previousStatus = report.getStatus();
@@ -718,6 +804,72 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     }
 
     // ================= HELPER METHODS =================
+
+    private ReportRequestResponse buildResponse(ReportRequest r, List<ReportRecordResponse> timeline) {
+        String roomName = null;
+        String slotName = null;
+        try {
+            if (StringUtils.hasText(r.getRoomId())) {
+                Room room = roomRepository.findByIdAndIsDeletedFalse(r.getRoomId()).orElse(null);
+                if (room != null && StringUtils.hasText(room.getRoomNumber())) {
+                    String rn = room.getRoomNumber().trim();
+                    roomName = (rn.startsWith("P.") || rn.startsWith("Phòng")) ? rn : ("P." + rn);
+                }
+            }
+            Contract contract = null;
+            if (StringUtils.hasText(r.getContractId())) {
+                contract = contractRepository.findByIdAndIsDeletedFalse(r.getContractId()).orElse(null);
+            }
+            if (contract == null && StringUtils.hasText(r.getTenantId())) {
+                contract = findActiveContract(r.getTenantId(), r.getRoomId());
+            }
+            if (contract != null) {
+                List<String> slotIds = new ArrayList<>();
+                if (StringUtils.hasText(contract.getRoomSlotId())) {
+                    slotIds.add(contract.getRoomSlotId());
+                } else if (contract.getRoomSlotIds() != null && !contract.getRoomSlotIds().isEmpty()) {
+                    slotIds.add(contract.getRoomSlotIds().get(0));
+                }
+                if (!slotIds.isEmpty()) {
+                    List<String> codes = new ArrayList<>();
+                    for (String sid : slotIds) {
+                        RoomSlot slot = roomSlotRepository.findByIdAndIsDeletedFalse(sid).orElse(null);
+                        if (slot != null && StringUtils.hasText(slot.getSlotCode())) {
+                            String rawCode = slot.getSlotCode().trim();
+                            codes.add(rawCode.contains("-") ? rawCode.substring(rawCode.lastIndexOf('-') + 1).trim() : rawCode);
+                        }
+                    }
+                    if (!codes.isEmpty()) {
+                        slotName = String.join(", ", codes);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        String assigneeName = r.getAssigneeName();
+        String assigneePhone = r.getAssigneePhone();
+        if (!StringUtils.hasText(assigneeName) && StringUtils.hasText(r.getManagerId())) {
+            try {
+                Manager m = managerRepository.findByIdAndIsDeletedFalse(r.getManagerId()).orElse(null);
+                if (m != null && StringUtils.hasText(m.getFullName())) {
+                    assigneeName = m.getFullName();
+                    if (!StringUtils.hasText(assigneePhone) && StringUtils.hasText(m.getPhone())) {
+                        assigneePhone = m.getPhone();
+                    }
+                } else {
+                    User u = userRepository.findByIdAndIsDeletedFalse(r.getManagerId()).orElse(null);
+                    if (u != null && StringUtils.hasText(u.getFullName())) {
+                        assigneeName = u.getFullName();
+                        if (!StringUtils.hasText(assigneePhone) && StringUtils.hasText(u.getPhone())) {
+                            assigneePhone = u.getPhone();
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return ReportRequestResponse.from(r, timeline, roomName, slotName, assigneeName, assigneePhone);
+    }
 
     private ReportRequest findReport(String id) {
         return reportRequestRepository.findByIdAndIsDeletedFalse(id)
@@ -817,49 +969,55 @@ public class ReportRequestServiceImpl implements ReportRequestService {
 
     private Contract findActiveContract(String tenantId, String roomId) {
         try {
-            if (!StringUtils.hasText(roomId) || !org.bson.types.ObjectId.isValid(roomId)) {
+            if (!StringUtils.hasText(tenantId)) {
                 return null;
             }
-            Criteria baseRoom = Criteria.where("roomId").is(new org.bson.types.ObjectId(roomId));
 
-            Query contractQuery = new Query(baseRoom
-                    .and("status").in(List.of(ContractStatus.ACTIVE.name(), "ACTIVE", "SIGNED"))
-                    .and("isDeleted").is(false));
-            List<Contract> contracts = mongoTemplate.find(contractQuery, Contract.class);
+            List<Criteria> ownership = new ArrayList<>();
+            if (org.bson.types.ObjectId.isValid(tenantId)) {
+                ownership.add(Criteria.where("tenantId").is(new org.bson.types.ObjectId(tenantId)));
+            }
+            ownership.add(Criteria.where("tenantId").is(tenantId));
 
-            if (contracts.isEmpty()) {
-                Query anyContractQuery = new Query(baseRoom.and("isDeleted").is(false));
-                contracts = mongoTemplate.find(anyContractQuery, Contract.class);
-                if (contracts.isEmpty()) {
-                    return null;
+            List<ContractTenant> activeMemberships = contractTenantRepository.findByTenantIdAndIsDeletedFalse(tenantId)
+                    .stream()
+                    .filter(ct -> ct.getStatus() == ContractTenantStatus.ACTIVE)
+                    .toList();
+            List<org.bson.types.ObjectId> memberContractIds = activeMemberships.stream()
+                    .map(ContractTenant::getContractId)
+                    .filter(StringUtils::hasText)
+                    .filter(org.bson.types.ObjectId::isValid)
+                    .map(org.bson.types.ObjectId::new)
+                    .toList();
+            if (!memberContractIds.isEmpty()) {
+                ownership.add(Criteria.where("_id").in(memberContractIds));
+            }
+
+            List<Criteria> contractCriteria = new ArrayList<>();
+            contractCriteria.add(Criteria.where("isDeleted").is(false));
+            contractCriteria.add(Criteria.where("status").in(List.of(ContractStatus.ACTIVE.name(), "ACTIVE", "SIGNED")));
+            contractCriteria.add(new Criteria().orOperator(ownership.toArray(new Criteria[0])));
+
+            if (StringUtils.hasText(roomId) && org.bson.types.ObjectId.isValid(roomId)) {
+                List<Criteria> withRoom = new ArrayList<>(contractCriteria);
+                withRoom.add(new Criteria().orOperator(
+                        Criteria.where("roomId").is(new org.bson.types.ObjectId(roomId)),
+                        Criteria.where("roomId").is(roomId)
+                ));
+                Contract byRoom = mongoTemplate.findOne(
+                        new Query(new Criteria().andOperator(withRoom.toArray(new Criteria[0]))),
+                        Contract.class
+                );
+                if (byRoom != null) {
+                    return byRoom;
                 }
             }
 
-            for (Contract c : contracts) {
-                if (!org.bson.types.ObjectId.isValid(c.getId())) continue;
-                Criteria ctCriterion = Criteria.where("contractId").is(new org.bson.types.ObjectId(c.getId()));
-
-                Criteria combinedCt;
-                if (StringUtils.hasText(tenantId) && org.bson.types.ObjectId.isValid(tenantId)) {
-                    combinedCt = new Criteria().andOperator(
-                            ctCriterion,
-                            Criteria.where("tenantId").is(new org.bson.types.ObjectId(tenantId)),
-                            Criteria.where("status").in(List.of(ContractTenantStatus.ACTIVE.name(), "ACTIVE")),
-                            Criteria.where("isDeleted").is(false)
-                    );
-                } else {
-                    combinedCt = new Criteria().andOperator(
-                            ctCriterion,
-                            Criteria.where("status").in(List.of(ContractTenantStatus.ACTIVE.name(), "ACTIVE")),
-                            Criteria.where("isDeleted").is(false)
-                    );
-                }
-                if (mongoTemplate.exists(new Query(combinedCt), ContractTenant.class)) {
-                    return c;
-                }
-            }
-
-            return contracts.get(0);
+            // Nếu roomId từ FE là UUID mock nhưng khách thuê có hợp đồng ACTIVE thật trong DB thì lấy hợp đồng của chính khách thuê đó
+            return mongoTemplate.findOne(
+                    new Query(new Criteria().andOperator(contractCriteria.toArray(new Criteria[0]))),
+                    Contract.class
+            );
         } catch (Exception ignored) {
             return null;
         }

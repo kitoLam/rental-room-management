@@ -5,6 +5,7 @@ import { useSession } from '@/features/auth/session-store'
 import { dateTime } from '@/lib/activity'
 import { queryClient } from '@/services/query-client'
 import { reportRequestService } from '@/services/report-request'
+import { formatReportAssignee } from '@/interfaces/report-request'
 import { tenantStatusLabel } from '@/features/tenant/status'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -54,7 +55,7 @@ export function AdminMaintenanceDetailPage() {
   }
 
   const r = query.data
-  const canAdminResolve = isAdmin && !!r && r.status !== 'CLOSED' && r.status !== 'CANCELLED'
+  const canAdminResolve = isAdmin && !!r && r.status === 'ESCALATED_ADMIN'
 
   return (
     <div className="min-w-0">
@@ -91,14 +92,18 @@ export function AdminMaintenanceDetailPage() {
                   <dd className="font-semibold">{tenantStatusLabel(r.priority)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Mã phòng / Chi nhánh</dt>
+                  <dt className="text-xs text-muted-foreground">Mã phòng</dt>
                   <dd className="font-semibold">
-                    Phòng: {r.roomId || 'Không xác định'} {r.branchId ? `(Chi nhánh: ${r.branchId})` : ''}
+                    {r.roomName ? `${r.roomName}${r.slotName ? ` - ${r.slotName}` : ''}` : `P.${(r.roomId || '').slice(-4).toUpperCase()}`}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Ngày gửi yêu cầu</dt>
                   <dd className="font-semibold">{dateTime(r.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Người phụ trách xử lý</dt>
+                  <dd className="font-semibold">{formatReportAssignee(r) || 'Chưa phân công'}</dd>
                 </div>
               </dl>
 
@@ -127,7 +132,8 @@ export function AdminMaintenanceDetailPage() {
               </div>
 
               {/* Dispute section when ESCALATED_ADMIN or disputeReason exists */}
-              {(r.status === 'ESCALATED_ADMIN' || !!r.disputeReason) && (
+              {/* Dispute section when ESCALATED_ADMIN */}
+              {r.status === 'ESCALATED_ADMIN' && (
                 <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 p-5 text-sm">
                   <div className="flex items-center gap-2 text-destructive font-bold text-base">
                     <ShieldAlert size={20} />
@@ -178,7 +184,7 @@ export function AdminMaintenanceDetailPage() {
               )}
 
               {/* Single Admin resolve button when not already shown in the ESCALATED_ADMIN box */}
-              {canAdminResolve && r.status !== 'ESCALATED_ADMIN' && !r.disputeReason && (
+              {false && (
                 <div className="mt-6 flex justify-end">
                   <Button onClick={() => setResolveModal(true)}>
                     Admin phân xử & đóng

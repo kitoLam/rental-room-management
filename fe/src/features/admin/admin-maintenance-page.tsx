@@ -144,6 +144,8 @@ export function AdminMaintenancePage() {
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground line-clamp-1">{r.content}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span>Phòng: {r.roomName ? `${r.roomName}${r.slotName ? ` - ${r.slotName}` : ''}` : `P.${(r.roomId || '').slice(-4).toUpperCase()}`}</span>
+                  <span>·</span>
                   <span>Loại: {tenantStatusLabel(r.type)}</span>
                   <span>·</span>
                   <span>Ưu tiên: {tenantStatusLabel(r.priority)}</span>
