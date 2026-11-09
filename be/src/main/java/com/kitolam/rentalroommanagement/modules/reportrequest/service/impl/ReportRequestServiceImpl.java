@@ -116,7 +116,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 : (StringUtils.hasText(validContract.getRoomId()) ? validContract.getRoomId() : request.roomId());
         String resolvedBranchId = room != null && StringUtils.hasText(room.getBranchId()) ? room.getBranchId() : null;
 
-        // 2. Validate ảnh đính kèm
+        // 2. Validate ảnh đinh kèm
         validateAttachments(request.attachments());
 
         // 3. Tự động gán Manager theo khu trọ
