@@ -25,12 +25,24 @@ export function ServicesPage() {
   const cancelRequest = useTenantMutation(tenantApi.cancelServiceRequest, () =>
     done('Đã hủy yêu cầu dịch vụ.'),
   )
+  const groups = [
+    {
+      title: 'Dịch vụ bắt buộc',
+      hint: 'Áp dụng cho mọi phòng, không cần đăng ký và không thể hủy.',
+      items: query.data?.filter((s) => s.mandatory) ?? [],
+    },
+    {
+      title: 'Dịch vụ tùy chọn',
+      hint: 'Đăng ký khi cần dùng; quản lý duyệt và xác nhận ngày lắp đặt. Có thể gửi yêu cầu ngừng sau khi dịch vụ có hiệu lực.',
+      items: query.data?.filter((s) => !s.mandatory) ?? [],
+    },
+  ]
   const current = query.data?.find((s) => s.id === selected?.id)
   const actions = current ? serviceActions(current) : []
   return (
     <TenantPage
       title="Dịch vụ phòng"
-      description="Điện, nước luôn có sẵn. Dịch vụ bổ sung được quản lý duyệt và xác nhận ngày lắp đặt."
+      description="Dịch vụ bắt buộc luôn được áp dụng. Dịch vụ tùy chọn cần được quản lý duyệt và xác nhận ngày lắp đặt."
     >
       {success && <Notice tone="success">{success}</Notice>}
       <QueryState
@@ -41,42 +53,58 @@ export function ServicesPage() {
         emptyMessage="Chưa có dịch vụ được cung cấp cho phòng."
         emptyAction={null}
       >
-        <Panel>
-          {query.data?.map((s) => (
-            <div
-              key={s.id}
-              className="flex flex-wrap items-center justify-between gap-4 border-t border-border py-5 first:border-0 first:pt-0 last:pb-0"
-            >
-              <div>
-                <h2 className="text-sm font-bold">{s.name}</h2>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {formatVnd(s.unitPrice)} / {s.unit} · {s.mandatory ? 'Bắt buộc' : 'Tùy chọn'}
-                </p>
-                {s.startDate && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {proposalStatuses.includes(s.status || '') ? 'Đề nghị từ ' : 'Từ '}
-                    {dateOnly(s.startDate)}
-                    {s.endDate && ` – ${dateOnly(s.endDate)}`}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                {s.status && <TenantStatus value={s.status} />}
-                <Button
-                  variant="outline"
-                  disabled={!contract.active && !s.subscriptionId}
-                  onClick={() => {
-                    cancelRequest.reset()
-                    setSuccess('')
-                    setSelected(s)
-                  }}
-                >
-                  {serviceActions(s).includes('REGISTER') ? 'Đăng ký' : 'Chi tiết'}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </Panel>
+        {groups.map(
+          (group) =>
+            group.items.length > 0 && (
+              <Panel key={group.title} className="mb-5">
+                <h2 className="text-lg font-bold">{group.title}</h2>
+                <p className="mb-2 mt-1 text-xs text-muted-foreground">{group.hint}</p>
+                {group.items.map((s) => {
+                  const canRegister = serviceActions(s).includes('REGISTER')
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex flex-wrap items-center justify-between gap-4 border-t border-border py-4 first:border-0"
+                    >
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold">{s.name}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatVnd(s.unitPrice)} / {s.unit}
+                        </p>
+                        {s.startDate && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {!s.mandatory && proposalStatuses.includes(s.status || '') ? 'Đề nghị từ ' : 'Từ '}
+                            {dateOnly(s.startDate)}
+                            {s.endDate && ` – ${dateOnly(s.endDate)}`}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {s.mandatory ? (
+                          <span className="text-xs font-medium text-muted-foreground">Luôn áp dụng</span>
+                        ) : (
+                          s.status && <TenantStatus value={s.status} />
+                        )}
+                        {!s.mandatory && (
+                          <Button
+                            variant={canRegister ? 'default' : 'outline'}
+                            disabled={!contract.active && !s.subscriptionId}
+                            onClick={() => {
+                              cancelRequest.reset()
+                              setSuccess('')
+                              setSelected(s)
+                            }}
+                          >
+                            {canRegister ? 'Đăng ký' : 'Chi tiết'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </Panel>
+            ),
+        )}
       </QueryState>
       <Modal
         open={!!selected}
@@ -104,7 +132,7 @@ export function ServicesPage() {
                   ['Kết thúc', current.endDate ? dateOnly(current.endDate) : null],
                 ]}
               />
-              {current.mandatory && <Notice>Điện và nước là dịch vụ bắt buộc, không thể hủy.</Notice>}
+              {current.mandatory && <Notice>Đây là dịch vụ bắt buộc, không thể đăng ký hay hủy.</Notice>}
               {current.status === 'APPROVED' && (
                 <Notice>Quản lý đã duyệt, đang chờ xác nhận ngày lắp đặt.</Notice>
               )}

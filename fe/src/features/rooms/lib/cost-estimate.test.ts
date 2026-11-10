@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { estimateMonthlyCost, selectedServiceCosts } from './cost-estimate'
+import { estimateMonthlyCost, selectedServiceCosts, shownOnRoomPage } from './cost-estimate'
 
 const input = {
   rent: 5000000,
@@ -46,5 +46,17 @@ it('counts mandatory fixed services once, chosen optional ones by quantity, and 
   expect(selectedServiceCosts(services, { parking: 2 })).toEqual([
     { label: 'Rác', cost: 30000 },
     { label: 'Gửi xe', cost: 160000 },
+  ])
+})
+
+it('hides per-visit services and parking (already estimated from vehicles × room parking rate)', () => {
+  const services = [
+    { id: 'wifi', name: 'Wifi', unit: 'tháng', price: 100000, mandatory: false, calculationType: 'FIXED' },
+    { id: 'parking', name: 'Gửi xe máy', unit: 'xe/tháng', price: 100000, mandatory: false, calculationType: 'FIXED' },
+    { id: 'cleaning', name: 'Dọn phòng', unit: 'lần', price: 60000, mandatory: false, calculationType: 'FIXED' },
+  ]
+  expect(services.filter(shownOnRoomPage).map((s) => s.id)).toEqual(['wifi'])
+  expect(selectedServiceCosts(services, { wifi: 1, parking: 2, cleaning: 1 })).toEqual([
+    { label: 'Wifi', cost: 100000 },
   ])
 })
