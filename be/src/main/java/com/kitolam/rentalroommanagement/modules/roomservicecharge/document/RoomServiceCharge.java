@@ -26,6 +26,11 @@ public class RoomServiceCharge extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomServiceId;
 
+    /** Room of the room service, denormalised for filtering and invoice generation. */
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String roomId;
+
     private String period;
 
     private RoomServiceChargeStatus status = RoomServiceChargeStatus.DRAFT;

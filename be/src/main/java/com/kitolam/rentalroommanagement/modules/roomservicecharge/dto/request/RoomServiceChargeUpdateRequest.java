@@ -1,14 +1,12 @@
 package com.kitolam.rentalroommanagement.modules.roomservicecharge.dto.request;
 
-import com.kitolam.rentalroommanagement.modules.roomservicecharge.enums.RoomServiceChargeStatus;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.PositiveOrZero;
 
-import java.util.List;
+import java.math.BigDecimal;
 
-/** PATCH semantics: null fields are left unchanged. */
+/** Only a DRAFT charge can be edited. Null fields are left unchanged. */
 public record RoomServiceChargeUpdateRequest(
-        RoomServiceChargeStatus status,
-        @Size(min = 1) List<@Valid ChargeSegmentRequest> segments
+        @PositiveOrZero BigDecimal previousReading,
+        @PositiveOrZero BigDecimal currentReading
 ) {
 }

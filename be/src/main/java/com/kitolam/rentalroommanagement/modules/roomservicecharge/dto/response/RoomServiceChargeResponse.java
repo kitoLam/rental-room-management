@@ -9,6 +9,7 @@ import java.util.List;
 public record RoomServiceChargeResponse(
         String id,
         String roomServiceId,
+        String roomId,
         String period,
         RoomServiceChargeStatus status,
         BigDecimal totalAmount,

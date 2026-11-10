@@ -6,6 +6,7 @@ import com.kitolam.rentalroommanagement.modules.roomservicecharge.enums.RoomServ
 /** Query parameters for search; all optional. */
 public record RoomServiceChargeFilterRequest(
         @ValidObjectId String roomServiceId,
+        @ValidObjectId String roomId,
         String period,
         RoomServiceChargeStatus status
 ) {
