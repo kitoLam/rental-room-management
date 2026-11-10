@@ -39,7 +39,8 @@ const decisions: Record<
     operation: 'REJECT',
     label: 'Từ chối',
     fields: [{ name: 'reason', label: 'Lý do từ chối', kind: 'textarea' }],
-    schema: z.object({ reason: note.min(5, 'Nhập lý do từ chối') }),
+    // refine (mã custom) để ManagerForm hiện đúng thông báo thay vì câu lỗi chung.
+    schema: z.object({ reason: note.refine((v) => v.length >= 5, 'Nhập lý do từ chối (ít nhất 5 ký tự)') }),
   },
   'confirm-installation': {
     title: 'Xác nhận ngày lắp đặt',

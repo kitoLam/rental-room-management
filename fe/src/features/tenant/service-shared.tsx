@@ -91,7 +91,7 @@ export function StopService({
     }),
     mutation = useTenantMutation(
       (id, value: z.infer<typeof serviceStopFormSchema>) =>
-        tenantApi.stopService(id, { ...value, subscriptionId: s.subscriptionId || s.id }),
+        tenantApi.stopService(id, { ...value, serviceId: s.id, subscriptionId: s.subscriptionId || s.id }),
       onSuccess,
     )
   return (
