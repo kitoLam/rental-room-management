@@ -80,7 +80,8 @@ export type ServiceRegistrationValue = {
   note: string
   contractEndDate: string
 }
-export type ServiceStopValue = { subscriptionId: string; proposedDate: string; note: string }
+// subscriptionId dùng cho API thật; serviceId (id danh mục) dùng cho mock engine.
+export type ServiceStopValue = { serviceId: string; subscriptionId: string; proposedDate: string; note: string }
 
 function contractToTenancy(
   c: z.infer<typeof tenantContractSchema>,
@@ -307,8 +308,31 @@ export const tenantApi = {
   services: async (id: string): Promise<TenantService[]> => {
     if (provider('utilities') === 'real') {
       // BE tự xác định phòng / chỗ của người thuê từ token, FE không gửi roomId / contractId.
-      const items = await utilitiesService.serviceRequests.catalog()
-      return items.map((s) => ({
+      // Catalog của service-requests chỉ có dịch vụ đăng ký được; dịch vụ bắt buộc lấy từ danh mục công khai để hiển thị.
+      const [items, publicItems] = await Promise.all([
+        utilitiesService.serviceRequests.catalog(),
+        request(
+          'catalog',
+          '/api/v1/public/services?serviceScope=SLOT',
+          z.array(z.object({ id: z.string(), name: z.string(), unit: z.string(), unitPrice: z.coerce.number(), mandatory: z.boolean() })),
+        ),
+      ])
+      const mandatory: TenantService[] = publicItems.filter((s) => s.mandatory).map((s) => ({
+        id: s.id,
+        name: s.name,
+        mandatory: true,
+        unit: s.unit,
+        unitPrice: s.unitPrice,
+        subscriptionId: null,
+        requestId: null,
+        status: null,
+        allowedActions: [],
+        startDate: null,
+        endDate: null,
+        note: '',
+        history: [],
+      }))
+      return [...mandatory, ...items.map((s) => ({
         id: s.serviceId,
         name: s.name,
         mandatory: false,
@@ -322,7 +346,7 @@ export const tenantApi = {
         endDate: s.subscription?.endDate ?? null,
         note: '',
         history: [],
-      }))
+      }))]
     }
     return request('tenant', path(id, 'services'), z.array(serviceSchema))
   },
@@ -357,7 +381,7 @@ export const tenantApi = {
     }
     return request(
       'tenant',
-      path(id, `services/${encodeURIComponent(value.subscriptionId)}/cancel`),
+      path(id, `services/${encodeURIComponent(value.serviceId)}/cancel`),
       serviceSchema,
       write('POST'),
     )

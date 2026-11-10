@@ -60,6 +60,6 @@ public class RoomSlotServiceImpl implements RoomSlotService {
 
     private RoomSlotResponse response(RoomSlot slot) {
         return new RoomSlotResponse(slot.getId(), slot.getRoomId(), slot.getSlotCode(), slot.getSlotNumber(),
-                slot.getStatus(), slot.getCreatedAt(), slot.getUpdatedAt());
+                slot.getStatus(), slot.getAvailableFrom(), slot.getCreatedAt(), slot.getUpdatedAt());
     }
 }

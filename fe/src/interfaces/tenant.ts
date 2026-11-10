@@ -47,6 +47,11 @@ export const tenantContractSchema = z.object({
   signedDate: date.nullable().optional(),
   firstBillingStartDate: date.nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
+  evidenceHistory: z.array(z.object({
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    at: z.string().nullable(),
+    note: z.string().nullable(),
+  })).optional(),
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),

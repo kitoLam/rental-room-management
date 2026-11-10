@@ -20,6 +20,44 @@ export const dateTime = (value: string) =>
   })
 export const dateOnly = (value: string) =>
   new Date(`${value}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+/** Cộng tháng theo đúng quy tắc LocalDate.plusMonths của Java: giữ ngày, kẹp về cuối tháng nếu tháng đích ngắn hơn. */
+export const addMonths = (date: string, months: number) => {
+  const [year, month, day] = date.split('-').map(Number)
+  const firstOfTarget = new Date(Date.UTC(year, month - 1 + months, 1))
+  const lastDay = new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0)).getUTCDate()
+  firstOfTarget.setUTCDate(Math.min(day, lastDay))
+  return firstOfTarget.toISOString().slice(0, 10)
+}
+export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Date(), moveInDate?: string | null) => {
+  const vietnamDate = (value: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(value)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+    return `${part('year')}-${part('month')}-${part('day')}`
+  }
+  // Ngày bắt đầu thuê = availableFrom của booking; booking cũ chưa có thì hôm sau ngày nộp bằng chứng.
+  let startDate: string
+  if (moveInDate) {
+    startDate = moveInDate
+  } else {
+    const submitted = new Date(`${vietnamDate(new Date(evidenceSubmittedAt))}T00:00:00Z`)
+    submitted.setUTCDate(submitted.getUTCDate() + 1)
+    startDate = submitted.toISOString().slice(0, 10)
+  }
+  const [year, month] = startDate.split('-').map(Number)
+  // Kỳ tính tiền đầu tiên luôn là mùng 1 của tháng kế tiếp tháng bắt đầu thuê:
+  // 01/12 → 01/01, 15/12 → 01/01, 30/12 → 01/01, 01/01 → 01/02.
+  // Date.UTC nhận tháng 0-based nên month (1-based) chính là tháng kế tiếp, tự quấn qua năm.
+  let candidate = new Date(Date.UTC(year, month, 1))
+  // Booking cũ có ngày bắt đầu đã qua: đẩy tiếp từng tháng để kỳ đầu không rơi vào quá khứ.
+  const today = new Date(`${vietnamDate(now)}T00:00:00Z`)
+  while (candidate < today) candidate = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth() + 1, 1))
+  return candidate.toISOString().slice(0, 10)
+}
 export function referenceLink(type: string | null, id: string | null, tenancyId?: string, branchId?:string) {
   if(type==='ADMIN_VERIFICATION'&&id)return `/admin/owner-verifications/${encodeURIComponent(id)}`
   if(type==='ADMIN_USER'&&id)return `/admin/users/${encodeURIComponent(id)}`

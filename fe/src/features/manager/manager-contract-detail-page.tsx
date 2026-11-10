@@ -1,12 +1,14 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
-import { dateOnly } from '@/lib/activity'
+import { addMonths, dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { managerApi } from '@/services/manager'
+import { bookingService } from '@/services/guest-user'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { z } from 'zod'
-import { ActionDialog, ManagerForm, ManagerLink, ManagerPage, ManagerStatus } from './components'
+import { ActionDialog, ManagerForm, ManagerLink, ManagerPage } from './components'
 import { useManagerAction, useManagerQuery } from './context'
 import { History } from './leasing-shared'
 export function ManagerContractDetail() {
@@ -18,10 +20,24 @@ export function ManagerContractDetail() {
       true,
     ),
     [action, setAction] = useState(''),
-    [adjustedSignedDate, setAdjustedSignedDate] = useState(''),
-    [firstBillingStartDate, setFirstBillingStartDate] = useState(''),
     [evidenceNote, setEvidenceNote] = useState(''),
     mutation = useManagerAction(() => setAction(''))
+  const sourceBooking = useQuery({
+    queryKey: ['contract-booking', query.data?.sourceBookingId],
+    queryFn: () => bookingService.get(query.data!.sourceBookingId!),
+    enabled: Boolean(query.data?.sourceBookingId && !query.data?.startDate),
+    retry: false,
+  })
+  // Hợp đồng chốt ngày bắt đầu từ booking gốc; dùng cho cả hiển thị nháp lẫn min ngày tính tiền kỳ đầu.
+  const expectedStartDate = query.data?.startDate || sourceBooking.data?.startDate || null
+  // Ngày tính tiền kỳ đầu gợi ý = mùng 1 đầu tiên không trước ngày hiệu lực; input chỉ đọc.
+  const firstBillingStartDate = query.data?.evidenceSubmittedAt
+    ? suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt, undefined, expectedStartDate)
+    : ''
+  const billingDateMinimum = firstBillingStartDate
+  const validFirstBillingStartDate = Boolean(
+    firstBillingStartDate && firstBillingStartDate >= billingDateMinimum && firstBillingStartDate.endsWith('-01'),
+  )
   return (
     <ManagerPage
       title="Hồ sơ hợp đồng"
@@ -34,24 +50,23 @@ export function ManagerContractDetail() {
               <h2 className="mb-5 text-xl font-bold">{query.data.code}</h2>
               <Facts
                 items={[
-                  ['Trạng thái', <ManagerStatus value={query.data.status} />],
-                  ['Đại diện', query.data.representativeName],
-                  ['Phòng', query.data.roomName],
-                  ['Địa chỉ thuê', query.data.roomAddress || '—'],
-                  ['Bên cho thuê', `${query.data.landlordName || '—'} · CCCD/CMND ${query.data.landlordIdNumber || '—'} · ${query.data.landlordAddress || '—'}`],
-                  ['Bên thuê', `${query.data.tenantName || query.data.representativeName || '—'} · CCCD/CMND ${query.data.tenantIdNumber || '—'} · ${query.data.tenantAddress || '—'}`],
-                  ['Giá thuê / tháng', query.data.rentPrice == null ? '—' : `${query.data.rentPrice.toLocaleString('vi-VN')} ₫`],
-                  ['Tiền cọc hợp đồng', query.data.contractDepositAmount == null ? '—' : `${query.data.contractDepositAmount.toLocaleString('vi-VN')} ₫`],
-                  ['Ngày thanh toán mỗi tháng', query.data.paymentDueDay ?? '—'],
                   [
                     'Thời hạn',
-                    query.data.evidenceSubmittedAt
+                    query.data.status === 'ACTIVE'
                       ? `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`
-                      : 'Chưa duyệt evidence',
+                      : expectedStartDate
+                        ? `Dự kiến từ ${dateOnly(expectedStartDate)}${query.data.termMonths ? ` → ${dateOnly(addMonths(expectedStartDate, query.data.termMonths))}` : ''} — chưa duyệt evidence`
+                        : 'Chưa duyệt evidence',
                   ],
-                  ['Số quan hệ thuê', query.data.tenantCount],
                 ]}
               />
+              <h3 className="mt-6 font-bold">Thông tin trên hợp đồng</h3>
+              <Facts items={[
+                ['Địa chỉ thuê', query.data.roomAddress || '—'],
+                ['Phòng / chỗ ở', query.data.roomName],
+                ['Giá thuê / tháng', query.data.rentPrice == null ? '—' : `${query.data.rentPrice.toLocaleString('vi-VN')} ₫`],
+                ['Tiền cọc hợp đồng', query.data.contractDepositAmount == null ? '—' : `${query.data.contractDepositAmount.toLocaleString('vi-VN')} ₫`],
+              ]} />
               <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.terms}</p>
               <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
                 <p>Chỉ số điện đầu kỳ: {query.data.electricityInitialReading ?? '—'} · {query.data.electricityRate ?? '—'} VND/kWh</p>
@@ -67,11 +82,10 @@ export function ManagerContractDetail() {
               {query.data.status === 'DRAFT' && query.data.evidenceSubmittedAt && <div className="mt-5 grid gap-4 rounded-xl border p-4">
                 <h3 className="font-semibold">Duyệt evidence đã ký</h3>
                 {query.data.signedEvidenceUrl && <a className="text-sm text-primary underline" href={query.data.signedEvidenceUrl} target="_blank" rel="noreferrer">Mở evidence người thuê đã gửi</a>}
-                <label className="grid gap-1 text-sm">Ngày ký đã xác minh (để trống để giữ ngày người thuê nhập)<input className="input" type="date" value={adjustedSignedDate || query.data.signedDate || ''} onChange={(event) => setAdjustedSignedDate(event.target.value)} /></label>
-                <label className="grid gap-1 text-sm">Ngày bắt đầu tính tiền kỳ đầu<input className="input" type="date" required value={firstBillingStartDate} onChange={(event) => setFirstBillingStartDate(event.target.value)} /></label>
+                <label className="grid gap-1 text-sm">Ngày bắt đầu tính tiền kỳ đầu<input className="input disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" type="date" required min={billingDateMinimum} value={firstBillingStartDate} disabled /></label>
                 <label className="grid gap-1 text-sm">Lý do nếu yêu cầu gửi lại<textarea className="input min-h-20" value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} /></label>
                 <div className="flex flex-wrap gap-3">
-                  <Button disabled={!firstBillingStartDate} loading={mutation.isPending} onClick={() => mutation.mutate({ resource: 'contracts', id: contractId, action: 'review-evidence', value: { approved: true, firstBillingStartDate, ...(adjustedSignedDate ? { adjustedSignedDate } : {}) } })}>Duyệt và kích hoạt</Button>
+                  <Button disabled={!validFirstBillingStartDate} loading={mutation.isPending} onClick={() => mutation.mutate({ resource: 'contracts', id: contractId, action: 'review-evidence', value: { approved: true, firstBillingStartDate } })}>Duyệt và kích hoạt</Button>
                   <Button variant="outline" disabled={!evidenceNote.trim()} loading={mutation.isPending} onClick={() => mutation.mutate({ resource: 'contracts', id: contractId, action: 'review-evidence', value: { approved: false, note: evidenceNote.trim() } })}>Yêu cầu gửi lại</Button>
                 </div>
               </div>}
@@ -97,9 +111,9 @@ export function ManagerContractDetail() {
                 )}
               </div>
             </Panel>
-            <Notice>
+            {query.data.status === 'DRAFT' && <Notice>
               Hợp đồng chỉ được kích hoạt sau khi manager duyệt evidence; các slot và snapshot dịch vụ được lưu trên cùng một hợp đồng.
-            </Notice>
+            </Notice>}
             <Panel>
               <h2 className="mb-5 font-bold">Lịch sử hợp đồng</h2>
               <History

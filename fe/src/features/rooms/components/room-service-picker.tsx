@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { formatVnd } from '@/lib/format'
 import type { RoomServiceOption } from '@/interfaces/domain'
-import type { ServiceSelection } from '../lib/cost-estimate'
+import { shownOnRoomPage, type ServiceSelection } from '../lib/cost-estimate'
 
 // Bắt buộc: tích sẵn, không bỏ chọn, không sửa số lượng. Tùy chọn: tự tích / bỏ tích, chỉnh số lượng
 // khi dịch vụ không tính theo chỉ số. Đơn giá do hệ thống thiết lập, chỉ xem.
@@ -19,13 +19,13 @@ export function RoomServicePicker({
   const id = useId()
   const toggle = (serviceId: string, checked: boolean) => {
     const next = { ...selection }
-    if (checked) next[serviceId] = services.find((s) => s.id === serviceId)?.quantityRule === 'PER_SLOT' ? slotCount : 1
+    if (checked) next[serviceId] = services.find((s) => s.id === serviceId)?.quantityRule === 'PER_SLOT' ? Math.max(1, slotCount) : 1
     else delete next[serviceId]
     onChange(next)
   }
   return (
     <ul className="divide-y divide-border">
-      {services.filter((service) => service.unit.trim().toLocaleLowerCase('vi-VN') !== 'lần').map((s) => {
+      {services.filter(shownOnRoomPage).map((s) => {
         const checked = s.mandatory || (selection[s.id] ?? 0) > 0
         const metered = s.quantityRule === 'METERED' || s.calculationType === 'METERED'
         const userQuantity = s.quantityRule === 'USER_INPUT'
@@ -52,8 +52,8 @@ export function RoomServicePicker({
               {!s.mandatory && checked && userQuantity && !metered && (
                 <input
                   type="number"
-                  min={0}
-                  max={slotCount}
+                  min={1}
+                  max={slotCount > 0 ? slotCount : undefined}
                   step={1}
                   aria-label={`Số lượng ${s.name}`}
                   className="input w-20"
@@ -61,12 +61,15 @@ export function RoomServicePicker({
                   onChange={(event) =>
                     onChange({
                       ...selection,
-                      [s.id]: Math.min(slotCount, Math.max(0, Math.floor(Number(event.target.value) || 0))),
+                      [s.id]: Math.min(
+                        slotCount > 0 ? slotCount : Infinity,
+                        Math.max(1, Math.floor(Number(event.target.value) || 0)),
+                      ),
                     })
                   }
                 />
               )}
-              {s.quantityRule === 'PER_SLOT' && <span className="text-xs text-muted-foreground">{slotCount} slot</span>}
+              {s.quantityRule === 'PER_SLOT' && <span className="text-xs text-muted-foreground">{slotCount > 0 ? `${slotCount} slot` : 'theo slot'}</span>}
               {metered && <span className="text-xs text-muted-foreground">Tính theo chỉ số thực tế</span>}
               <span className="text-muted-foreground">
                 {formatVnd(s.price)} / {s.unit}

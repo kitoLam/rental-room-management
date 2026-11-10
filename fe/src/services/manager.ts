@@ -908,7 +908,7 @@ export const managerApi = {
       return contractService.completeCheckIn(id, v.signedFileUrl)
     }
     if (resource === 'contracts' && provider('manager') === 'real' && id && action === 'review-evidence')
-      return contractService.reviewEvidence(id, value as { approved: boolean; note?: string; adjustedSignedDate?: string; firstBillingStartDate?: string })
+      return contractService.reviewEvidence(id, value as { approved: boolean; note?: string; firstBillingStartDate?: string })
     if (resource === 'services' && provider('utilities') === 'real') {
       if (method === 'DELETE' && id) {
         await utilitiesService.catalog.delete(id)

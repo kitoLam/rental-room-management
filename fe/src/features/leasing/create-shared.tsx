@@ -7,6 +7,7 @@ import { bookingService, catalogService } from '@/services/guest-user'
 import { invalidateActivity } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { KeyRound } from 'lucide-react'
+import { dateOnly } from '@/lib/activity'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
@@ -32,6 +33,12 @@ export function BookingForm({ room }: { room: Room }) {
   const selectedSlotsAvailable = selectedSlots.length > 0 && selectedSlots.every((id) =>
     available.data?.slots.some((slot) => slot.id === id && slot.available),
   )
+  // Ngày nhận phòng dự kiến = slot chọn sẵn sàng muộn nhất (khớp cách máy chủ chốt ngày bắt đầu thuê).
+  const expectedMoveInDate = (available.data?.slots ?? [])
+    .filter((slot) => selectedSlots.includes(slot.id) && slot.available && slot.availableFrom)
+    .map((slot) => slot.availableFrom as string)
+    .sort()
+    .at(-1) ?? null
   const create = useMutation({
     mutationFn: () => bookingService.create({
       roomId: room.id,
@@ -59,16 +66,26 @@ export function BookingForm({ room }: { room: Room }) {
           <Field id="booking-slots" label="Slot muốn thuê">
             <div className="grid gap-2 sm:grid-cols-2">
               {available.data?.slots.map((slot) => (
-                <label key={slot.id} className="flex min-h-12 items-center gap-3 rounded-lg border p-3 text-sm">
+                <label key={slot.id} className={`flex min-h-12 items-start gap-3 rounded-lg border p-3 text-sm ${selectedSlots.includes(slot.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}>
                   <input
                     type="checkbox"
+                    className="mt-0.5"
                     checked={selectedSlots.includes(slot.id)}
                     disabled={!slot.available}
                     onChange={(event) => setSelectedSlots((current) => event.target.checked
                       ? [...current, slot.id]
                       : current.filter((id) => id !== slot.id))}
                   />
-                  {slot.label}{slot.available ? '' : ' · Đã giữ hoặc đang ở'}
+                  <span className="grid gap-0.5 leading-snug">
+                    <span className="font-medium">{slot.label}</span>
+                    {!slot.available ? (
+                      slot.availableFrom
+                        ? <span className="text-xs text-warning">Đang thuê · nhận phòng từ {dateOnly(slot.availableFrom)}</span>
+                        : <span className="text-xs text-muted-foreground">Đã giữ hoặc đang ở</span>
+                    ) : slot.availableFrom ? (
+                      <span className="text-xs text-muted-foreground">Từ {dateOnly(slot.availableFrom)}</span>
+                    ) : null}
+                  </span>
                 </label>
               ))}
             </div>
@@ -112,6 +129,12 @@ export function BookingForm({ room }: { room: Room }) {
           <h2 className="font-bold">Thông tin phòng</h2>
           <p className="mt-4 text-sm text-muted-foreground">Giá thuê tham khảo mỗi slot</p>
           <p className="mt-1 font-bold">{room.price.toLocaleString('vi-VN')} ₫ / tháng</p>
+          {expectedMoveInDate && (
+            <div className="mt-4">
+              <p className="text-sm text-muted-foreground">Ngày nhận phòng dự kiến</p>
+              <p className="mt-1 font-bold text-primary">{dateOnly(expectedMoveInDate)}</p>
+            </div>
+          )}
           <p className="mt-4 text-sm text-muted-foreground">Tiền cọc được tính ở máy chủ từ mức cọc của phòng nhân số slot đã chọn.</p>
         </Panel>
         {provider('leasing') === 'mock' && <p className="text-xs text-muted-foreground">Đây là yêu cầu demo, không phát sinh giao dịch tiền thật.</p>}

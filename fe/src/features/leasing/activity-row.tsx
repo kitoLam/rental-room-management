@@ -33,7 +33,9 @@ export function ActivityRow({
           )}
           {'startAt' in record
             ? dateTime(record.startAt)
-            : `${dateOnly(record.startDate)} → ${dateOnly(record.endDate)}`}
+            : record.hasRentalDates
+              ? `${dateOnly(record.startDate)} → ${dateOnly(record.endDate)}`
+              : `Từ ${dateOnly(record.startDate)}`}
         </p>
         {'paymentDueAt' in record && record.status === 'AWAITING_PAYMENT' && (
           <p className="mt-2 flex items-center gap-2 text-xs text-warning">
