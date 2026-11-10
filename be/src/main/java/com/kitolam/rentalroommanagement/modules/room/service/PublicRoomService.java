@@ -15,6 +15,7 @@ import com.kitolam.rentalroommanagement.modules.room.dto.response.PublicRoomResp
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
+import com.kitolam.rentalroommanagement.modules.roomslot.service.support.RoomSlotAvailabilityRoller;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomtype.document.RoomType;
@@ -30,6 +31,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -44,6 +47,7 @@ public class PublicRoomService {
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
     private final RoomService roomService;
+    private final Clock clock;
 
     public PagedResponse<PublicRoomResponse> search(
             String keyword,
@@ -281,9 +285,12 @@ public class PublicRoomService {
                 Criteria.where("status").in(List.of(
                         OccupancyStatus.RESERVED.name(), OccupancyStatus.ACTIVE.name())),
                 Criteria.where("roomSlotId").in(slotIds))), RoomSlotOccupancy.class);
+        // Slot đang có lượt ở nhưng sắp hết hạn (còn <= 14 ngày) vẫn được tính là trống để khách mới đặt cọc.
+        LocalDate today = RoomSlotAvailabilityRoller.todayVietnam(clock);
         Set<String> occupiedSlotIds = new HashSet<>();
         Map<String, Integer> occupiedSlotCounts = new HashMap<>();
         occupancies.forEach(occupancy -> {
+            if (RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), today)) return;
             String roomId = roomBySlotId.get(occupancy.getRoomSlotId());
             if (roomId != null && occupiedSlotIds.add(occupancy.getRoomSlotId())) {
                 occupiedSlotCounts.merge(roomId, 1, Integer::sum);

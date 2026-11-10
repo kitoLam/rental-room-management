@@ -298,7 +298,10 @@ public class ContractServiceImpl implements ContractService {
             return response(contractRepository.save(contract));
         }
 
-        LocalDate effectiveDate = LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
+        // Ngày bắt đầu hợp đồng theo ngày bắt đầu thuê đã chốt lúc đặt cọc; booking cũ chưa có thì giữ quy tắc cũ.
+        LocalDate effectiveDate = booking.getExpectedMoveInDate() != null
+                ? booking.getExpectedMoveInDate()
+                : LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
         LocalDate firstBillingStartDate = request.firstBillingStartDate();
         if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate) || firstBillingStartDate.getDayOfMonth() != 1)
             throw new BadRequestException("Ngày bắt đầu tính tiền kỳ đầu phải là mùng 1 của tháng, không trước ngày hiệu lực hợp đồng");
