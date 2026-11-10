@@ -230,6 +230,7 @@ public class ContractServiceImpl implements ContractService {
                 .filter(item -> item.getRoomSlotId().equals(slot.getId()) && item.getStatus() == OccupancyStatus.RESERVED)
                 .findFirst().orElseThrow(() -> new ConflictException("Không tìm thấy slot đang được giữ bởi booking"));
         occupancy.setContractTenantId(contractTenant.getId());
+        occupancy.setContractId(contract.getId());
         occupancy.setStatus(OccupancyStatus.ACTIVE);
         occupancyRepository.save(occupancy);
         contract.setSignedFileUrl(request.signedFileUrl().trim());
@@ -329,6 +330,7 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Không tìm thấy đủ slot đang được giữ bởi booking");
         reservations.forEach(item -> {
             item.setContractTenantId(contractTenant.getId());
+            item.setContractId(contract.getId());
             item.setStartDate(effectiveDate);
             item.setEndDate(contract.getEndDate());
             item.setStatus(OccupancyStatus.ACTIVE);

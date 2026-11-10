@@ -8,8 +8,11 @@ import java.time.LocalDate;
 public record InvoiceItemResponse(
         String id,
         InvoiceItemType type,
+        String roomId,
+        String roomSlotId,
+        String slotServiceId,
+        String roomServiceId,
         String roomServiceChargeId,
-        String slotServiceChargeId,
         String description,
         LocalDate fromDate,
         LocalDate toDate,

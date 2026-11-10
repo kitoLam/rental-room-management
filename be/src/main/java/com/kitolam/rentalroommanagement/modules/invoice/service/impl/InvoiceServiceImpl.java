@@ -1,7 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.invoice.service.impl;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceResponse;
@@ -16,12 +15,6 @@ import org.springframework.stereotype.Service;
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
-
-    @Override
-    public InvoiceResponse create(InvoiceCreateRequest request) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
 
     @Override
     public InvoiceResponse getById(String id) {

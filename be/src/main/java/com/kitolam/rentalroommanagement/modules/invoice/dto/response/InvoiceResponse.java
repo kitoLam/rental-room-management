@@ -9,7 +9,9 @@ import java.util.List;
 
 public record InvoiceResponse(
         String id,
-        String contractTenantId,
+        String contractId,
+        String tenantId,
+        String branchId,
         String invoiceNumber,
         String period,
         LocalDate issueDate,

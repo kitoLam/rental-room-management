@@ -22,10 +22,22 @@ public class InvoiceItem {
     private InvoiceItemType type;
 
     @Field(targetType = FieldType.OBJECT_ID)
-    private String roomServiceChargeId;
+    private String roomId;
 
     @Field(targetType = FieldType.OBJECT_ID)
-    private String slotServiceChargeId;
+    private String roomSlotId;
+
+    /** Source of a SLOT_SERVICE item. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String slotServiceId;
+
+    /** Source of a ROOM_SERVICE item. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String roomServiceId;
+
+    /** Meter reading charge of a metered ROOM_SERVICE item. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String roomServiceChargeId;
 
     private String description;
 
@@ -39,6 +51,7 @@ public class InvoiceItem {
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal unitPrice;
 
+    /** Negative for DISCOUNT items. */
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal amount;
 }

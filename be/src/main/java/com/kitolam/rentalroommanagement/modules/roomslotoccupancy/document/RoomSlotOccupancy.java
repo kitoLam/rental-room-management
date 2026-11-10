@@ -28,6 +28,11 @@ public class RoomSlotOccupancy extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String contractTenantId;
 
+    /** Contract holding this slot; set when the contract is activated. Used for monthly billing. */
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String contractId;
+
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String bookingId;

@@ -2,7 +2,6 @@ package com.kitolam.rentalroommanagement.modules.invoice.controller;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceResponse;
@@ -33,13 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
-
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Tạo hoá đơn")
-    public StandardResponse<InvoiceResponse> create(@Valid @RequestBody InvoiceCreateRequest request) {
-        return StandardResponse.success("Tạo hoá đơn thành công", invoiceService.create(request));
-    }
 
     @GetMapping("/{id}")
     @Operation(summary = "Lấy hoá đơn theo id")

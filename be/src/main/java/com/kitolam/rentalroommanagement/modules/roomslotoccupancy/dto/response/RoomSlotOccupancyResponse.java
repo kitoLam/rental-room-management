@@ -9,6 +9,7 @@ public record RoomSlotOccupancyResponse(
         String id,
         String roomSlotId,
         String contractTenantId,
+        String contractId,
         LocalDate startDate,
         LocalDate endDate,
         OccupancyStatus status,
