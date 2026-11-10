@@ -341,6 +341,7 @@ const backendSlotAvailabilitySchema = z.object({
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
+  availableFrom: z.string().nullable().optional(),
 })
 const backendRoomSlotSchema = z.object({
   id: databaseIdSchema,
@@ -348,6 +349,7 @@ const backendRoomSlotSchema = z.object({
   slotCode: z.string(),
   slotNumber: z.number().nullable(),
   status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
+  availableFrom: z.string().nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 })
@@ -535,7 +537,14 @@ export const bookingService = {
     const checked = slots.content.length
       ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
       : []
-    const slotAvailability = checked.map((slot) => ({ id: slot.roomSlotId, label: slot.slotCode, available: slot.available }))
+    const availableFromById = new Map(slots.content.map((slot) => [slot.id, slot.availableFrom]))
+    const slotAvailability = checked.map((slot) => ({
+      id: slot.roomSlotId,
+      label: slot.slotCode,
+      available: slot.available,
+      // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
+      availableFrom: slot.availableFrom ?? availableFromById.get(slot.roomSlotId) ?? null,
+    }))
     const available = slotAvailability.some((slot) => slot.available)
     return {
       roomId,

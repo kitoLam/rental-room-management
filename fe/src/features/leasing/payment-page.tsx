@@ -113,7 +113,9 @@ export default function PaymentPage() {
                 {b.branchName}
                 {b.slotLabel ? ` · ${b.slotLabel}` : ''}
               </p>
-              {b.hasRentalDates && <p className="mt-3 text-sm">{dateOnly(b.startDate)} → {dateOnly(b.endDate)}</p>}
+              {b.hasRentalDates
+                ? <p className="mt-3 text-sm">Thời hạn thuê: {dateOnly(b.startDate)} → {dateOnly(b.endDate)}</p>
+                : <p className="mt-3 text-sm">Ngày bắt đầu thuê dự kiến: <span className="font-bold">{dateOnly(b.startDate)}</span></p>}
               <div className="my-7 rounded-xl bg-primary-soft p-5">
                 <p className="text-xs text-primary">
                   KHOẢN GIỮ CHỖ

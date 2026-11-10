@@ -112,7 +112,12 @@ export const availabilitySchema = z.object({
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
-  slots: z.array(z.object({ id: databaseIdSchema, label: z.string(), available: z.boolean() })),
+  slots: z.array(z.object({
+    id: databaseIdSchema,
+    label: z.string(),
+    available: z.boolean(),
+    availableFrom: z.string().nullable().optional(),
+  })),
 })
 export type Availability = z.infer<typeof availabilitySchema>
 export const appointmentStatuses = [

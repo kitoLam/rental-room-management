@@ -1,9 +1,11 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
-import { dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
+import { addMonths, dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { managerApi } from '@/services/manager'
-import { useEffect, useState } from 'react'
+import { bookingService } from '@/services/guest-user'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useParams } from 'react-router'
 import { z } from 'zod'
 import { ActionDialog, ManagerForm, ManagerLink, ManagerPage } from './components'
@@ -18,19 +20,24 @@ export function ManagerContractDetail() {
       true,
     ),
     [action, setAction] = useState(''),
-    [firstBillingStartDate, setFirstBillingStartDate] = useState(''),
     [evidenceNote, setEvidenceNote] = useState(''),
     mutation = useManagerAction(() => setAction(''))
-  const billingDateMinimum = query.data?.evidenceSubmittedAt
-    ? suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt)
+  const sourceBooking = useQuery({
+    queryKey: ['contract-booking', query.data?.sourceBookingId],
+    queryFn: () => bookingService.get(query.data!.sourceBookingId!),
+    enabled: Boolean(query.data?.sourceBookingId && !query.data?.startDate),
+    retry: false,
+  })
+  // Hợp đồng chốt ngày bắt đầu từ booking gốc; dùng cho cả hiển thị nháp lẫn min ngày tính tiền kỳ đầu.
+  const expectedStartDate = query.data?.startDate || sourceBooking.data?.startDate || null
+  // Ngày tính tiền kỳ đầu gợi ý = mùng 1 đầu tiên không trước ngày hiệu lực; input chỉ đọc.
+  const firstBillingStartDate = query.data?.evidenceSubmittedAt
+    ? suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt, undefined, expectedStartDate)
     : ''
+  const billingDateMinimum = firstBillingStartDate
   const validFirstBillingStartDate = Boolean(
     firstBillingStartDate && firstBillingStartDate >= billingDateMinimum && firstBillingStartDate.endsWith('-01'),
   )
-  useEffect(() => {
-    if (query.data?.evidenceSubmittedAt)
-      setFirstBillingStartDate(suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt))
-  }, [query.data?.evidenceSubmittedAt])
   return (
     <ManagerPage
       title="Hồ sơ hợp đồng"
@@ -47,7 +54,9 @@ export function ManagerContractDetail() {
                     'Thời hạn',
                     query.data.status === 'ACTIVE'
                       ? `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`
-                      : 'Chưa duyệt evidence',
+                      : expectedStartDate
+                        ? `Dự kiến từ ${dateOnly(expectedStartDate)}${query.data.termMonths ? ` → ${dateOnly(addMonths(expectedStartDate, query.data.termMonths))}` : ''} — chưa duyệt evidence`
+                        : 'Chưa duyệt evidence',
                   ],
                 ]}
               />

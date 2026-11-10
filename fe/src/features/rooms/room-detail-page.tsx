@@ -25,6 +25,7 @@ import { StatusBadge } from '@/components/common/status-badge'
 import { bookingService, catalogService } from '@/services/guest-user'
 import { provider } from '@/services/config'
 import { databaseIdSchema } from '@/interfaces/domain'
+import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
@@ -85,6 +86,9 @@ export default function RoomDetailPage() {
     selectedSlots.length > 0 &&
     selectedSlots.every((id) => available.data.slots.some((s) => s.id === id && s.available))
   const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
+  const earliestAvailableFrom = (available.data?.slots ?? [])
+    .flatMap((s) => ((s.available || s.availableFrom) && s.availableFrom ? [s.availableFrom] : []))
+    .sort()[0] ?? null
   return (
     <Page
       wide
@@ -263,6 +267,12 @@ export default function RoomDetailPage() {
                       {getPriceUnit(r)}
                     </span>
                   </p>
+                  {earliestAvailableFrom && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
+                      <CalendarDays size={14} className="shrink-0" />
+                      Có thể nhận phòng từ {dateOnly(earliestAvailableFrom)}
+                    </p>
+                  )}
                   <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                     Giá thuê chính thức được thỏa thuận khi lập hợp đồng. Khoản giữ chỗ được thông
                     báo riêng.
@@ -274,11 +284,11 @@ export default function RoomDetailPage() {
                         {available.data.slots.map((s) => (
                           <label
                             key={s.id}
-                            className={`flex min-h-12 items-center gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
+                            className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
                           >
                             <input
                               type="checkbox"
-                              className="accent-primary"
+                              className="mt-0.5 accent-primary"
                               value={s.id}
                               checked={selectedSlots.includes(s.id)}
                               disabled={!s.available}
@@ -286,8 +296,16 @@ export default function RoomDetailPage() {
                                 ? [...current, s.id]
                                 : current.filter((id) => id !== s.id))}
                             />
-                            {s.label}
-                            {!s.available && ' · Đã kín'}
+                            <span className="grid gap-0.5 leading-snug">
+                              <span className="font-medium">{s.label}</span>
+                              {!s.available ? (
+                                s.availableFrom
+                                  ? <span className="text-xs text-warning">Đang thuê · nhận phòng từ {dateOnly(s.availableFrom)}</span>
+                                  : <span className="text-xs text-muted-foreground">Đã kín</span>
+                              ) : s.availableFrom ? (
+                                <span className="text-xs text-muted-foreground">Từ {dateOnly(s.availableFrom)}</span>
+                              ) : null}
+                            </span>
                           </label>
                         ))}
                       </div>
