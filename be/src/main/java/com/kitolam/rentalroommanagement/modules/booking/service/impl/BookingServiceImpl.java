@@ -139,6 +139,13 @@ public class BookingServiceImpl implements BookingService {
         String roomId = slots.getFirst().getRoomId();
         if (slots.stream().anyMatch(slot -> !roomId.equals(slot.getRoomId())))
             throw new BadRequestException("Các slot cần thuộc cùng một phòng");
+        Room targetRoom = room(roomId);
+        if (tenant.isInactiveInBranch(targetRoom.getBranchId()))
+            throw new ForbiddenException("Tài khoản của bạn hiện đang tạm ngưng hoạt động tại cơ sở này");
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(targetRoom.getBranchId())) {
+            tenant.addBranch(targetRoom.getBranchId());
+            tenantRepository.save(tenant);
+        }
         // Mốc so sánh ngày nhả phòng phải theo giờ Việt Nam, không theo UTC của clock.
         LocalDate todayVietnam = todayVietnam();
         LocalDate holdStart = todayVietnam;

@@ -20,6 +20,7 @@ const groups: [string, [string, string][]][] = [
     [
       ['managers', 'Quản lý'],
       ['manager-assignments', 'Phân công'],
+      ['tenants', 'Quản lý tài khoản'],
     ],
   ],
   [

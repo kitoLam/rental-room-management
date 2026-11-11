@@ -5,4 +5,5 @@ import com.kitolam.rentalroommanagement.modules.manager.document.Manager;
 
 public interface ManagerRepository extends BaseRepository<Manager> {
     java.util.Optional<Manager> findByEmailAndIsDeletedFalse(String email);
+    java.util.List<Manager> findByBranchIdInAndIsDeletedFalse(java.util.Collection<String> branchIds);
 }

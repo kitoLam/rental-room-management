@@ -35,7 +35,7 @@ const groups = [
     items: [
       ['rooms', 'Phòng', House],
       ['room-types', 'Loại phòng', House],
-      ['tenants', 'Người thuê', Users],
+      ['tenants', 'Quản lý tài khoản', Users],
     ],
   },
   {
@@ -153,14 +153,6 @@ export function ManagerLayout() {
                   to="/admin/dashboard"
                 >
                   ← Quản trị hệ thống
-                </Link>
-              )}
-              {user.roles.includes('OWNER') && (
-                <Link
-                  className="mb-5 block min-h-11 text-sm font-bold text-primary"
-                  to="/owner/dashboard"
-                >
-                  ← Không gian chủ trọ
                 </Link>
               )}
               <div className="mb-5">

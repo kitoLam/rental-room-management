@@ -15,8 +15,19 @@ public class AuthTokenStore {
 
     // Compare-and-set predicates also protect multiple application instances.
     public boolean consumeVerification(String hash, Instant now) {
-        var criteria = Criteria.where("tokenHash").is(hash).and("isDeleted").is(false)
-                .and("usedAt").is(null).and("expiresAt").gt(now);
+        return consumeVerification(hash, TokenPurpose.EMAIL_VERIFICATION, now);
+    }
+
+    public boolean consumeVerification(String hash, TokenPurpose expectedPurpose, Instant now) {
+        Criteria purposeCriteria = expectedPurpose == TokenPurpose.EMAIL_VERIFICATION
+                ? new Criteria().orOperator(
+                        Criteria.where("purpose").is(TokenPurpose.EMAIL_VERIFICATION),
+                        Criteria.where("purpose").is(null))
+                : Criteria.where("purpose").is(expectedPurpose);
+        var criteria = new Criteria().andOperator(
+                Criteria.where("tokenHash").is(hash).and("isDeleted").is(false)
+                        .and("usedAt").is(null).and("expiresAt").gt(now),
+                purposeCriteria);
         return mongo.updateFirst(Query.query(criteria),
                 new Update().set("usedAt", now).set("updatedAt", now), VerificationToken.class)
                 .getModifiedCount() == 1;
@@ -32,7 +43,7 @@ public class AuthTokenStore {
 
     public boolean claimResend(String userId, Instant cutoff, Instant now) {
         var criteria = Criteria.where("_id").is(new ObjectId(userId)).and("isDeleted").is(false)
-                .and("enabled").is(false).and("emailVerified").is(false)
+                .and("enabled").is(false)
                 .orOperator(Criteria.where("lastVerificationSentAt").lte(cutoff),
                         Criteria.where("lastVerificationSentAt").is(null));
         return mongo.updateFirst(Query.query(criteria),
