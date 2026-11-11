@@ -1135,13 +1135,15 @@ export default function ProfilePage() {
                   <span>Lời mời làm quản lý</span>
                   <ArrowRight size={13} />
                 </Link>
-                <Link
-                  to={activeUser?.roles?.includes('OWNER') ? '/owner/dashboard' : '/owner/onboarding'}
-                  className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
-                >
-                  <span>{activeUser?.roles?.includes('OWNER') ? 'Không gian chủ trọ' : 'Đăng ký làm chủ trọ'}</span>
-                  <ArrowRight size={13} />
-                </Link>
+                {!activeUser?.roles?.includes('OWNER') && (
+                  <Link
+                    to="/owner/onboarding"
+                    className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
+                  >
+                    <span>Đăng ký làm chủ trọ</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                )}
               </div>
 
               <InlineError error={logout.error} />

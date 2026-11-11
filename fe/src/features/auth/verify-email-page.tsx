@@ -5,10 +5,18 @@ import { authService } from '@/services/guest-user'
 import { useQuery } from '@tanstack/react-query'
 import { Mail, MailCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Heading } from './auth-shared'
+
+interface VerifyEmailResult {
+  message?: string
+  requiresPasswordSetup?: boolean
+  setupToken?: string
+}
+
 export function VerifyEmailPage() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [finishedToken, setFinishedToken] = useState('')
   const token = params.get('token') || finishedToken
   const email = params.get('email') || ''
@@ -18,7 +26,7 @@ export function VerifyEmailPage() {
     queryFn: async () => {
       try {
         const res = await authService.verify(token)
-        return res ?? true
+        return (res ?? true) as VerifyEmailResult | boolean
       } finally {
         setFinishedToken(token)
       }
@@ -30,13 +38,26 @@ export function VerifyEmailPage() {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
+  const setupToken =
+    typeof verify.data === 'object' &&
+    verify.data !== null &&
+    verify.data.requiresPasswordSetup &&
+    verify.data.setupToken
+      ? verify.data.setupToken
+      : null
   useEffect(() => {
+    if (setupToken) {
+      navigate(`/reset-password?token=${encodeURIComponent(setupToken)}&mode=setup`, {
+        replace: true,
+      })
+      return
+    }
     if (token && params.has('token') && (verify.isSuccess || verify.isError)) {
       const next = new URLSearchParams(params)
       next.delete('token')
       setParams(next, { replace: true })
     }
-  }, [token, params, setParams, verify.isSuccess, verify.isError])
+  }, [token, params, setParams, verify.isSuccess, verify.isError, setupToken, navigate])
   return (
     <>
       <div className="mb-6 flex size-14 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -58,13 +79,25 @@ export function VerifyEmailPage() {
       {token && (
         <QueryState pending={verify.isPending} error={verify.error} retry={verify.refetch}>
           {verify.isSuccess && (
-            <Notice tone="success">Tài khoản đã sẵn sàng. Bạn có thể đăng nhập.</Notice>
+            <Notice tone="success">
+              {setupToken
+                ? 'Xác thực email thành công. Vui lòng tiếp tục đặt mật khẩu cho tài khoản của bạn.'
+                : 'Tài khoản đã sẵn sàng. Bạn có thể đăng nhập.'}
+            </Notice>
           )}
         </QueryState>
       )}
-      <Button asChild className="mt-6 w-full">
-        <Link to={`/login?redirect=${encodeURIComponent(redirect)}`}>Về đăng nhập</Link>
-      </Button>
+      {setupToken ? (
+        <Button asChild className="mt-6 w-full">
+          <Link to={`/reset-password?token=${encodeURIComponent(setupToken)}&mode=setup`}>
+            Tiếp tục đặt mật khẩu
+          </Link>
+        </Button>
+      ) : (
+        <Button asChild className="mt-6 w-full">
+          <Link to={`/login?redirect=${encodeURIComponent(redirect)}`}>Về đăng nhập</Link>
+        </Button>
+      )}
     </>
   )
 }

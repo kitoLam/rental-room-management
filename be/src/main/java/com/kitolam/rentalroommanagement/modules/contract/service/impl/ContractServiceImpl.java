@@ -123,6 +123,13 @@ public class ContractServiceImpl implements ContractService {
 
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(booking.getTenantId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người thuê"));
+        if (tenant.isInactiveInBranch(room.getBranchId())) {
+            throw new ConflictException("Tài khoản người thuê hiện đang tạm ngưng hoạt động tại cơ sở này");
+        }
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(room.getBranchId())) {
+            tenant.addBranch(room.getBranchId());
+            tenantRepository.save(tenant);
+        }
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy chi nhánh"));
         Contract contract = new Contract();

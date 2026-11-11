@@ -56,6 +56,14 @@ export const authService = {
           false,
         )
       : request('auth', '/api/v1/auth/verify-email', nullable, write('POST', { token }), false),
+  setupPassword: (input: { token: string; password: string; confirmPassword: string }) =>
+    request(
+      'auth',
+      '/api/v1/auth/setup-password',
+      nullable,
+      write('POST', input),
+      false,
+    ),
   logout: () =>
     request(
       'auth',

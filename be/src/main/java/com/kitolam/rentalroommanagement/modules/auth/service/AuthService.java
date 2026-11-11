@@ -10,7 +10,10 @@ public interface AuthService {
     List<AccountIdentityResponse> activeManagementAccounts();
     MessageResponse signup(SignupRequest request);
     MessageResponse verifyEmail(String token);
+    MessageResponse setupPassword(SetupPasswordRequest request);
     MessageResponse resendVerification(ResendVerificationRequest request);
+    AccountIdentityResponse createManagedTenantAccount(String fullName, String email, String phone, String branchName);
+    MessageResponse resendManagedTenantVerification(String email, String branchName);
     TokenResponse login(LoginRequest request);
     TokenResponse refresh(RefreshTokenRequest request);
     MessageResponse logout(RefreshTokenRequest request);

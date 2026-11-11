@@ -9,8 +9,7 @@ const workspaceRoles = new Map<string, readonly string[]>([
 
 export function dashboardPath(roles: readonly string[]) {
   if (roles.includes('ADMIN')) return '/admin/dashboard'
-  if (roles.includes('OWNER')) return '/owner/dashboard'
-  if (roles.includes('MANAGER')) return '/manager/dashboard'
+  if (roles.includes('OWNER') || roles.includes('MANAGER')) return '/manager/dashboard'
   return '/user/dashboard'
 }
 

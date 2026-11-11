@@ -89,7 +89,6 @@ export function SiteHeader() {
             {user ? (
               <>
                 {user.roles.includes('ADMIN') && <Link to="/admin/dashboard" className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex">Quản trị</Link>}
-                {user.roles.includes('OWNER') && <Link to="/owner/dashboard" className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex">Chủ trọ</Link>}
                 {(user.roles.includes('MANAGER') || !!assignments.data?.length) && (
                   <Link
                     to="/manager/dashboard"
@@ -123,7 +122,7 @@ export function SiteHeader() {
                   variant={overlay ? 'overlay' : 'outline'}
                   className="hidden sm:inline-flex"
                 >
-                  <Link to={dashboardPath(user.roles)}>{user.fullName.split(' ').at(-1)}</Link>
+                  <Link to={dashboardPath(user.roles)}>{user.fullName}</Link>
                 </Button>
               </>
             ) : (
@@ -151,7 +150,7 @@ export function SiteHeader() {
       <Modal
         open={menu}
         onOpenChange={setMenu}
-        title={user ? `Chào ${user.fullName.split(' ').at(-1)}` : 'Khám phá TroPro'}
+        title={user ? `Chào ${user.fullName}` : 'Khám phá TroPro'}
         description="Một không gian phù hợp, một khởi đầu mới."
         drawer
       >
@@ -160,7 +159,6 @@ export function SiteHeader() {
             ? [
                 ['Tổng quan', dashboardPath(user.roles)],
                 ...((user?.roles.includes('MANAGER') || assignments.data?.length) ? [['Quản lý chi nhánh', '/manager/dashboard']] : []),
-                ...(user?.roles.includes('OWNER') ? [['Không gian chủ trọ', '/owner/dashboard']] : []),
                 ...(user?.roles.includes('ADMIN') ? [['Quản trị hệ thống', '/admin/dashboard']] : []),
                 ...(!isStaffOnly && (user?.roles.includes('TENANT') || tenancies.data?.length) ? [['Không gian thuê', '/tenant/dashboard']] : []),
                 ['Tìm phòng', '/rooms'],
