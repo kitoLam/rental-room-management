@@ -405,7 +405,7 @@ const backendContractSchema = z.object({
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   services: z.array(z.object({
     serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
@@ -431,6 +431,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     slotLabel: b.slotCode,
     slotLabels: b.slotCodes || [b.slotCode],
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
+    expectedMoveInDate: b.expectedMoveInDate,
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),

@@ -196,7 +196,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
               <Panel>
                 <h2 className="mb-3 font-bold">Văn bản hợp đồng</h2>
                 <a
-                  href={contract?.templateDownloadUrl || 'https://www.youtube.com/'}
+                  href={contract?.contractUrl || 'https://www.youtube.com/'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-primary"

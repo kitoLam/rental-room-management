@@ -41,7 +41,7 @@ const backendContractDto = z.object({
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
   termMonths: z.number().nullable().optional(), signedDate: z.string().nullable().optional(), firstBillingStartDate: z.string().nullable().optional(),
-  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), templateDownloadUrl: z.string().nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
   electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
@@ -52,7 +52,8 @@ const backendContractDto = z.object({
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomId,
-    startDate: value.startDate || new Date().toISOString().slice(0, 10), endDate: value.endDate || new Date().toISOString().slice(0, 10), terms: value.terms || '',
+    // Nháp chưa duyệt evidence không có ngày hiệu lực; giữ null để trang tự lấy ngày bắt đầu thuê từ booking gốc.
+    startDate: value.startDate || null, endDate: value.endDate || null, terms: value.terms || '',
     landlordName: value.landlordName, landlordIdNumber: value.landlordIdNumber, landlordAddress: value.landlordAddress,
     tenantName: value.tenantName, tenantIdNumber: value.tenantIdNumber, tenantAddress: value.tenantAddress,
     roomAddress: value.roomAddress, paymentDueDay: value.paymentDueDay, rentPrice: value.rentPrice,
@@ -63,7 +64,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     signedEvidenceUrl: value.signedEvidenceUrl, termMonths: value.termMonths, signedDate: value.signedDate,
     firstBillingStartDate: value.firstBillingStartDate, evidenceSubmittedAt: value.evidenceSubmittedAt,
     evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
-    evidenceNote: value.evidenceNote, templateDownloadUrl: value.templateDownloadUrl,
+    evidenceNote: value.evidenceNote, contractUrl: value.contractUrl,
     rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })

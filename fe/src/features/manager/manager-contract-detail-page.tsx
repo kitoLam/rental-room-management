@@ -1,7 +1,7 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
-import { addMonths, dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
+import { addMonths, bookingMoveInDate, dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { managerApi } from '@/services/manager'
 import { bookingService } from '@/services/guest-user'
 import { useQuery } from '@tanstack/react-query'
@@ -29,9 +29,11 @@ export function ManagerContractDetail() {
     retry: false,
   })
   // Hợp đồng chốt ngày bắt đầu từ booking gốc; dùng cho cả hiển thị nháp lẫn min ngày tính tiền kỳ đầu.
-  const expectedStartDate = query.data?.startDate || sourceBooking.data?.startDate || null
+  const bookingStartDate = bookingMoveInDate(sourceBooking.data)
+  const expectedStartDate = query.data?.startDate || bookingStartDate || null
   // Ngày tính tiền kỳ đầu gợi ý = mùng 1 đầu tiên không trước ngày hiệu lực; input chỉ đọc.
-  const firstBillingStartDate = query.data?.evidenceSubmittedAt
+  // Booking cũ chưa chốt ngày dọn vào thì backend lùi 1 ngày sau evidence, helper xử lý cùng quy tắc.
+  const firstBillingStartDate = query.data?.evidenceSubmittedAt && (expectedStartDate || sourceBooking.isSuccess)
     ? suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt, undefined, expectedStartDate)
     : ''
   const billingDateMinimum = firstBillingStartDate
@@ -52,7 +54,7 @@ export function ManagerContractDetail() {
                 items={[
                   [
                     'Thời hạn',
-                    query.data.status === 'ACTIVE'
+                    query.data.status === 'ACTIVE' && query.data.startDate && query.data.endDate
                       ? `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`
                       : expectedStartDate
                         ? `Dự kiến từ ${dateOnly(expectedStartDate)}${query.data.termMonths ? ` → ${dateOnly(addMonths(expectedStartDate, query.data.termMonths))}` : ''} — chưa duyệt evidence`

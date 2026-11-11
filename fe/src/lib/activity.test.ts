@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, firstBillingStartDate } from '@/lib/activity'
+import { addMonths, bookingMoveInDate, firstBillingStartDate } from '@/lib/activity'
 
 describe('firstBillingStartDate', () => {
   const now = new Date('2026-11-10T05:00:00Z')
@@ -25,6 +25,25 @@ describe('firstBillingStartDate', () => {
 
   it('falls back to the day after evidence was submitted when there is no lease start', () => {
     expect(firstBillingStartDate('2026-12-20T03:00:00Z', now)).toBe('2027-01-01')
+  })
+
+  it('never suggests a first billing day before the lease start (the 400 on approval)', () => {
+    const evidenceAt = '2026-11-11T08:01:46Z'
+    // Ngày dọn vào tháng 12: gợi ý cũ (mùng 1 tháng 12 tính từ hôm nay) rơi trước ngày hiệu lực → backend từ chối.
+    expect(firstBillingStartDate(evidenceAt, now, '2026-12-05')).toBe('2027-01-01')
+    expect(firstBillingStartDate(evidenceAt, now, '2026-12-01')).toMatch(/^\d{4}-\d{2}-01$/)
+    for (const moveIn of ['2026-11-20', '2026-12-05', '2027-01-01', '2027-03-31'])
+      expect(firstBillingStartDate(evidenceAt, now, moveIn) >= moveIn).toBe(true)
+  })
+})
+
+describe('bookingMoveInDate', () => {
+  it('prefers the confirmed move-in date and keeps null separate from the display fallback', () => {
+    expect(bookingMoveInDate({ expectedMoveInDate: '2026-12-05', startDate: '2026-12-05' })).toBe('2026-12-05')
+    expect(bookingMoveInDate({ expectedMoveInDate: null, startDate: '2026-11-01' })).toBeUndefined()
+    // Mock không mang expectedMoveInDate nên dùng startDate đã gán sẵn.
+    expect(bookingMoveInDate({ startDate: '2026-12-05' })).toBe('2026-12-05')
+    expect(bookingMoveInDate(undefined)).toBeUndefined()
   })
 })
 
