@@ -65,7 +65,7 @@ export const profileSchema = z.object({
     .refine((v) => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v < today()), 'Ngày sinh chưa hợp lệ.'),
   gender: z.enum(['', 'MALE', 'FEMALE', 'OTHER']),
 })
-export function safeRedirect(value: string | null, fallback = '/user/dashboard') {
+export function safeRedirect(value: string | null, fallback = '/') {
   if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value))
     return fallback
   const url = new URL(value, 'https://tropro.local')

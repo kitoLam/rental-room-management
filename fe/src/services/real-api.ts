@@ -73,6 +73,12 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
   if (
+    (feature === 'manager' || feature === 'owner' || feature === 'tenant' || feature === 'guestUser') &&
+    ((pathname === '/api/v1/invoices/debts' && verb === 'GET') ||
+      (matches('/api/v1/invoices/debts/[^/]+/(pay|unpay)') && verb === 'POST'))
+  )
+    return null
+  if (
     (feature === 'manager' || feature === 'owner') &&
     ((pathname === '/api/v1/branches/managed' && verb === 'GET') ||
       (pathname === '/api/v1/tenants' && ['GET', 'POST'].includes(verb)) ||

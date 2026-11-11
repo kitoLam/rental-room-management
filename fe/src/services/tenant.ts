@@ -187,18 +187,31 @@ export const tenantApi = {
         '/api/v1/contracts?page=0&size=100',
         pageSchema(tenantContractSchema),
       )
-      const today = new Date().toISOString().slice(0, 10)
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const activeList = (page.content || [])
         .filter(
           (c) =>
             c.status === 'ACTIVE' &&
+            !(c.contractNumber || '').toUpperCase().startsWith('TMP-') &&
             (!c.startDate || c.startDate <= today) &&
             (!c.endDate || c.endDate >= today),
         )
-        .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
+        .sort((a, b) => {
+          const startCmp = (b.startDate || '').localeCompare(a.startDate || '')
+          if (startCmp !== 0) return startCmp
+          return (b.contractNumber || '').localeCompare(a.contractNumber || '')
+        })
+      const byRoom = new Map<string, (typeof activeList)[number]>()
+      for (const c of activeList) {
+        const roomKey = c.roomId || c.id
+        if (!byRoom.has(roomKey)) {
+          byRoom.set(roomKey, c)
+        }
+      }
       const contracts =
-        activeList.length > 0
-          ? [activeList[0]]
+        byRoom.size > 0
+          ? Array.from(byRoom.values())
           : (page.content || []).filter((c) => c.status === 'ACTIVE').slice(0, 1)
       const { roomSlotService } = await import('./guest-user')
       return await Promise.all(

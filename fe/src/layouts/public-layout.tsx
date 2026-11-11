@@ -15,6 +15,7 @@ import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
 import { hasMocks, provider } from '@/services/config'
+import { TenantOverdueGate } from '@/features/tenant/tenant-debts-gate'
 import { cn } from '@/lib/utils'
 import { useHeaderOverlay } from './use-header-overlay'
 
@@ -146,6 +147,7 @@ export function SiteHeader() {
             </button>
           </nav>
         </Container>
+        <TenantOverdueGate />
       </header>
       <Modal
         open={menu}

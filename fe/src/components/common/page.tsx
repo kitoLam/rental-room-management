@@ -274,6 +274,7 @@ export function Modal({
   hideClose = false,
   children,
   drawer = false,
+  wide = false,
 }: {
   title: string
   description?: string
@@ -283,6 +284,7 @@ export function Modal({
   hideClose?: boolean
   children: ReactNode
   drawer?: boolean
+  wide?: boolean
 }) {
   const returnFocus = useRef<HTMLElement | null>(null)
   const handleOpenChange = (value: boolean) => {
@@ -308,7 +310,10 @@ export function Modal({
             'fixed z-50 max-h-[90dvh] overflow-y-auto bg-surface p-6 shadow-float outline-none',
             drawer
               ? 'inset-y-0 right-0 max-h-dvh w-full max-w-sm'
-              : 'top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-xl',
+              : cn(
+                  'top-1/2 left-1/2 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl',
+                  wide ? 'max-w-4xl' : 'max-w-xl',
+                ),
           )}
         >
           <Dialog.Title className={cn('text-xl font-bold', !hideClose && 'pr-10')}>

@@ -678,6 +678,12 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'debts',
+                lazy: async () => ({
+                  Component: (await import('@/features/tenant/tenant-debts-gate')).default,
+                }),
+              },
+              {
                 path: 'services',
                 lazy: async () => ({
                   Component: (await import('@/features/tenant/services-page')).ServicesPage,
@@ -739,6 +745,10 @@ export const router = createBrowserRouter([
                 lazy: async () => ({
                   Component: (await import('@/features/user/dashboard-page')).default,
                 }),
+              },
+              {
+                path: 'user/debts',
+                element: <Navigate to="/tenant/debts" replace />,
               },
               {
                 path: 'user/bookings',

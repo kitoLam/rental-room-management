@@ -14,9 +14,11 @@ export function dashboardPath(roles: readonly string[]) {
 }
 
 export function postLoginPath(requested: string | null, roles: readonly string[]) {
-  const home = dashboardPath(roles)
+  const isStaff = roles.includes('ADMIN') || roles.includes('OWNER') || roles.includes('MANAGER')
+  const home = isStaff ? dashboardPath(roles) : '/'
   const target = safeRedirect(requested, home)
   const pathname = new URL(target, 'https://tropro.local').pathname
+  if (!isStaff && /^\/(user(\/dashboard)?|profile)\/?$/.test(pathname)) return '/'
   if (
     /^\/(user|owner|manager|admin)(\/dashboard)?\/?$/.test(pathname)
     && pathname !== home
