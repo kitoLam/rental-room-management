@@ -141,7 +141,7 @@ export function SiteHeader() {
                   variant={overlay ? 'overlay' : 'outline'}
                   className="hidden sm:inline-flex"
                 >
-                  <Link to={dashboardPath(user.roles)}>{user.fullName.split(' ').at(-1)}</Link>
+                  <Link to={dashboardPath(user.roles)}>{user.fullName}</Link>
                 </Button>
               </>
             ) : (
@@ -169,7 +169,7 @@ export function SiteHeader() {
       <Modal
         open={menu}
         onOpenChange={setMenu}
-        title={user ? `Chào ${user.fullName.split(' ').at(-1)}` : 'Khám phá TroPro'}
+        title={user ? `Chào ${user.fullName}` : 'Khám phá TroPro'}
         description="Một không gian phù hợp, một khởi đầu mới."
         drawer
       >
@@ -190,6 +190,7 @@ export function SiteHeader() {
                 ...(!isStaffOnly && (user?.roles.includes('TENANT') || tenancies.data?.length)
                   ? [['Không gian thuê', '/tenant/dashboard']]
                   : []),
+
                 ['Tìm phòng', '/rooms'],
                 [
                   'Lịch xem phòng',

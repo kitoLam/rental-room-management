@@ -509,6 +509,12 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'portfolio/tenants',
+                lazy: async () => ({
+                  Component: (await import('@/features/owner/owner-tenants-page')).OwnerTenantsPage,
+                }),
+              },
+              {
                 path: 'finance',
                 lazy: async () => ({
                   Component: (await import('@/features/owner/owner-finance-page')).OwnerFinance,

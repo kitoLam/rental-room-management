@@ -18,10 +18,8 @@ export function postLoginPath(requested: string | null, roles: readonly string[]
   const home = dashboardPath(roles)
   const target = safeRedirect(requested, home)
   const pathname = new URL(target, 'https://tropro.local').pathname
-  if (
-    /^\/(user|owner|manager|admin)(\/dashboard)?\/?$/.test(pathname)
-    && pathname !== home
-  ) return home
+  if (/^\/(user|owner|manager|admin)(\/dashboard)?\/?$/.test(pathname) && pathname !== home)
+    return home
   const allowed = workspaceRoles.get(pathname.split('/')[1])
   return allowed && !allowed.some((role) => roles.includes(role)) ? home : target
 }

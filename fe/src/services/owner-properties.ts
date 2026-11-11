@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { databaseIdSchema } from '@/interfaces/domain'
+import { provider } from './config'
 import { request, write } from './http'
 
 export const propertyTypes = { APARTMENT: 'Căn hộ', BOARDING_HOUSE: 'Nhà trọ', HOUSE: 'Nhà nguyên căn' } as const
@@ -31,9 +32,31 @@ const propertyRoomSchema = z.object({
   floorNumber: z.number().nullable(), referencePrice: z.number(), isPublic: z.boolean(),
   operationalStatus: z.string(), description: z.string().nullable(),
 })
+const managedBranchDtoSchema = z.object({
+  id: databaseIdSchema,
+  name: z.string(),
+  address: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'INACTIVE']),
+})
 const root = '/api/owner/properties'
 export const ownerProperties = {
-  list: () => request('owner', root, z.array(propertySchema)),
+  list: async (): Promise<OwnerProperty[]> => {
+    if (provider('owner') === 'real') {
+      const branches = await request('owner', '/api/v1/branches/managed', z.array(managedBranchDtoSchema))
+      return branches.map((b) => ({
+        id: b.id,
+        name: b.name,
+        address: b.address || '',
+        propertyType: null,
+        declaredRoomCount: null,
+        description: b.description || null,
+        roomCount: 0,
+        status: b.status,
+      }))
+    }
+    return request('owner', root, z.array(propertySchema))
+  },
   get: (id: string) => request('owner', `${root}/${encodeURIComponent(id)}`, propertySchema),
   save: (input: PropertyInput, id?: string) => request('owner', id ? `${root}/${encodeURIComponent(id)}` : root, propertySchema, write(id ? 'PUT' : 'POST', input)),
   rooms: (id: string) => request('owner', `${root}/${encodeURIComponent(id)}/rooms`, z.array(propertyRoomSchema)),

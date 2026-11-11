@@ -125,6 +125,13 @@ public class ContractServiceImpl implements ContractService {
 
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(booking.getTenantId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người thuê"));
+        if (tenant.isInactiveInBranch(room.getBranchId())) {
+            throw new ConflictException("Tài khoản người thuê hiện đang tạm ngưng hoạt động tại cơ sở này");
+        }
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(room.getBranchId())) {
+            tenant.addBranch(room.getBranchId());
+            tenantRepository.save(tenant);
+        }
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy chi nhánh"));
         Contract contract = new Contract();
@@ -556,7 +563,7 @@ public class ContractServiceImpl implements ContractService {
                 c.getElectricityRate(), c.getWaterRate(), c.getParkingRate(), c.getMaxOccupants(),
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
-                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getTemplateDownloadUrl(),
+                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getContractUrl(),
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
     }
 

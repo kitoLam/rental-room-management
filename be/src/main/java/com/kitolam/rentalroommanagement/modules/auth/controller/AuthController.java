@@ -38,6 +38,11 @@ public class AuthController {
         return auth.verifyEmail(token);
     }
 
+    @PostMapping("/setup-password")
+    public MessageResponse setupPassword(@Valid @RequestBody SetupPasswordRequest request) {
+        return auth.setupPassword(request);
+    }
+
     @PostMapping("/resend-verification")
     public MessageResponse resend(@Valid @RequestBody ResendVerificationRequest request) {
         return auth.resendVerification(request);

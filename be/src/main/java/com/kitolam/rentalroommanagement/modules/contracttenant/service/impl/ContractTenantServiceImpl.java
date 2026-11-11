@@ -59,13 +59,19 @@ public class ContractTenantServiceImpl implements ContractTenantService {
         Contract contract = authorizedContract(request.contractId(), principal);
         if (contract.getStatus() != ContractStatus.DRAFT && contract.getStatus() != ContractStatus.ACTIVE)
             throw new ConflictException("Chỉ hợp đồng nháp hoặc đang hiệu lực mới thêm được người thuê");
+        Room room = roomRepository.findByIdAndIsDeletedFalse(contract.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(request.tenantId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy hồ sơ Tenant"));
-        if (tenant.getStatus() != TenantStatus.ACTIVE)
-            throw new ConflictException("Tài khoản Tenant hiện không hoạt động");
+        if (tenant.getStatus() != TenantStatus.ACTIVE || tenant.isInactiveInBranch(room.getBranchId()))
+            throw new ConflictException("Tài khoản Tenant hiện không hoạt động tại cơ sở này");
         if (contractTenantRepository.existsByContractIdAndTenantIdAndIsDeletedFalse(contract.getId(), tenant.getId()))
             throw new ConflictException("Tenant đã thuộc hợp đồng này");
         validateDates(request.joinedAt(), request.leftAt());
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(room.getBranchId())) {
+            tenant.addBranch(room.getBranchId());
+            tenantRepository.save(tenant);
+        }
 
         ContractTenant item = new ContractTenant();
         item.setContractId(contract.getId());
@@ -135,7 +141,10 @@ public class ContractTenantServiceImpl implements ContractTenantService {
 
     @Override
     public List<EligibleContractTenantResponse> eligibleTenants(String contractId, AuthPrincipal principal) {
-        authorizedContract(contractId, principal);
+        Contract contract = authorizedContract(contractId, principal);
+        Room room = roomRepository.findByIdAndIsDeletedFalse(contract.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
+        String branchId = room.getBranchId();
         List<User> users = userRepository.findByRoleInAndEnabledTrueAndEmailVerifiedTrueAndIsDeletedFalse(List.of(Role.TENANT));
         if (users.isEmpty()) return List.of();
         List<String> emails = users.stream().map(User::getEmail).filter(email -> email != null && !email.isBlank()).toList();
@@ -148,6 +157,7 @@ public class ContractTenantServiceImpl implements ContractTenantService {
                 .filter(user -> tenantsByEmail.containsKey(user.getEmail()))
                 .map(user -> Map.entry(user, tenantsByEmail.get(user.getEmail())))
                 .filter(entry -> entry.getValue().getStatus() == TenantStatus.ACTIVE)
+                .filter(entry -> !entry.getValue().isInactiveInBranch(branchId))
                 .filter(entry -> !linkedTenantIds.contains(entry.getValue().getId()))
                 .map(entry -> new EligibleContractTenantResponse(entry.getValue().getId(), entry.getKey().getFullName(),
                         entry.getKey().getEmail(), entry.getKey().getPhone()))

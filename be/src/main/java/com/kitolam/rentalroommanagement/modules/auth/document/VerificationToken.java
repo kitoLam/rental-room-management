@@ -16,6 +16,7 @@ public class VerificationToken extends BaseDocument {
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String userId;
+    private TokenPurpose purpose = TokenPurpose.EMAIL_VERIFICATION;
     private Instant expiresAt;
     private Instant usedAt;
     // Keep expired/used tokens briefly to distinguish errors; never TTL-delete users.

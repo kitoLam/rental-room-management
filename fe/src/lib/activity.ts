@@ -28,6 +28,27 @@ export const addMonths = (date: string, months: number) => {
   firstOfTarget.setUTCDate(Math.min(day, lastDay))
   return firstOfTarget.toISOString().slice(0, 10)
 }
+/** Ngày hiệu lực thật của booking. Backend duyệt evidence dùng expectedMoveInDate, booking cũ chưa có thì lùi 1 ngày sau
+ * lúc nộp evidence; mock không mang expectedMoveInDate nên rơi về startDate đã gán sẵn. */
+export const bookingMoveInDate = (booking?: { expectedMoveInDate?: string | null; startDate?: string }) =>
+  booking
+    ? booking.expectedMoveInDate === undefined
+      ? booking.startDate
+      : booking.expectedMoveInDate ?? undefined
+    : undefined
+/** Ngày kế tiếp (giờ Việt Nam) của một mốc instant; backend dùng quy tắc này khi booking cũ thiếu ngày dọn vào. */
+export const dayAfterVietnamDate = (instant: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(instant))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+  const next = new Date(`${part('year')}-${part('month')}-${part('day')}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return next.toISOString().slice(0, 10)
+}
 export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Date(), moveInDate?: string | null) => {
   const vietnamDate = (value: Date) => {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -39,15 +60,8 @@ export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Dat
     const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
     return `${part('year')}-${part('month')}-${part('day')}`
   }
-  // Ngày bắt đầu thuê = availableFrom của booking; booking cũ chưa có thì hôm sau ngày nộp bằng chứng.
-  let startDate: string
-  if (moveInDate) {
-    startDate = moveInDate
-  } else {
-    const submitted = new Date(`${vietnamDate(new Date(evidenceSubmittedAt))}T00:00:00Z`)
-    submitted.setUTCDate(submitted.getUTCDate() + 1)
-    startDate = submitted.toISOString().slice(0, 10)
-  }
+  // Ngày bắt đầu thuê = ngày dọn vào đã chốt của booking; booking cũ chưa có thì hôm sau ngày nộp bằng chứng.
+  const startDate = moveInDate || dayAfterVietnamDate(evidenceSubmittedAt)
   const [year, month] = startDate.split('-').map(Number)
   // Kỳ tính tiền đầu tiên luôn là mùng 1 của tháng kế tiếp tháng bắt đầu thuê:
   // 01/12 → 01/01, 15/12 → 01/01, 30/12 → 01/01, 01/01 → 01/02.

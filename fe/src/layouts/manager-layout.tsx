@@ -40,7 +40,7 @@ const groups = [
     items: [
       ['rooms', 'Phòng', House],
       ['room-types', 'Loại phòng', House],
-      ['tenants', 'Người thuê', Users],
+      ['tenants', 'Quản lý tài khoản', Users],
     ],
   },
   {

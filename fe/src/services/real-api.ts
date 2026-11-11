@@ -78,9 +78,21 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
       (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
       (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/setup-password' && verb === 'POST') ||
       (pathname === '/api/v1/auth/me' && ['GET', 'PATCH'].includes(verb)) ||
       (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
       (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
+  )
+    return null
+  if (
+    (feature === 'manager' || feature === 'owner') &&
+    ((pathname === '/api/v1/branches/managed' && verb === 'GET') ||
+      (pathname === '/api/v1/tenants' && ['GET', 'POST'].includes(verb)) ||
+      (pathname === '/api/v1/tenants/stats' && verb === 'GET') ||
+      (matches(`/api/v1/tenants/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/tenants/${id}/branch-status`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/role`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/resend-verification`) && verb === 'POST'))
   )
     return null
   if (
