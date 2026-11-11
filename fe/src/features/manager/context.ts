@@ -34,8 +34,16 @@ export const useManagerSelection = create<{
   deny: (id) => set((s) => ({ denied: [...s.denied, id] })),
 }))
 export const useManager = () =>
-  useOutletContext<{ branch: ManagerBranch; branches: ManagerBranch[] }>()
+  useOutletContext<{
+    branch: ManagerBranch
+    branches: ManagerBranch[]
+    overviewBranchId?: string
+  }>()
 export function managerLink(path: string, branchId: string, params: Record<string, string> = {}) {
+  const owner = useSession.getState().user?.roles.includes('OWNER')
+  if (owner && path.startsWith('/manager/')) {
+    path = path.replace('/manager/', '/owner/')
+  }
   const workspace: Record<string, string> =
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('workspace') === 'owner'
@@ -74,7 +82,13 @@ export function useManagerList<K extends ManagerResource>(
   poll = false,
   enabled = true,
 ) {
-  return useManagerQuery(resource, (b) => managerApi.list(b, resource, filters), [filters], poll, enabled)
+  return useManagerQuery(
+    resource,
+    (b) => managerApi.list(b, resource, filters),
+    [filters],
+    poll,
+    enabled,
+  )
 }
 export function useManagerAction(onSuccess?: (result: { id?: string } | null) => void) {
   const { branch } = useManager()

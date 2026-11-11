@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.tenant.service;
 
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantCreateRequest;
 import com.kitolam.rentalroommanagement.modules.tenant.dto.request.TenantFilterRequest;
@@ -20,4 +22,8 @@ public interface TenantService {
     TenantResponse update(String id, TenantUpdateRequest request);
 
     void delete(String id);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewTenant> readForOverview(List<String> ids);
+
+    record OverviewTenant(String id, String fullName, String phone) { }
 }

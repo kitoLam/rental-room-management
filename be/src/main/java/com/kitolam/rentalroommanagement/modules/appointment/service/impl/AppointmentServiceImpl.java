@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.appointment.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ForbiddenException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
@@ -737,5 +739,26 @@ public class AppointmentServiceImpl implements AppointmentService {
     private NotificationScope notificationScope() {
         var actor = requireActiveAccount();
         return new NotificationScope(actor.accountId(), actor.manageableBranchIds());
+    }
+    @Override
+    public List<OverviewAppointment> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        return appointmentRepository.overviewCandidates(ids).stream()
+                .map(item -> new OverviewAppointment(item.getId(), item.getRoomId(), item.getAppointmentDate(),
+                        item.getStartAt(), item.getEndAt(), item.getShiftType(), item.getStatus(), item.getContactName(),
+                        item.getContactPhone(), item.getApprovedAt(), item.getApprovedBy(), item.getApprovedByName())).toList();
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var result = new java.util.ArrayList<ActivitySnapshot>();
+        for (var item : appointmentRepository.overviewActivities(ids, from, to)) {
+            var history = item.getHistory() == null ? java.util.List.<com.kitolam.rentalroommanagement.modules.appointment.document.Appointment.HistoryEntry>of() : item.getHistory();
+            for (var event : history) result.add(new ActivitySnapshot(event.id(), item.getId(), event.action(), event.at(), event.actorAccountId(), event.actorName(), event.reason()));
+            if (item.getApprovedAt() != null && history.stream().noneMatch(e -> "APPROVED".equals(e.action())))
+                result.add(new ActivitySnapshot(item.getId() + ":approval", item.getId(), "APPROVED", item.getApprovedAt(), item.getApprovedBy(), item.getApprovedByName(), null));
+        }
+        return result.stream().filter(e -> e.within(from, to)).toList();
     }
 }

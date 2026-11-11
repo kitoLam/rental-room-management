@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.servicerequest.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.servicerequest.dto.request.ServiceDateConfirmationRequest;
@@ -46,4 +48,16 @@ public interface ServiceRequestService {
     ServiceRequestResponse confirmInstallation(String id, ServiceDateConfirmationRequest request, AuthPrincipal principal);
 
     ServiceRequestResponse confirmTermination(String id, ServiceDateConfirmationRequest request, AuthPrincipal principal);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewServiceRequest> readForOverview(List<String> ids);
+
+    record OverviewServiceRequest(String roomId, com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus status,
+                                  String id, String tenantName, String serviceName, String slotCode) {
+        public OverviewServiceRequest(String roomId, com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus status) {
+            this(roomId, status, null, null, null, null);
+        }
+    }
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

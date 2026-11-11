@@ -1,5 +1,9 @@
 package com.kitolam.rentalroommanagement.modules.contract.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCreateRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractFilterRequest;
@@ -36,4 +40,11 @@ public interface ContractService {
     ContractResponse submitEvidence(String id, ContractEvidenceRequest request, AuthPrincipal principal);
 
     ContractResponse reviewEvidence(String id, ContractEvidenceReviewRequest request, AuthPrincipal principal);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewContract> readForOverview(List<String> ids);
+
+    record OverviewContract(String id, String roomId, String tenantId, String bookingId, String contractNumber, com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus status, java.time.LocalDate startDate, java.time.LocalDate endDate, java.time.Instant evidenceSubmittedAt) { }
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

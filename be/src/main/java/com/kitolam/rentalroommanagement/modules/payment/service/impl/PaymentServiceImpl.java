@@ -1,5 +1,13 @@
 package com.kitolam.rentalroommanagement.modules.payment.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import com.kitolam.rentalroommanagement.modules.payment.document.Payment;
+
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentCreateRequest;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentFilterRequest;
@@ -14,6 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+
+    private final MongoTemplate overviewMongo;
 
     private final PaymentRepository paymentRepository;
 
@@ -45,5 +55,16 @@ public class PaymentServiceImpl implements PaymentService {
     public void delete(String id) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+    @Override
+    public List<OverviewPayment> readForOverview(List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("invoiceId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("paidAt").gte(from).lt(to));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").in("SUCCESS", "LATE_PAID"));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("bookingId").is(null));
+        query.fields().include("invoiceId", "amount");
+        return overviewMongo.find(query, Payment.class).stream()
+                .map(item -> new OverviewPayment(item.getInvoiceId(), item.getAmount())).toList();
     }
 }

@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.contract.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -563,5 +565,36 @@ public class ContractServiceImpl implements ContractService {
         if (contract.getEvidenceHistory().isEmpty() && contract.getEvidenceSubmittedAt() != null && !"SUBMITTED".equals(action))
             contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry("SUBMITTED", contract.getEvidenceSubmittedAt(), null));
         contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry(action, at, note));
+    }
+    @Override
+    public List<OverviewContract> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "tenantId", "bookingId", "contractNumber", "status", "startDate", "endDate", "evidenceSubmittedAt");
+        return mongoTemplate.find(query, Contract.class).stream()
+                .map(item -> new OverviewContract(item.getId(), item.getRoomId(), item.getTenantId(), item.getBookingId(), item.getContractNumber(), item.getStatus(), item.getStartDate(), item.getEndDate(), item.getEvidenceSubmittedAt())).toList();
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("_id", ids);
+        query.addCriteria(new org.springframework.data.mongodb.core.query.Criteria().orOperator(
+                org.springframework.data.mongodb.core.query.Criteria.where("evidenceHistory.at").gte(from).lt(to),
+                org.springframework.data.mongodb.core.query.Criteria.where("createdAt").gte(from).lt(to),
+                org.springframework.data.mongodb.core.query.Criteria.where("terminatedAt").gte(from).lt(to)));
+        query.fields().include("evidenceHistory", "createdAt", "terminatedAt", "terminationReason");
+        var result = new java.util.ArrayList<ActivitySnapshot>();
+        for (var item : mongoTemplate.find(query, Contract.class)) {
+            result.add(new ActivitySnapshot(item.getId() + ":created", item.getId(), "CREATED", item.getCreatedAt(), null, null, null));
+            if (item.getTerminatedAt() != null)
+                result.add(new ActivitySnapshot(item.getId() + ":terminated", item.getId(), "TERMINATED", item.getTerminatedAt(), null, null, item.getTerminationReason()));
+            if (item.getEvidenceHistory() == null) continue;
+            for (int i = 0; i < item.getEvidenceHistory().size(); i++) {
+                var event = item.getEvidenceHistory().get(i);
+                result.add(new ActivitySnapshot(item.getId() + ":" + i, item.getId(), event.action(), event.at(), null, null, event.note()));
+            }
+        }
+        return result.stream().filter(e -> e.within(from, to)).toList();
     }
 }

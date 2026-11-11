@@ -1,5 +1,9 @@
 package com.kitolam.rentalroommanagement.modules.appointment.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentCreateRequest;
 import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentFilterRequest;
@@ -57,4 +61,16 @@ public interface AppointmentService {
     AppointmentResponse noShow(String id, AppointmentActionRequest.NoShow request);
 
     AppointmentResponse correctResult(String id, AppointmentActionRequest.Correction request);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewAppointment> readForOverview(List<String> ids);
+
+    record OverviewAppointment(String id, String roomId, java.time.LocalDate appointmentDate,
+                               java.time.Instant startAt, java.time.Instant endAt,
+                               com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType shiftType,
+                               com.kitolam.rentalroommanagement.modules.appointment.enums.AppointmentStatus status,
+                               String contactName, String contactPhone, java.time.Instant approvedAt,
+                               String approvedBy, String approvedByName) { }
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

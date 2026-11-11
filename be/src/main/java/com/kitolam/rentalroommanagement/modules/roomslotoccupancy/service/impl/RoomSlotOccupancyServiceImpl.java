@@ -1,5 +1,13 @@
 package com.kitolam.rentalroommanagement.modules.roomslotoccupancy.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
+
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.dto.request.RoomSlotOccupancyCreateRequest;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.dto.request.RoomSlotOccupancyFilterRequest;
@@ -14,6 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class RoomSlotOccupancyServiceImpl implements RoomSlotOccupancyService {
+
+    private final MongoTemplate overviewMongo;
 
     private final RoomSlotOccupancyRepository roomSlotOccupancyRepository;
 
@@ -45,5 +55,13 @@ public class RoomSlotOccupancyServiceImpl implements RoomSlotOccupancyService {
     public void delete(String id) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+    @Override
+    public List<OverviewOccupancy> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomSlotId", ids);
+        query.fields().include("roomSlotId", "contractTenantId", "bookingId", "startDate", "endDate", "status");
+        return overviewMongo.find(query, RoomSlotOccupancy.class).stream()
+                .map(item -> new OverviewOccupancy(item.getRoomSlotId(), item.getContractTenantId(), item.getBookingId(), item.getStartDate(), item.getEndDate(), item.getStatus())).toList();
     }
 }

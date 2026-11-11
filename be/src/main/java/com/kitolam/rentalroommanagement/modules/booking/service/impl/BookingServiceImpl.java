@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.booking.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -969,5 +971,40 @@ public class BookingServiceImpl implements BookingService {
     private BookingPaymentResponse paymentResponse(Payment p, String paymentUrl) {
         return new BookingPaymentResponse(p.getId(), p.getBookingId(), p.getAmount(), p.getTransactionCode(),
                 p.getMethod(), p.getStatus(), p.getCreatedAt(), p.getPaidAt(), paymentUrl);
+    }
+    @Override
+    public List<OverviewBooking> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var scope = MongoQueryHelper.byReferenceIds("roomSlotIds", ids);
+        var legacy = MongoQueryHelper.byReferenceIds("roomSlotId", ids);
+        var query = new org.springframework.data.mongodb.core.query.BasicQuery(
+                new org.bson.Document("$or", List.of(scope.getQueryObject(), legacy.getQueryObject())));
+        query.fields().include("tenantId", "roomSlotId", "roomSlotIds", "contractId", "expectedMoveInDate", "holdExpiresAt", "paymentDeadline", "checkInDeadline", "status");
+        return mongoTemplate.find(query, Booking.class).stream()
+                .map(item -> new OverviewBooking(item.getId(), item.getTenantId(), item.getRoomSlotId(), item.getRoomSlotIds(), item.getContractId(), item.getExpectedMoveInDate(), item.getHoldExpiresAt(), item.getPaymentDeadline(), item.getCheckInDeadline(), item.getStatus())).toList();
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("_id", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("timeline.at").gte(from).lt(to));
+        query.fields().include("timeline");
+        var result = new java.util.ArrayList<ActivitySnapshot>();
+        for (var item : mongoTemplate.find(query, Booking.class)) {
+            if (item.getTimeline() == null) continue;
+            for (int i = 0; i < item.getTimeline().size(); i++) {
+                var event = item.getTimeline().get(i);
+                String action = event.status();
+                if (i > 0) {
+                    String previous = item.getTimeline().get(i - 1).status();
+                    if (java.util.Objects.equals(action, previous)) action = "UPDATED";
+                    else if ("AWAITING_PAYMENT".equals(action)
+                            && ("REQUESTED".equals(previous) || "PENDING".equals(previous))) action = "APPROVED";
+                }
+                result.add(new ActivitySnapshot(item.getId() + ":" + i, item.getId(), action, event.at(), null, null, event.note()));
+            }
+        }
+        return result.stream().filter(e -> e.within(from, to)).toList();
     }
 }

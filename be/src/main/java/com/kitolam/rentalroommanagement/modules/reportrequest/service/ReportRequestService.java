@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.reportrequest.service;
 
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
@@ -75,4 +77,13 @@ public interface ReportRequestService {
 
     /** Xóa mềm yêu cầu */
     void delete(String id, AuthPrincipal principal);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewReport> readForOverview(List<String> ids);
+
+    record OverviewReport(String roomId, com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status,
+                          String id, String title, String tenantId) {
+        public OverviewReport(String roomId, com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status) {
+            this(roomId, status, null, null, null);
+        }
+    }
 }

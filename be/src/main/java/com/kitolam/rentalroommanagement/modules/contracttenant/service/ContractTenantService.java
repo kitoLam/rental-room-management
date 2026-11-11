@@ -23,4 +23,8 @@ public interface ContractTenantService {
     void delete(String id, AuthPrincipal principal);
 
     List<EligibleContractTenantResponse> eligibleTenants(String contractId, AuthPrincipal principal);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewTenancy> readForOverview(List<String> ids);
+
+    record OverviewTenancy(String id, String contractId, String tenantId, com.kitolam.rentalroommanagement.modules.contracttenant.enums.ContractTenantStatus status, java.time.LocalDate joinedAt, java.time.LocalDate leftAt) { }
 }

@@ -1,5 +1,13 @@
 package com.kitolam.rentalroommanagement.modules.invoice.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import com.kitolam.rentalroommanagement.modules.invoice.document.Invoice;
+
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
@@ -14,6 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class InvoiceServiceImpl implements InvoiceService {
+
+    private final MongoTemplate overviewMongo;
 
     private final InvoiceRepository invoiceRepository;
 
@@ -45,5 +55,14 @@ public class InvoiceServiceImpl implements InvoiceService {
     public void delete(String id) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+    @Override
+    public List<OverviewInvoice> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("contractTenantId");
+        return overviewMongo.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
     }
 }

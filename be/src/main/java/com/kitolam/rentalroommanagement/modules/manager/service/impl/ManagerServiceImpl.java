@@ -1,5 +1,13 @@
 package com.kitolam.rentalroommanagement.modules.manager.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import com.kitolam.rentalroommanagement.modules.manager.document.Manager;
+
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.manager.dto.request.ManagerCreateRequest;
 import com.kitolam.rentalroommanagement.modules.manager.dto.request.ManagerFilterRequest;
@@ -16,6 +24,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ManagerServiceImpl implements ManagerService {
+
+    private final MongoTemplate overviewMongo;
 
     private final ManagerRepository managerRepository;
     private final ManagerMapper mapper;
@@ -53,5 +63,14 @@ public class ManagerServiceImpl implements ManagerService {
     public void delete(String id) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+    @Override
+    public List<OverviewManager> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("branchId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").is("ACTIVE"));
+        query.fields().include("branchId", "fullName");
+        return overviewMongo.find(query, Manager.class).stream()
+                .map(item -> new OverviewManager(item.getBranchId(), item.getFullName())).toList();
     }
 }

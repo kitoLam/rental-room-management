@@ -62,4 +62,12 @@ public class RoomSlotServiceImpl implements RoomSlotService {
         return new RoomSlotResponse(slot.getId(), slot.getRoomId(), slot.getSlotCode(), slot.getSlotNumber(),
                 slot.getStatus(), slot.getAvailableFrom(), slot.getCreatedAt(), slot.getUpdatedAt());
     }
+    @Override
+    public List<OverviewSlot> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "slotCode", "status", "availableFrom");
+        return mongoTemplate.find(query, RoomSlot.class).stream()
+                .map(item -> new OverviewSlot(item.getId(), item.getRoomId(), item.getSlotCode(), item.getStatus(), item.getAvailableFrom())).toList();
+    }
 }

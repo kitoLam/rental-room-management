@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.servicerequest.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -450,5 +452,31 @@ public class ServiceRequestServiceImpl implements ServiceRequestService {
 
     private static String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+    @Override
+    public List<OverviewServiceRequest> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "status", "tenantName", "serviceName", "slotCode");
+        return mongoTemplate.find(query, ServiceRequest.class).stream()
+                .map(item -> new OverviewServiceRequest(item.getRoomId(), item.getStatus(), item.getId(),
+                        item.getTenantName(), item.getServiceName(), item.getSlotCode())).toList();
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("_id", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("history.at").gte(from).lt(to));
+        query.fields().include("history");
+        var result = new java.util.ArrayList<ActivitySnapshot>();
+        for (var item : mongoTemplate.find(query, ServiceRequest.class)) {
+            if (item.getHistory() == null) continue;
+            for (int i = 0; i < item.getHistory().size(); i++) {
+                var event = item.getHistory().get(i);
+                result.add(new ActivitySnapshot(item.getId() + ":" + i, item.getId(), event.statusTo() == null ? null : event.statusTo().name(), event.at(), event.actorAccountId(), null, event.note()));
+            }
+        }
+        return result.stream().filter(e -> e.within(from, to)).toList();
     }
 }

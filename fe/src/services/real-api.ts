@@ -8,8 +8,20 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
-  if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
-  if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
+  if (
+    (feature === 'manager' || feature === 'owner') &&
+    pathname === '/api/v1/dashboard/management' &&
+    verb === 'GET'
+  )
+    return null
+  if (
+    feature === 'manager' &&
+    matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) &&
+    ['GET', 'PUT'].includes(verb)
+  )
+    return null
+  if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET')
+    return null
   // Đăng ký / ngừng dịch vụ (BE module servicerequest).
   if (
     feature === 'utilities' &&
@@ -79,10 +91,14 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
-  if (feature === 'catalog' && verb === 'GET' && (matches(`/api/v1/public/rooms(/${id})?`) ||
+  if (
+    feature === 'catalog' &&
+    verb === 'GET' &&
+    (matches(`/api/v1/public/rooms(/${id})?`) ||
       matches(`/api/v1/public/branches(/${id})?`) ||
       pathname === '/api/v1/public/room-types' ||
-      pathname === '/api/v1/public/services'))
+      pathname === '/api/v1/public/services')
+  )
     return null
 
   if (
@@ -91,7 +107,8 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches('/api/v1/bookings') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
       (matches('/api/v1/bookings/availability(/batch)?') && verb === 'GET') ||
-      (matches(`/api/v1/bookings/${id}/(cancel|terms|payments)`) && ['POST', 'GET'].includes(verb)) ||
+      (matches(`/api/v1/bookings/${id}/(cancel|terms|payments)`) &&
+        ['POST', 'GET'].includes(verb)) ||
       (matches(`/api/v1/bookings/${id}/payments/${id}/(reconcile)`) && verb === 'POST') ||
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
   )

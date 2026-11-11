@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.contracttenant.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -41,6 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ContractTenantServiceImpl implements ContractTenantService {
+
+    private final MongoTemplate overviewMongo;
 
     private final ContractTenantRepository contractTenantRepository;
     private final ContractRepository contractRepository;
@@ -191,5 +195,13 @@ public class ContractTenantServiceImpl implements ContractTenantService {
                 item.getRoomSlotIds(), item.getServices(),
                 tenant.getFullName(), tenant.getEmail(), item.getIsRepresentative(), item.getRentAmount(), item.getJoinedAt(),
                 item.getLeftAt(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
+    }
+    @Override
+    public List<OverviewTenancy> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractId", ids);
+        query.fields().include("contractId", "tenantId", "status", "joinedAt", "leftAt");
+        return overviewMongo.find(query, ContractTenant.class).stream()
+                .map(item -> new OverviewTenancy(item.getId(), item.getContractId(), item.getTenantId(), item.getStatus(), item.getJoinedAt(), item.getLeftAt())).toList();
     }
 }

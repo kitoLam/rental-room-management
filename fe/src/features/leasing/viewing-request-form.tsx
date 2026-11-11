@@ -80,6 +80,7 @@ export function ViewingRequestForm({
       remember(null)
       await Promise.all([
         client.invalidateQueries({ queryKey: ['viewing-appointments'] }),
+        client.invalidateQueries({ queryKey: ['management-overview'] }),
         client.invalidateQueries({ queryKey: ['viewing-availability', roomId] }),
         client.invalidateQueries({ queryKey: ['viewing-configuration', roomId] }),
       ])
