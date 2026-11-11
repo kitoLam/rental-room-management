@@ -1,6 +1,6 @@
 import { ConfirmAction, InlineError, Notice, Page, Panel, QueryState, RecordStatus } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { addMonths, dateOnly, dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
+import { addMonths, bookingMoveInDate, dateOnly, dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { bookingService, contractService } from '@/services/guest-user'
 import { provider } from '@/services/config'
@@ -50,7 +50,7 @@ export function BookingDetailPage() {
     onSuccess: refresh,
   })
   const billingDateMinimum = contractQuery.data?.evidenceSubmittedAt
-    ? suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt, undefined, record?.startDate)
+    ? suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt, undefined, bookingMoveInDate(record))
     : ''
   // Ngày tính tiền kỳ đầu gợi ý = mùng 1 đầu tiên không trước ngày bắt đầu thuê; input chỉ đọc.
   const firstBillingStartDate = billingDateMinimum
@@ -102,7 +102,7 @@ export function BookingDetailPage() {
         <QueryState pending={contractQuery.isPending} error={contractQuery.error} retry={contractQuery.refetch}>
           {contractQuery.data && <div className="mt-4 grid gap-5">
             <p className="text-sm">{contractQuery.data.contractNumber} · {contractQuery.data.status} · {contractQuery.data.roomSlotIds?.length ?? 1} slot</p>
-            {contractQuery.data.templateDownloadUrl && <a className="text-sm text-primary underline" href={contractQuery.data.templateDownloadUrl} target="_blank" rel="noreferrer">Tải mẫu hợp đồng</a>}
+            {contractQuery.data.contractUrl && <a className="text-sm text-primary underline" href={contractQuery.data.contractUrl} target="_blank" rel="noreferrer">Tải mẫu hợp đồng</a>}
             {contractQuery.data.evidenceDeadline && <Notice>Hạn nộp evidence: {dateTime(contractQuery.data.evidenceDeadline)}</Notice>}
             {contractQuery.data.evidenceNote && <Notice tone="warning">Manager yêu cầu gửi lại: {contractQuery.data.evidenceNote}</Notice>}
             {contractQuery.data.evidenceSubmittedAt && <Notice>Evidence đã gửi lúc {dateTime(contractQuery.data.evidenceSubmittedAt)}; đang chờ manager duyệt.</Notice>}

@@ -102,7 +102,7 @@ public class BookingServiceImpl implements BookingService {
     private final BranchService branchAccess;
 
     @Value("${contract.template.download-url:https://www.youtube.com/}")
-    private String contractTemplateDownloadUrl;
+    private String contractUrl;
 
     @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
     @Transactional
@@ -791,7 +791,7 @@ public class BookingServiceImpl implements BookingService {
                 .multiply(BigDecimal.valueOf(slots.size())));
         contract.setContractDepositAmount(booking.getHoldingDepositAmount());
         contract.setMaxOccupants(slots.size());
-        contract.setTemplateDownloadUrl(contractTemplateDownloadUrl);
+        contract.setContractUrl(contractUrl);
         contract.setEvidenceDeadline(clock.instant().plusSeconds(72 * 60 * 60));
         contract.setServices(booking.getSelectedServices().stream().map(service -> {
             ContractServiceSnapshot snapshot = new ContractServiceSnapshot();

@@ -45,7 +45,7 @@ export function ManagerContractEditor() {
             schema={contractInputSchema}
             defaults={
               query.data
-                ? { ...query.data }
+                ? { ...query.data, startDate: query.data.startDate ?? '', endDate: query.data.endDate ?? '' }
                 : { code: '', roomId: '', startDate: '', endDate: '', terms: '' }
             }
             fields={[
