@@ -22,7 +22,8 @@ import java.util.TreeMap;
 /**
  * Pure monthly billing rules (no database access).
  * <ul>
- *   <li>ROOM_RENT: contract.rentPrice × billed days / days in month.</li>
+ *   <li>ROOM_RENT: contract.rentPrice × billed days / days in month (billed days start at firstBillingStartDate).</li>
+ *   <li>Everything else follows the days the tenant actually lives there (the holdings).</li>
  *   <li>SLOT_SERVICE: unitPrice × quantity, × days / days in month when prorated BY_DAY.</li>
  *   <li>ROOM_SERVICE: room amount split between the contracts living in the room by slot-days.
  *       METERED uses the confirmed reading, FIXED the monthly price, PER_SLOT/PER_PERSON is
@@ -38,16 +39,15 @@ public final class InvoiceCalculator {
     /** Generated items (ROOM_RENT, SLOT_SERVICE, ROOM_SERVICE) of one contract. */
     public static List<InvoiceItem> calculate(ContractBillingInput input, BillingPeriod period) {
         List<InvoiceItem> items = new ArrayList<>();
-        if (input.billingWindow().isEmpty()) {
-            return items;
-        }
         BigDecimal daysInPeriod = BigDecimal.valueOf(period.days());
 
-        // 1. Rent of the whole contract
+        // 1. Rent of the whole contract, from firstBillingStartDate on
         DateRange window = input.billingWindow();
-        BigDecimal rentDays = BigDecimal.valueOf(window.days());
-        items.add(item(InvoiceItemType.ROOM_RENT, "Tiền phòng " + period.label(), window,
-                rentDays, input.rentPrice(), prorate(input.rentPrice(), rentDays, daysInPeriod)));
+        if (!window.isEmpty()) {
+            BigDecimal rentDays = BigDecimal.valueOf(window.days());
+            items.add(item(InvoiceItemType.ROOM_RENT, "Tiền phòng " + period.label(), window,
+                    rentDays, input.rentPrice(), prorate(input.rentPrice(), rentDays, daysInPeriod)));
+        }
 
         // 2. Services of each slot held
         for (Holding holding : input.holdings()) {

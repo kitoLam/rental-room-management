@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.invoice.service.impl;
 
+import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
+import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ForbiddenException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
@@ -9,19 +11,20 @@ import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.invoice.billing.BillingPeriod;
-import com.kitolam.rentalroommanagement.modules.invoice.billing.InvoiceCalculator;
 import com.kitolam.rentalroommanagement.modules.invoice.billing.MissingMeterReadingException;
 import com.kitolam.rentalroommanagement.modules.invoice.document.Invoice;
-import com.kitolam.rentalroommanagement.modules.invoice.document.InvoiceItem;
+import com.kitolam.rentalroommanagement.modules.invoice.dto.request.ContractInvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceGenerateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceGenerateResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceGenerateResponse.Failed;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceGenerateResponse.Skipped;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceResponse;
+import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceKind;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus;
 import com.kitolam.rentalroommanagement.modules.invoice.repository.InvoiceRepository;
 import com.kitolam.rentalroommanagement.modules.invoice.service.InvoiceGenerationService;
 import com.kitolam.rentalroommanagement.modules.invoice.service.support.ContractBillingLoader;
+import com.kitolam.rentalroommanagement.modules.invoice.service.support.InvoiceComposer;
 import com.kitolam.rentalroommanagement.modules.invoice.service.support.InvoiceNumberGenerator;
 import com.kitolam.rentalroommanagement.modules.invoice.service.support.InvoiceResponses;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
@@ -59,7 +62,7 @@ public class InvoiceGenerationServiceImpl implements InvoiceGenerationService {
     private final ContractRepository contractRepository;
     private final RoomRepository roomRepository;
     private final RoomSlotRepository roomSlotRepository;
-    private final ContractBillingLoader billingLoader;
+    private final InvoiceComposer composer;
     private final InvoiceNumberGenerator numberGenerator;
     private final StaffAccess staffAccess;
     private final MongoTemplate mongoTemplate;
@@ -67,14 +70,14 @@ public class InvoiceGenerationServiceImpl implements InvoiceGenerationService {
 
     public InvoiceGenerationServiceImpl(InvoiceRepository invoiceRepository, ContractRepository contractRepository,
                                         RoomRepository roomRepository, RoomSlotRepository roomSlotRepository,
-                                        ContractBillingLoader billingLoader, InvoiceNumberGenerator numberGenerator,
+                                        InvoiceComposer composer, InvoiceNumberGenerator numberGenerator,
                                         StaffAccess staffAccess, MongoTemplate mongoTemplate,
                                         PlatformTransactionManager transactionManager) {
         this.invoiceRepository = invoiceRepository;
         this.contractRepository = contractRepository;
         this.roomRepository = roomRepository;
         this.roomSlotRepository = roomSlotRepository;
-        this.billingLoader = billingLoader;
+        this.composer = composer;
         this.numberGenerator = numberGenerator;
         this.staffAccess = staffAccess;
         this.mongoTemplate = mongoTemplate;
@@ -131,28 +134,65 @@ public class InvoiceGenerationServiceImpl implements InvoiceGenerationService {
         if (ContractBillingLoader.billingWindow(contract, period).isEmpty()) {
             return Outcome.skipped("NOT_IN_PERIOD");
         }
-        Invoice existing = invoiceRepository.findByContractIdAndPeriodAndIsDeletedFalse(contract.getId(), period.code()).orElse(null);
+        Invoice existing = invoiceRepository
+                .findByContractIdAndPeriodAndKindAndIsDeletedFalse(contract.getId(), period.code(), InvoiceKind.MONTHLY)
+                .orElse(null);
         if (existing != null && existing.getStatus() != InvoiceStatus.DRAFT) {
             return Outcome.skipped("ALREADY_ISSUED");
         }
+        if (composer.otherDraft(contract.getId(), period, existing == null ? null : existing.getId()).isPresent()) {
+            return Outcome.skipped("SUPPLEMENTARY_DRAFT_PENDING");
+        }
 
-        List<InvoiceItem> items = InvoiceCalculator.calculate(billingLoader.load(contract, period), period);
-
-        Invoice draft = existing != null ? existing : newInvoice(contract, branchId, period);
-        // Keep items added by hand (OTHER, PENALTY, DISCOUNT...) when recomputing a draft
-        draft.getItems().removeIf(item -> item.getType().isGenerated());
-        draft.getItems().addAll(0, items);
-        InvoiceCalculator.applyTotals(draft);
-
-        Invoice result = dryRun ? draft : transactionTemplate.execute(status -> {
-            if (draft.getInvoiceNumber() == null) draft.setInvoiceNumber(numberGenerator.next(period.month()));
-            return invoiceRepository.save(draft);
-        });
+        Invoice draft = existing != null ? existing : newInvoice(contract, branchId, period, InvoiceKind.MONTHLY);
+        composer.compose(contract, period, draft);
+        Invoice result = dryRun ? draft : save(draft, period);
         return new Outcome(existing != null ? Kind.REGENERATED : Kind.CREATED, InvoiceResponses.of(result), null);
     }
 
-    private Invoice newInvoice(Contract contract, String branchId, BillingPeriod period) {
+    @Override
+    public InvoiceResponse createForContract(String contractId, ContractInvoiceCreateRequest request, AuthPrincipal principal) {
+        BillingPeriod period = BillingPeriod.parse(request.period());
+        Contract contract = contractRepository.findByIdAndIsDeletedFalse(contractId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy hợp đồng"));
+        String branchId = branchOf(contract.getRoomId());
+        staffAccess.requireBranch(branchId, principal);
+        if (!BILLABLE_CONTRACT.contains(contract.getStatus())) {
+            throw new BadRequestException("Hợp đồng chưa có hiệu lực, không thể lập hoá đơn");
+        }
+        if (ContractBillingLoader.stayWindow(contract, period).isEmpty()) {
+            throw new BadRequestException("Hợp đồng không có ngày ở nào trong kỳ " + period.label());
+        }
+
+        List<Invoice> live = invoiceRepository.findByContractIdAndPeriodAndIsDeletedFalse(contract.getId(), period.code());
+        Invoice existingDraft = live.stream().filter(invoice -> invoice.getStatus() == InvoiceStatus.DRAFT).findFirst().orElse(null);
+        boolean isNew = existingDraft == null;
+        Invoice draft = existingDraft;
+        if (isNew) {
+            boolean hasMonthly = live.stream().anyMatch(invoice -> invoice.getKind() == InvoiceKind.MONTHLY);
+            draft = newInvoice(contract, branchId, period, hasMonthly ? InvoiceKind.SUPPLEMENTARY : InvoiceKind.MONTHLY);
+        }
+
+        InvoiceComposer.Result result = composer.compose(contract, period, draft);
+        if (isNew && result.computed() == 0) {
+            throw new BadRequestException("Kỳ " + period.label() + " chưa có khoản nào để thu (chưa tới ngày tính tiền phòng và không có dịch vụ)");
+        }
+        if (isNew && result.remaining() == 0) {
+            throw new ConflictException("Mọi khoản của kỳ " + period.label() + " đã được lập hoá đơn, không còn gì để thu thêm");
+        }
+        return InvoiceResponses.of(Boolean.TRUE.equals(request.dryRun()) ? draft : save(draft, period));
+    }
+
+    private Invoice save(Invoice draft, BillingPeriod period) {
+        return transactionTemplate.execute(status -> {
+            if (draft.getInvoiceNumber() == null) draft.setInvoiceNumber(numberGenerator.next(period.month()));
+            return invoiceRepository.save(draft);
+        });
+    }
+
+    private Invoice newInvoice(Contract contract, String branchId, BillingPeriod period, InvoiceKind kind) {
         Invoice invoice = new Invoice();
+        invoice.setKind(kind);
         invoice.setContractId(contract.getId());
         invoice.setTenantId(contract.getTenantId());
         invoice.setBranchId(branchId);

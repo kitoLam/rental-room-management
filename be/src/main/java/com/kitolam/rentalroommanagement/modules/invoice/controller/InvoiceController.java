@@ -3,6 +3,7 @@ package com.kitolam.rentalroommanagement.modules.invoice.controller;
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+import com.kitolam.rentalroommanagement.modules.invoice.dto.request.ContractInvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceGenerateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceUpdateRequest;
@@ -47,6 +48,16 @@ public class InvoiceController {
     public StandardResponse<InvoiceGenerateResponse> generate(@Valid @RequestBody InvoiceGenerateRequest request,
                                                               @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success(invoiceGenerationService.generate(request, principal));
+    }
+
+    @PostMapping("/contracts/{contractId}")
+    @PreAuthorize(STAFF)
+    @Operation(summary = "Lập hoá đơn cho 1 hợp đồng trong 1 kỳ; chỉ thu phần chưa được lập hoá đơn trước đó")
+    public StandardResponse<InvoiceResponse> createForContract(@PathVariable String contractId,
+                                                               @Valid @RequestBody ContractInvoiceCreateRequest request,
+                                                               @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Lập hoá đơn thành công",
+                invoiceGenerationService.createForContract(contractId, request, principal));
     }
 
     @PatchMapping("/{id}/issue")

@@ -57,27 +57,35 @@ public class ContractBillingLoader {
     private final ServiceItemRepository serviceItemRepository;
 
     /**
-     * Days of the period the contract is billed for:
+     * Days of the period the RENT is billed for:
      * [max(startDate, firstBillingStartDate), min(endDate, termination date)) ∩ period.
      */
     public static DateRange billingWindow(Contract contract, BillingPeriod period) {
+        DateRange stay = stayWindow(contract, period);
+        LocalDate firstBilling = contract.getFirstBillingStartDate();
+        if (firstBilling == null || stay.isEmpty()) return stay;
+        return stay.intersect(DateRange.of(firstBilling, null));
+    }
+
+    /**
+     * Days of the period the tenant actually lives there: [startDate, min(endDate, termination date)) ∩ period.
+     * Services and the share of room charges follow this window, so someone moving in mid-month pays
+     * for the utilities they used even though rent only starts at firstBillingStartDate.
+     */
+    public static DateRange stayWindow(Contract contract, BillingPeriod period) {
         if (contract.getStartDate() == null) {
             return new DateRange(period.range().from(), period.range().from());
-        }
-        LocalDate start = contract.getStartDate();
-        if (contract.getFirstBillingStartDate() != null && contract.getFirstBillingStartDate().isAfter(start)) {
-            start = contract.getFirstBillingStartDate();
         }
         LocalDate end = contract.getEndDate();
         if (contract.getTerminatedAt() != null) {
             LocalDate terminated = LocalDate.ofInstant(contract.getTerminatedAt(), VIETNAM);
             if (end == null || terminated.isBefore(end)) end = terminated;
         }
-        return DateRange.of(start, end).intersect(period.range());
+        return DateRange.of(contract.getStartDate(), end).intersect(period.range());
     }
 
     public ContractBillingInput load(Contract contract, BillingPeriod period) {
-        DateRange window = billingWindow(contract, period);
+        DateRange stay = stayWindow(contract, period);
 
         // Slots held by this contract
         List<RoomSlotOccupancy> ownOccupancies = occupancies(Criteria.where("contractId").is(oid(contract.getId())), period);
@@ -91,7 +99,7 @@ public class ContractBillingLoader {
                 .map(o -> {
                     RoomSlot slot = slots.get(o.getRoomSlotId());
                     Room room = rooms.get(slot.getRoomId());
-                    DateRange range = DateRange.of(o.getStartDate(), o.getEndDate()).intersect(window);
+                    DateRange range = DateRange.of(o.getStartDate(), o.getEndDate()).intersect(stay);
                     return new Holding(slot.getRoomId(), room == null ? "?" : room.getRoomNumber(),
                             slot.getId(), slot.getSlotCode(), range);
                 })
@@ -135,7 +143,7 @@ public class ContractBillingLoader {
                 })
                 .toList();
 
-        return new ContractBillingInput(contract.getId(), contract.getRentPrice(), window, holdings,
+        return new ContractBillingInput(contract.getId(), contract.getRentPrice(), billingWindow(contract, period), holdings,
                 slotServices, roomServices, roomSlotDays(roomIds, period));
     }
 
@@ -148,7 +156,7 @@ public class ContractBillingLoader {
                 .toList();
         Map<String, DateRange> windows = new HashMap<>();
         contractRepository.findAllById(all.stream().map(RoomSlotOccupancy::getContractId).collect(Collectors.toSet()))
-                .forEach(c -> windows.put(c.getId(), billingWindow(c, period)));
+                .forEach(c -> windows.put(c.getId(), stayWindow(c, period)));
 
         Map<String, Map<String, Long>> result = new HashMap<>();
         for (RoomSlotOccupancy occupancy : all) {

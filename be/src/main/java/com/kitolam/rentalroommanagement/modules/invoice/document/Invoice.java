@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.invoice.document;
 
 import com.kitolam.rentalroommanagement.common.base.BaseDocument;
+import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceKind;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,9 +25,9 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @Document(collection = "invoices")
-// One live invoice per contract and period; soft-deleted invoices do not block regeneration.
-@CompoundIndex(name = "contract_id_period_uq", def = "{'contractId': 1, 'period': 1}",
-        unique = true, partialFilter = "{'isDeleted': false}")
+// One live MONTHLY invoice per contract and period; supplementary and soft-deleted invoices are not limited.
+@CompoundIndex(name = "contract_id_period_kind_uq", def = "{'contractId': 1, 'period': 1, 'kind': 1}",
+        unique = true, partialFilter = "{'isDeleted': false, 'kind': 'MONTHLY'}")
 public class Invoice extends BaseDocument {
 
     @Field(targetType = FieldType.OBJECT_ID)
@@ -46,6 +47,8 @@ public class Invoice extends BaseDocument {
     private String invoiceNumber;
 
     private String period;
+
+    private InvoiceKind kind = InvoiceKind.MONTHLY;
 
     private LocalDate issueDate;
 

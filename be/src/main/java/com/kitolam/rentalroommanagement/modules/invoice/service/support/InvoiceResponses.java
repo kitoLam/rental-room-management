@@ -12,7 +12,7 @@ public final class InvoiceResponses {
 
     public static InvoiceResponse of(Invoice invoice) {
         return new InvoiceResponse(invoice.getId(), invoice.getContractId(), invoice.getTenantId(), invoice.getBranchId(),
-                invoice.getInvoiceNumber(), invoice.getPeriod(), invoice.getIssueDate(), invoice.getDueDate(),
+                invoice.getInvoiceNumber(), invoice.getPeriod(), invoice.getKind(), invoice.getIssueDate(), invoice.getDueDate(),
                 invoice.getPreviousDebt(), invoice.getDiscountAmount(), invoice.getTotalAmount(), invoice.getPaidAmount(),
                 invoice.getRemainingAmount(), invoice.getStatus(),
                 invoice.getItems().stream().map(InvoiceResponses::of).toList(),

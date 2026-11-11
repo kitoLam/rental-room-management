@@ -10,7 +10,7 @@ import java.util.Map;
  * Everything needed to bill one contract for one period, already loaded from the database.
  * All ranges are clipped to the period and to the contract's billing window.
  *
- * @param billingWindow days the contract is billed in this period (empty = nothing to bill)
+ * @param billingWindow days of the period the rent is billed for (empty = no rent this period)
  * @param holdings      slots held by the contract
  * @param slotServices  services subscribed on those slots
  * @param roomServices  services of every room the contract holds a slot in

@@ -1,5 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.invoice.dto.response;
 
+import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceKind;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ public record InvoiceResponse(
         String branchId,
         String invoiceNumber,
         String period,
+        InvoiceKind kind,
         LocalDate issueDate,
         LocalDate dueDate,
         BigDecimal previousDebt,
