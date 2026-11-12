@@ -1,6 +1,6 @@
 import { Field, InlineError } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { registerSchema, safeRedirect } from '@/lib/validation'
+import { registerSchema, safeRedirect, today } from '@/lib/validation'
 import { authService } from '@/services/guest-user'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -101,7 +101,11 @@ export function RegisterPage() {
       fullName: '',
       email: '',
       phone: '',
+      dateOfBirth: '',
+      permanentAddress: '',
       cccdNumber: '',
+      cccdIssueDate: '',
+      cccdIssuePlace: '',
       cccdFrontImageUrl: '',
       cccdBackImageUrl: '',
       password: '',
@@ -163,6 +167,36 @@ export function RegisterPage() {
           />
         </Field>
 
+        <Field
+          label="Ngày tháng năm sinh"
+          id="register-dob"
+          error={form.formState.errors.dateOfBirth?.message}
+        >
+          <input
+            id="register-dob"
+            className="input min-h-12 text-base px-4 py-3"
+            type="date"
+            max={today()}
+            {...form.register('dateOfBirth')}
+            aria-invalid={!!form.formState.errors.dateOfBirth}
+          />
+        </Field>
+        <Field
+          label="Địa chỉ thường trú"
+          id="register-permanent-address"
+          error={form.formState.errors.permanentAddress?.message}
+        >
+          <input
+            id="register-permanent-address"
+            className="input min-h-12 text-base px-4 py-3"
+            type="text"
+            autoComplete="street-address"
+            placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố"
+            {...form.register('permanentAddress')}
+            aria-invalid={!!form.formState.errors.permanentAddress}
+          />
+        </Field>
+
         {/* === CCCD Section === */}
         <Field
           label="Số CCCD"
@@ -179,6 +213,36 @@ export function RegisterPage() {
             aria-invalid={!!form.formState.errors.cccdNumber}
           />
         </Field>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field
+            label="Ngày cấp CCCD"
+            id="register-cccd-issue-date"
+            error={form.formState.errors.cccdIssueDate?.message}
+          >
+            <input
+              id="register-cccd-issue-date"
+              className="input min-h-12 text-base px-4 py-3"
+              type="date"
+              max={today()}
+              {...form.register('cccdIssueDate')}
+              aria-invalid={!!form.formState.errors.cccdIssueDate}
+            />
+          </Field>
+          <Field
+            label="Nơi cấp CCCD"
+            id="register-cccd-issue-place"
+            error={form.formState.errors.cccdIssuePlace?.message}
+          >
+            <input
+              id="register-cccd-issue-place"
+              className="input min-h-12 text-base px-4 py-3"
+              type="text"
+              placeholder="Cục Cảnh sát QLHC về TTXH"
+              {...form.register('cccdIssuePlace')}
+              aria-invalid={!!form.formState.errors.cccdIssuePlace}
+            />
+          </Field>
+        </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <CccdImageUpload
             label="Ảnh mặt trước CCCD"

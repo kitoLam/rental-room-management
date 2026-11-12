@@ -910,6 +910,14 @@ public class BookingServiceImpl implements BookingService {
             created.setEmail(user.getEmail());
             created.setFullName(user.getFullName());
             created.setPhone(user.getPhone());
+            created.setIdCardNumber(user.getCccdNumber());
+            created.setAddress(user.getPermanentAddress());
+            if (user.getDateOfBirth() != null && !user.getDateOfBirth().isBlank()) {
+                try {
+                    created.setDateOfBirth(LocalDate.parse(user.getDateOfBirth().strip()));
+                } catch (Exception ignored) {
+                }
+            }
             return tenantRepository.save(created);
         });
     }

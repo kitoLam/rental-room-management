@@ -10,5 +10,9 @@ public record UserProfileResponse(
         String phone,
         String dateOfBirth,
         String gender,
+        String permanentAddress,
+        String cccdNumber,
+        String cccdIssueDate,
+        String cccdIssuePlace,
         String status
 ) {}

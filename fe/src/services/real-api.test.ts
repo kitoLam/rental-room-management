@@ -41,10 +41,31 @@ describe('verified real API contracts', () => {
     const fetcher = vi.fn().mockResolvedValue(json(null, 202))
     vi.stubGlobal('fetch', fetcher)
     const { authService } = await import('./guest-user')
-    await expect(authService.register({ fullName: 'Nguyễn An', email: 'an@example.com', password: 'Test@1234', phone: '0901234567', cccdNumber: '001234567890', cccdFrontImageUrl: 'data:image/png;base64,abc', cccdBackImageUrl: 'data:image/png;base64,def', confirmPassword: 'Test@1234', termsAccepted: true })).resolves.toBeNull()
+    const payload = {
+      fullName: 'Nguyễn An',
+      email: 'an@example.com',
+      password: 'Test@1234',
+      phone: '0901234567',
+      dateOfBirth: '1999-05-20',
+      permanentAddress: '12 Nguyễn Trãi, Thanh Xuân, Hà Nội',
+      cccdNumber: '001234567890',
+      cccdIssueDate: '2021-08-15',
+      cccdIssuePlace: 'Cục Cảnh sát QLHC về TTXH',
+      cccdFrontImageUrl: 'data:image/png;base64,abc',
+      cccdBackImageUrl: 'data:image/png;base64,def',
+      confirmPassword: 'Test@1234',
+      termsAccepted: true,
+    }
+    await expect(authService.register(payload)).resolves.toBeNull()
     expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/signup')
     expect(fetcher.mock.calls[0][1].method).toBe('POST')
     expect(fetcher.mock.calls[0][1].credentials).toBe('include')
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({
+      dateOfBirth: '1999-05-20',
+      permanentAddress: '12 Nguyễn Trãi, Thanh Xuân, Hà Nội',
+      cccdIssueDate: '2021-08-15',
+      cccdIssuePlace: 'Cục Cảnh sát QLHC về TTXH',
+    })
   })
 
   it('keeps the backend public page number and never invents availability', async () => {
@@ -136,5 +157,29 @@ describe('verified real API contracts', () => {
     const errFetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Server error' }), { status: 500 }))
     vi.stubGlobal('fetch', errFetcher)
     await expect(reportRequestService.search({ page: 0, size: 8 }, 'tenant')).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('validates permanentAddress, dateOfBirth, cccdIssueDate, and cccdIssuePlace in registerSchema', async () => {
+    const { registerSchema } = await import('@/lib/validation')
+    const base = {
+      fullName: 'Nguyễn An',
+      email: 'an@example.com',
+      phone: '0901234567',
+      dateOfBirth: '1999-05-20',
+      permanentAddress: '12 Nguyễn Trãi, Thanh Xuân, Hà Nội',
+      cccdNumber: '001234567890',
+      cccdIssueDate: '2021-08-15',
+      cccdIssuePlace: 'Cục Cảnh sát QLHC về TTXH',
+      cccdFrontImageUrl: 'data:image/png;base64,abc',
+      cccdBackImageUrl: 'data:image/png;base64,def',
+      password: 'Test@1234',
+      confirmPassword: 'Test@1234',
+      termsAccepted: true,
+    }
+    expect(registerSchema.safeParse(base).success).toBe(true)
+    expect(registerSchema.safeParse({ ...base, permanentAddress: 'HN' }).success).toBe(false)
+    expect(registerSchema.safeParse({ ...base, dateOfBirth: '2099-01-01' }).success).toBe(false)
+    expect(registerSchema.safeParse({ ...base, cccdIssueDate: '1995-01-01' }).success).toBe(false)
+    expect(registerSchema.safeParse({ ...base, cccdIssuePlace: '' }).success).toBe(false)
   })
 })

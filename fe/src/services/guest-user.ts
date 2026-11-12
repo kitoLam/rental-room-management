@@ -36,7 +36,11 @@ export const authService = {
     email: string
     password: string
     phone: string
+    dateOfBirth: string
+    permanentAddress: string
     cccdNumber: string
+    cccdIssueDate: string
+    cccdIssuePlace: string
     cccdFrontImageUrl: string
     cccdBackImageUrl: string
     confirmPassword: string

@@ -169,8 +169,20 @@ export const handlers = [
         return ok()
       }
       if (path === '/api/v1/auth/signup' || path === '/api/v1/auth/register' || path === '/api/auth/register') {
-        const raw = await payload<{ fullName: string; email: string; password: string; phone?: string; termsAccepted?: boolean }>()
-        const input = registerSchema.parse({ phone: '0901234567', termsAccepted: true, ...raw, confirmPassword: raw.password })
+        const raw = await payload<Record<string, unknown>>()
+        const input = registerSchema.parse({
+          phone: '0901234567',
+          dateOfBirth: '2000-01-01',
+          permanentAddress: '123 Đường Mẫu, TP.HCM',
+          cccdNumber: '001234567890',
+          cccdIssueDate: '2021-01-01',
+          cccdIssuePlace: 'Cục Cảnh sát QLHC về TTXH',
+          cccdFrontImageUrl: 'data:image/png;base64,mock-front',
+          cccdBackImageUrl: 'data:image/png;base64,mock-back',
+          termsAccepted: true,
+          ...raw,
+          confirmPassword: raw.confirmPassword ?? raw.password,
+        })
         if (db.state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase()))
           throw new MockError('Email này đã được đăng ký.', 409)
         const user = {
@@ -179,9 +191,13 @@ export const handlers = [
           fullName: input.fullName,
           roles: ['USER'] as User['roles'],
           status: 'PENDING_VERIFICATION' as const,
-          phone: null,
-          dateOfBirth: null,
+          phone: input.phone || null,
+          dateOfBirth: input.dateOfBirth || null,
           gender: null,
+          permanentAddress: input.permanentAddress || null,
+          cccdNumber: input.cccdNumber || null,
+          cccdIssueDate: input.cccdIssueDate || null,
+          cccdIssuePlace: input.cccdIssuePlace || null,
           passwordHash: await hash(input.password),
         }
         db.state.users.push(user)

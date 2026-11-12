@@ -11,6 +11,12 @@ export const loginSchema = z.object({
   email: emailField,
   password: z.string().min(1, 'Nhập mật khẩu.'),
 })
+function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
 export const registerSchema = z
   .object({
     fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(100),
@@ -19,10 +25,30 @@ export const registerSchema = z
       .string()
       .trim()
       .regex(/^(?:0|\+84)[35789][0-9]{8}$/, 'Nhập số di động Việt Nam hợp lệ.'),
+    dateOfBirth: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Vui lòng chọn ngày tháng năm sinh.')
+      .refine((value) => isValidIsoDate(value) && value < today(), 'Ngày tháng năm sinh phải nhỏ hơn ngày hiện tại.'),
+    permanentAddress: z
+      .string()
+      .trim()
+      .min(5, 'Nhập địa chỉ thường trú (ít nhất 5 ký tự).')
+      .max(255, 'Địa chỉ thường trú tối đa 255 ký tự.'),
     cccdNumber: z
       .string()
       .trim()
       .regex(/^\d{9,12}$/, 'Số CCCD phải gồm 9 đến 12 chữ số.'),
+    cccdIssueDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Vui lòng chọn ngày cấp CCCD.')
+      .refine((value) => isValidIsoDate(value) && value <= today(), 'Ngày cấp CCCD không được vượt quá ngày hiện tại.'),
+    cccdIssuePlace: z
+      .string()
+      .trim()
+      .min(2, 'Nhập nơi cấp CCCD.')
+      .max(150, 'Nơi cấp CCCD tối đa 150 ký tự.'),
     cccdFrontImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt trước CCCD.'),
     cccdBackImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt sau CCCD.'),
     termsAccepted: z.boolean().refine((value) => value, 'Bạn phải đồng ý điều khoản.'),
@@ -33,6 +59,10 @@ export const registerSchema = z
       .regex(/[^\p{L}\p{N}\s]/u, 'Mật khẩu cần có ký tự đặc biệt.')
       .refine((value) => !/\p{Cc}/u.test(value), 'Mật khẩu không được chứa ký tự điều khiển.'),
     confirmPassword: z.string(),
+  })
+  .refine((v) => !isValidIsoDate(v.dateOfBirth) || !isValidIsoDate(v.cccdIssueDate) || v.cccdIssueDate > v.dateOfBirth, {
+    path: ['cccdIssueDate'],
+    message: 'Ngày cấp CCCD phải sau ngày tháng năm sinh.',
   })
   .refine((v) => v.password === v.confirmPassword, {
     path: ['confirmPassword'],

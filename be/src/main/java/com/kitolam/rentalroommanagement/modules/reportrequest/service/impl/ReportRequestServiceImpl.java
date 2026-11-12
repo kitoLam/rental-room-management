@@ -885,6 +885,16 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             newTenant.setEmail(principal.email());
             newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
             newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
+            if (user != null) {
+                newTenant.setIdCardNumber(user.getCccdNumber());
+                newTenant.setAddress(user.getPermanentAddress());
+                if (StringUtils.hasText(user.getDateOfBirth())) {
+                    try {
+                        newTenant.setDateOfBirth(java.time.LocalDate.parse(user.getDateOfBirth().strip()));
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
             return tenantRepository.save(newTenant);
         }
         if (StringUtils.hasText(inputTenantId)) {
@@ -906,6 +916,16 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         newTenant.setEmail(principal.email());
         newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
         newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
+        if (user != null) {
+            newTenant.setIdCardNumber(user.getCccdNumber());
+            newTenant.setAddress(user.getPermanentAddress());
+            if (StringUtils.hasText(user.getDateOfBirth())) {
+                try {
+                    newTenant.setDateOfBirth(java.time.LocalDate.parse(user.getDateOfBirth().strip()));
+                } catch (Exception ignored) {
+                }
+            }
+        }
         return tenantRepository.save(newTenant);
     }
 

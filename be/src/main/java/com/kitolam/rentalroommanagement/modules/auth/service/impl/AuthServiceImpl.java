@@ -112,7 +112,11 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.email());
         user.setPhone(request.phone());
         user.setPasswordHash(passwords.encode(request.password()));
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPermanentAddress(request.permanentAddress());
         user.setCccdNumber(request.cccdNumber());
+        user.setCccdIssueDate(request.cccdIssueDate());
+        user.setCccdIssuePlace(request.cccdIssuePlace());
         user.setCccdFrontImageUrl(request.cccdFrontImageUrl());
         user.setCccdBackImageUrl(request.cccdBackImageUrl());
         user.setRole(Role.TENANT);
@@ -442,6 +446,10 @@ public class AuthServiceImpl implements AuthService {
                 user.getPhone(),
                 user.getDateOfBirth(),
                 user.getGender(),
+                user.getPermanentAddress(),
+                user.getCccdNumber(),
+                user.getCccdIssueDate(),
+                user.getCccdIssuePlace(),
                 user.isEnabled() ? "ACTIVE" : "DISABLED"
         );
     }
