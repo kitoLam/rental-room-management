@@ -276,7 +276,13 @@ export const managerApi = {
       return result as unknown as Page<ManagerRecord<K>>
     }
     if (resource === 'contracts' && provider('manager') === 'real') {
-      const query = new URLSearchParams({ page: filters.page || '0', size: filters.size || '8' })
+      const query = new URLSearchParams({
+        page: String(Number(filters.page || '0') + 1),
+        size: filters.size || '8',
+      })
+      if (!filters.status) query.append('sort', 'status,asc')
+      query.append('sort', 'createdAt,desc')
+      query.append('sort', 'id,desc')
       if (filters.status) query.set('status', filters.status === 'ENDED' ? 'EXPIRED' : filters.status === 'CANCELLED' ? 'TERMINATED' : filters.status)
       if (filters.q) query.set('keyword', filters.q)
       const page = await request('manager', `/api/v1/contracts?${query}`, pageSchema(backendContractDto))

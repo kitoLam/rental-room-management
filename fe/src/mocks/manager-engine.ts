@@ -531,9 +531,15 @@ export class ManagerEngine {
           .filter((b) => b.branchId === branchId)
           .map((b) => ({ ...b, ...this.contact(b.requesterUserId) }))
         break
-      case 'contracts':
+      case 'contracts': {
+        const statusOrder = { ACTIVE: 0, DRAFT: 1, EXPIRED: 2, ENDED: 2, CANCELLED: 3 }
         records = this.state.contracts
           .filter((c) => c.branchId === branchId)
+          .sort((a, b) =>
+            statusOrder[a.status] - statusOrder[b.status] ||
+            (b.history[0]?.at ?? '').localeCompare(a.history[0]?.at ?? '') ||
+            b.id.localeCompare(a.id),
+          )
           .map((c) => {
             const ts = this.tenant.state.tenancies.filter((t) => t.contractId === c.id)
             const rep =
@@ -547,6 +553,7 @@ export class ManagerEngine {
             }
           })
         break
+      }
       case 'services':
         records = this.state.services.filter((s) => s.branchId === branchId)
         break
