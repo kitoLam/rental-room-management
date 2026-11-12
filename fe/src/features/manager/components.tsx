@@ -128,6 +128,17 @@ export function ManagerStatus({ value }: { value: string }) {
     </StatusBadge>
   )
 }
+/** Nhãn "Sắp hết hạn" nháy nhẹ; tôn trọng prefers-reduced-motion (không nháy khi người dùng yêu cầu giảm chuyển động). */
+export function ExpiringSoonBadge() {
+  return (
+    <StatusBadge
+      tone="warning"
+      className="motion-safe:animate-pulse"
+    >
+      Sắp hết hạn
+    </StatusBadge>
+  )
+}
 export type Column<T> = { label: string; render: (row: T) => ReactNode; mobile?: boolean }
 export function Records<T extends { id: string }>({
   query,

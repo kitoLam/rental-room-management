@@ -8,8 +8,8 @@ import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCreateRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractFilterRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractUpdateRequest;
-import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractDraftRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractServiceSelectionRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractRenewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
@@ -29,8 +29,6 @@ public interface ContractService {
 
     void delete(String id, AuthPrincipal principal);
 
-    ContractResponse createDraftFromBooking(String bookingId, ContractDraftRequest request, AuthPrincipal principal);
-
     String nextContractNumber();
 
     ContractResponse selectServices(String id, ContractServiceSelectionRequest request, AuthPrincipal principal);
@@ -40,6 +38,9 @@ public interface ContractService {
     ContractResponse submitEvidence(String id, ContractEvidenceRequest request, AuthPrincipal principal);
 
     ContractResponse reviewEvidence(String id, ContractEvidenceReviewRequest request, AuthPrincipal principal);
+
+    ContractResponse renew(String id, ContractRenewRequest request, AuthPrincipal principal);
+
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewContract> readForOverview(List<String> ids);
 

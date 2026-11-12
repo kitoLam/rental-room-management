@@ -243,7 +243,7 @@ const viewingNotificationSchema = z.object({
   kind: z.string(),
   title: z.string(),
   message: z.string(),
-  detailPath: z.string().regex(/^\/(user|manager)\/appointments\/[0-9a-fA-F]{24}$/),
+  detailPath: z.string().regex(/^\/(user|manager)\/(appointments|contracts)(\/[0-9a-fA-F]{24})?$/),
   createdAt: z.iso.datetime(),
   readAt: z.iso.datetime().nullish(),
 })
