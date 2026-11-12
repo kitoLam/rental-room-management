@@ -15,6 +15,7 @@ import { useSession } from '@/features/auth/session-store'
 import { tenantApi } from '@/services/tenant'
 import type { Tenancy } from '@/interfaces/tenant'
 import { provider } from '@/services/config'
+import { serviceCatalogApi } from '@/services/service-catalog'
 import { queryClient } from '@/services/query-client'
 import { useTenancySelection, isActive, tenantLink } from '@/features/tenant/context'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,32 @@ export function TenantLayout() {
     mutationFn: tenantApi.reset,
     onSuccess: () => queryClient.invalidateQueries(),
   })
+  // Real API: the tenant space opens only once at least one contract has been approved.
+  const realContracts = useQuery({
+    queryKey: ['tenant', 'contracts-real'],
+    queryFn: serviceCatalogApi.myContracts,
+    enabled: provider('leasing') === 'real',
+  })
+  if (provider('leasing') === 'real' && realContracts.data && !realContracts.data.some((c) => c.status === 'ACTIVE')) {
+    const waiting = realContracts.data.filter((c) => c.status === 'DRAFT').length
+    return (
+      <Container className="py-10">
+        <Notice tone="warning">
+          {waiting > 0
+            ? `Bạn có ${waiting} hợp đồng chưa được duyệt. Hãy nộp bản ký trong Hồ sơ → Hợp đồng; quản lý duyệt xong bạn mới vào được không gian thuê.`
+            : 'Bạn chưa có hợp đồng thuê nào đang hiệu lực.'}
+        </Notice>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Button asChild>
+            <Link to="/profile?tab=contracts">Mở hợp đồng của tôi</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/rooms">Tìm phòng</Link>
+          </Button>
+        </div>
+      </Container>
+    )
+  }
   return (
     <Container wide className="py-7 sm:py-10">
       <QueryState

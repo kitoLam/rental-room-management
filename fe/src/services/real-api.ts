@@ -146,6 +146,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     feature === 'tenant' &&
     ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
       (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
       (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
       (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
   )

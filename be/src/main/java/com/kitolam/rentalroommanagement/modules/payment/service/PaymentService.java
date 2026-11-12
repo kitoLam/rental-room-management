@@ -18,4 +18,8 @@ public interface PaymentService {
     PaymentResponse update(String id, PaymentUpdateRequest request);
 
     void delete(String id);
+
+    /** Payments of the logged-in tenant's bookings, newest first. */
+    java.util.List<com.kitolam.rentalroommanagement.modules.payment.dto.response.MyPaymentResponse> mine(
+            com.kitolam.rentalroommanagement.common.security.AuthPrincipal principal);
 }

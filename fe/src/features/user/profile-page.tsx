@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router'
+import { useNavigate, Link, useSearchParams } from 'react-router'
+import { ContractsTab, PaymentsTab } from './profile-tabs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -1040,6 +1041,14 @@ export default function ProfilePage() {
 
   // Sử dụng dữ liệu profile mới nhất nếu có, hoặc dùng thông tin sessionUser có sẵn
   const activeUser = profile.data || sessionUser
+  const isTenant = Boolean(activeUser?.roles?.includes('TENANT'))
+  const [params, setParams] = useSearchParams()
+  const tab = isTenant && ['payments', 'contracts'].includes(params.get('tab') || '') ? params.get('tab')! : 'overview'
+  const tabs = [
+    { key: 'overview', label: 'Tổng quan' },
+    { key: 'payments', label: 'Thanh toán' },
+    { key: 'contracts', label: 'Hợp đồng' },
+  ]
 
   const logout = useMutation({
     mutationFn: authService.logout,
@@ -1056,7 +1065,24 @@ export default function ProfilePage() {
       eyebrow="TÀI KHOẢN CÁ NHÂN"
       description="Quản lý thông tin liên lạc, bảo mật đăng nhập và theo dõi toàn bộ lịch hẹn xem phòng cùng các yêu cầu giữ chỗ của bạn."
     >
-      <div className="space-y-8">
+      {isTenant && (
+        <div role="tablist" aria-label="Hồ sơ" className="mb-6 flex flex-wrap gap-2 border-b border-border/60 pb-3">
+          {tabs.map((t) => (
+            <Button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              variant={tab === t.key ? 'default' : 'ghost'}
+              onClick={() => setParams(t.key === 'overview' ? {} : { tab: t.key })}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
+      )}
+      {tab === 'payments' && <PaymentsTab />}
+      {tab === 'contracts' && <ContractsTab />}
+      <div className={tab === 'overview' ? 'space-y-8' : 'hidden'}>
         {/* KHU VỰC CHÍNH: HÀNG TRÊN CÙNG GỒM THÔNG TIN CÁ NHÂN + ĐỔI MẬT KHẨU (NGANG NHAU) VÀ ASIDE */}
         <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
           {/* CỘT CHÍNH: HÀNG NGANG CHỨA FORM THÔNG TIN (MỞ RỘNG) & FORM ĐỔI MẬT KHẨU (THU NHỎ) */}
