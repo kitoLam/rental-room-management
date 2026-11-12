@@ -196,7 +196,7 @@ export function SiteHeader() {
                   'Lịch xem phòng',
                   viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id }),
                 ],
-                ...(!user.roles.includes('ADMIN') ? [['Yêu cầu giữ chỗ', '/user/bookings']] : []),
+                ...(!user.roles.includes('ADMIN') ? [['Yêu cầu giữ chỗ', '/tenant/bookings']] : []),
                 ...(!isStaffOnly ? [['Thông báo', '/notifications']] : []),
                 ['Hồ sơ', '/profile'],
               ]

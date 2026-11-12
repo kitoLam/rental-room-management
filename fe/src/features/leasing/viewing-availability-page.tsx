@@ -265,7 +265,7 @@ export function ViewingAvailabilityPage() {
                   <div className="mt-6 flex flex-wrap gap-4">
                     {context.data && (
                       <Button asChild variant="outline">
-                        <Link to="/user/appointments">Theo dõi lịch xem</Link>
+                        <Link to="/tenant/appointments">Theo dõi lịch xem</Link>
                       </Button>
                     )}
                     <Button asChild variant="outline">

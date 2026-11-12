@@ -207,6 +207,16 @@ public class ContractTenantServiceImpl implements ContractTenantService {
                 item.getLeftAt(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
     }
     @Override
+    public List<TenantLease> readOwnedForOverview(String tenantId) {
+        if (tenantId == null) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("tenantId", List.of(tenantId));
+        query.fields().include("contractId", "roomSlotIds", "isRepresentative", "rentAmount", "joinedAt", "leftAt", "status");
+        return overviewMongo.find(query, ContractTenant.class).stream().map(item -> new TenantLease(item.getId(),
+                item.getContractId(), item.getRoomSlotIds() == null ? List.of() : List.copyOf(item.getRoomSlotIds()),
+                item.getIsRepresentative(), item.getRentAmount(), item.getJoinedAt(), item.getLeftAt(), item.getStatus())).toList();
+    }
+
+    @Override
     public List<OverviewTenancy> readForOverview(List<String> ids) {
         if (ids.isEmpty()) return List.of();
         var query = MongoQueryHelper.byReferenceIds("contractId", ids);

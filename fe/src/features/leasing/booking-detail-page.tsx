@@ -61,10 +61,10 @@ export function BookingDetailPage() {
   const contractTermPreview = record?.startDate
     ? `${dateOnly(record.startDate)} → ${dateOnly(addMonths(record.startDate, Number(termMonths)))}`
     : null
-  if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/user/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
+  if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/tenant/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
 
   return (
-    <Page title="Chi tiết giữ chỗ" back="/user/bookings" narrow>
+    <Page title="Chi tiết giữ chỗ" back="/tenant/bookings" narrow>
       <QueryState pending={recordQuery.isPending} error={recordQuery.error} retry={recordQuery.refetch}>
         {record && <Panel>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -86,7 +86,7 @@ export function BookingDetailPage() {
           {record.depositStatus === 'PROCESSING' && <Notice tone="warning">Khoản cọc đang được xử lý hoàn tiền.</Notice>}
           {record.status === 'CONFIRMED' && <Notice tone="success">Đã nhận cọc. Hợp đồng tạm đã được tạo; tenancy chỉ kích hoạt sau khi manager duyệt bằng chứng.</Notice>}
           <div className="mt-6 flex flex-wrap gap-3">
-            {!canManage && record.status === 'AWAITING_PAYMENT' && <Button asChild><Link to={`/user/bookings/${record.id}/payment`}>Thanh toán cọc</Link></Button>}
+            {!canManage && record.status === 'AWAITING_PAYMENT' && <Button asChild><Link to={`/tenant/bookings/${record.id}/payment`}>Thanh toán cọc</Link></Button>}
             {record.contractId && <Button asChild variant="outline"><Link to={`/tenant/contracts/${record.contractId}`}>Mở hợp đồng tạm</Link></Button>}
             {['REQUESTED', 'AWAITING_PAYMENT'].includes(record.status) && <ConfirmAction
               label="Hủy giữ chỗ" title="Hủy giữ chỗ?" description="Các slot sẽ được giải phóng. Nếu đã thanh toán, khoản cọc sẽ được chuyển sang xử lý hoàn."

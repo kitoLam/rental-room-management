@@ -307,7 +307,7 @@ function OverviewDashboard() {
           <div className="flex items-center gap-2">
             {activeTab === 'appointments' ? (
               <Link
-                to="/user/appointments"
+                to="/tenant/appointments"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
               >
                 Xem tất cả lịch sử xem phòng ({allAppointments.length})
@@ -315,7 +315,7 @@ function OverviewDashboard() {
               </Link>
             ) : (
               <Link
-                to="/user/bookings"
+                to="/tenant/bookings"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
               >
                 Xem tất cả yêu cầu giữ chỗ ({allBookings.length})
@@ -462,7 +462,7 @@ function OverviewDashboard() {
 
                       <div className="flex items-center gap-2">
                         <Button asChild variant="outline" className="text-xs h-8 px-3">
-                          <Link to={`/user/appointments/${item.id}`}>
+                          <Link to={`/tenant/appointments/${item.id}`}>
                             Chi tiết
                             <ArrowRight size={12} />
                           </Link>
@@ -569,7 +569,7 @@ function OverviewDashboard() {
                           <div className="flex items-center gap-2">
                             <h4 className="font-bold text-foreground text-base truncate">
                               <Link
-                                to={`/user/bookings/${item.id}`}
+                                to={`/tenant/bookings/${item.id}`}
                                 className="hover:text-primary transition-colors hover:underline"
                               >
                                 {item.roomTitle}
@@ -620,7 +620,7 @@ function OverviewDashboard() {
 
                       <div className="flex items-center gap-2">
                         <Button asChild variant="outline" className="text-xs h-8 px-3">
-                          <Link to={`/user/bookings/${item.id}`}>
+                          <Link to={`/tenant/bookings/${item.id}`}>
                             Chi tiết
                             <ArrowRight size={12} />
                           </Link>
@@ -628,7 +628,7 @@ function OverviewDashboard() {
 
                         {item.status === 'AWAITING_PAYMENT' && (
                           <Button asChild className="text-xs h-8 px-3">
-                            <Link to={`/user/bookings/${item.id}`}>
+                            <Link to={`/tenant/bookings/${item.id}`}>
                               Thanh toán cọc
                             </Link>
                           </Button>
@@ -1115,14 +1115,14 @@ export default function ProfilePage() {
                   Lối tắt nhanh
                 </p>
                 <Link
-                  to="/user/appointments"
+                  to="/tenant/appointments"
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >
                   <span>Quản lý lịch hẹn xem phòng</span>
                   <ArrowRight size={13} />
                 </Link>
                 <Link
-                  to="/user/bookings"
+                  to="/tenant/bookings"
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >
                   <span>Yêu cầu đặt phòng & giữ chỗ</span>

@@ -6,9 +6,11 @@ import { useSession } from '@/features/auth/session-store'
 import { dashboardPath } from '@/features/auth/navigation'
 import { useManagerSelection } from '@/features/manager/context'
 import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
+import { TenantLayout } from './tenant-layout'
 export function UserLayout() {
   const user = useSession((state) => state.user)
-  const branchId = useManagerSelection((state) => user ? state.byUser[user.id] : undefined)
+  const branchId = useManagerSelection((state) => (user ? state.byUser[user.id] : undefined))
+  if (user?.roles.includes('TENANT')) return <TenantLayout />
   return (
     <>
       <div className="border-b border-border bg-surface">
@@ -16,8 +18,12 @@ export function UserLayout() {
           <nav aria-label="Không gian cá nhân" className="flex gap-1 overflow-x-auto py-2 sm:gap-5">
             {[
               { to: dashboardPath(user?.roles ?? []), label: 'Tổng quan', icon: House },
-              { to: viewingAppointmentsPath(user?.roles ?? [], { branchId }), label: 'Lịch xem phòng', icon: CalendarDays },
-              { to: '/user/bookings', label: 'Giữ chỗ', icon: KeyRound },
+              {
+                to: viewingAppointmentsPath(user?.roles ?? [], { branchId }),
+                label: 'Lịch xem phòng',
+                icon: CalendarDays,
+              },
+              { to: '/tenant/bookings', label: 'Giữ chỗ', icon: KeyRound },
               { to: '/profile', label: 'Hồ sơ', icon: UserRound },
             ].map(({ to, label, icon: Icon }) => (
               <NavLink

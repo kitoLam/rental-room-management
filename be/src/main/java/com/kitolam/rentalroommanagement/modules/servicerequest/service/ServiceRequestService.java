@@ -18,6 +18,10 @@ import java.util.List;
 
 /** Use cases of the "Đăng ký và ngừng dịch vụ" flow. */
 public interface ServiceRequestService {
+    /** Read-only summary; accountId and contractId must already be authorized by the caller. */
+    List<TenantRequest> readForTenantOverview(String accountId, String contractId);
+
+    record TenantRequest(com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus status) { }
 
     // Tenant
 

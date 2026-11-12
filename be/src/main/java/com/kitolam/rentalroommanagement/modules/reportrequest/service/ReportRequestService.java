@@ -20,6 +20,12 @@ import com.kitolam.rentalroommanagement.modules.reportrequest.dto.response.Repor
 import org.springframework.data.domain.Pageable;
 
 public interface ReportRequestService {
+    /** Read-only summary for an authorized contract and the current account/profile IDs. */
+    java.util.List<TenantSupport> readForTenantOverview(java.util.List<String> tenantIds, String contractId);
+
+    record TenantSupport(String id, String title,
+                         com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status,
+                         java.time.Instant updatedAt) { }
 
     /**
      * Tenant tạo yêu cầu:

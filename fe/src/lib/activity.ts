@@ -98,8 +98,8 @@ export function referenceLink(type: string | null, id: string | null, tenancyId?
   if (id && type && routes[type] && tenancyId)
     return `${routes[type]}?tenancyId=${encodeURIComponent(tenancyId)}${type === 'TENANT_PAYMENT' ? `&paymentId=${encodeURIComponent(id)}` : ''}`
   return id && type === 'APPOINTMENT'
-    ? `/user/appointments/${id}`
+    ? `/tenant/appointments/${id}`
     : id && type === 'BOOKING'
-      ? `/user/bookings/${id}`
+      ? `/tenant/bookings/${id}`
       : null
 }

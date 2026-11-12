@@ -9,6 +9,12 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (
+    feature === 'tenant' &&
+    verb === 'GET' &&
+    ['/api/v1/dashboard/tenant', '/api/v1/dashboard/tenant/tenancies'].includes(pathname)
+  )
+    return null
+  if (
     (feature === 'manager' || feature === 'owner') &&
     ['/api/v1/dashboard/management', '/api/v1/dashboard/reports'].includes(pathname) &&
     verb === 'GET'

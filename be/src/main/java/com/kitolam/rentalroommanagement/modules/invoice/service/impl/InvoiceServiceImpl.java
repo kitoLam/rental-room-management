@@ -66,6 +66,16 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
     }
     @Override
+    public List<TenantInvoice> readForTenantOverview(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("invoiceNumber", "period", "dueDate", "totalAmount", "remainingAmount", "status");
+        return overviewMongo.find(query, Invoice.class).stream().map(item -> new TenantInvoice(item.getId(),
+                item.getInvoiceNumber(), item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount(), item.getStatus())).toList();
+    }
+
+    @Override
     public List<OverviewInvoice> readForReports(List<String> contractTenantIds) {
         if (contractTenantIds.isEmpty()) return List.of();
         var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);

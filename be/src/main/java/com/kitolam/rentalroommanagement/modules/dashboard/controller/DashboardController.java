@@ -9,6 +9,8 @@ import com.kitolam.rentalroommanagement.modules.dashboard.service.DashboardServi
 import com.kitolam.rentalroommanagement.modules.dashboard.service.ManagementReportService;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.request.ManagementReportRequest;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.ManagementReportResponse;
+import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.TenantOverviewResponse;
+import com.kitolam.rentalroommanagement.modules.dashboard.service.TenantOverviewService;
 import jakarta.validation.Valid;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
@@ -29,6 +31,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class DashboardController {
     private final DashboardService dashboardService;
     private final ManagementReportService managementReportService;
+    private final TenantOverviewService tenantOverviewService;
+
+    @GetMapping("/tenant/tenancies")
+    @PreAuthorize("hasRole('TENANT')")
+    public StandardResponse<java.util.List<TenantOverviewResponse.Lease>> tenantTenancies(
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(tenantOverviewService.tenancies(principal));
+    }
+
+    @GetMapping("/tenant")
+    @PreAuthorize("hasRole('TENANT')")
+    public StandardResponse<TenantOverviewResponse> tenant(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestParam(required = false) @ValidObjectId String tenancyId) {
+        return StandardResponse.success(tenantOverviewService.overview(principal, tenancyId));
+    }
 
     @GetMapping("/reports")
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")

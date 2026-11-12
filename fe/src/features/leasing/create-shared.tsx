@@ -49,7 +49,7 @@ export function BookingForm({ room }: { room: Room }) {
     }),
     onSuccess: async (record) => {
       await invalidateActivity()
-      navigate(`/user/bookings/${record.id}`, { replace: true })
+      navigate(`/tenant/bookings/${record.id}`, { replace: true })
     },
     onError: () => void invalidateActivity(),
   })

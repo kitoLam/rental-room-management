@@ -28,6 +28,8 @@ export const useTenancySelection = create<{
 }))
 export type TenantContext = { tenancy: Tenancy; tenancies: Tenancy[] }
 export const useTenant = () => useOutletContext<TenantContext>()
+export const useTenantWorkspace = () =>
+  useOutletContext<{ tenancy?: Tenancy; tenancies: Tenancy[] }>()
 export const isActive = (t: Tenancy) =>
   t.status === 'ACTIVE' &&
   (t.contractStatus === 'ACTIVE' || !t.contractStatus) &&

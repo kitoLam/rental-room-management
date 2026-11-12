@@ -17,7 +17,7 @@ export function ActivityRow({
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex flex-wrap items-center gap-3">
           <Link
-            to={`/user/${kind}/${record.id}`}
+            to={`/tenant/${kind}/${record.id}`}
             className="text-sm font-bold hover:text-primary hover:underline"
           >
             {record.roomTitle}
@@ -45,7 +45,7 @@ export function ActivityRow({
         )}
       </div>
       <Button asChild variant="outline">
-        <Link to={`/user/${kind}/${record.id}`}>
+        <Link to={`/tenant/${kind}/${record.id}`}>
           Chi tiết
           <ArrowUpRight />
         </Link>

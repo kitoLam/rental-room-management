@@ -63,6 +63,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ServiceRequestServiceImpl implements ServiceRequestService {
+    @Override
+    public List<TenantRequest> readForTenantOverview(String accountId, String contractId) {
+        if (accountId == null || contractId == null) return List.of();
+        var query = com.kitolam.rentalroommanagement.common.util.MongoQueryHelper.byReferenceIds("contractId", List.of(contractId));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("requesterAccountId").is(accountId));
+        query.fields().include("status");
+        return mongoTemplate.find(query, ServiceRequest.class).stream().map(item -> new TenantRequest(item.getStatus())).toList();
+    }
 
     private static final List<String> OPEN_STATUSES =
             List.of(ServiceRequestStatus.PENDING.name(), ServiceRequestStatus.APPROVED.name());

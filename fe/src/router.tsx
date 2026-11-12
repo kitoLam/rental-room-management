@@ -1,4 +1,5 @@
 import { RouteGuard } from '@/features/auth/route-guard'
+import { LegacyTenantRedirect } from '@/features/tenant/legacy-tenant-redirect'
 import { HomePage } from '@/features/home/home-page'
 import { AdminLayout } from '@/layouts/admin-layout'
 import { AuthLayout } from '@/layouts/auth-layout'
@@ -302,17 +303,18 @@ export const router = createBrowserRouter([
           Component: (await import('@/features/manager/utility-rates-page')).default,
         }),
       },
+      { path: 'user/appointments/*', element: <LegacyTenantRedirect /> },
       {
         element: <UserLayout />,
         children: [
           {
-            path: 'user/appointments',
+            path: 'tenant/appointments',
             lazy: async () => ({
               Component: (await import('@/features/leasing/appointments-page')).AppointmentsPage,
             }),
           },
           {
-            path: 'user/appointments/:appointmentId',
+            path: 'tenant/appointments/:appointmentId',
             lazy: async () => ({
               Component: (await import('@/features/leasing/appointment-detail-page'))
                 .AppointmentDetailPage,
@@ -668,6 +670,7 @@ export const router = createBrowserRouter([
               Component: (await import('@/features/leasing/create-booking-page')).CreateBookingPage,
             }),
           },
+          { path: 'user/bookings/*', element: <LegacyTenantRedirect /> },
           {
             element: <UserLayout />,
             children: [
@@ -679,20 +682,20 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'user/bookings',
+                path: 'tenant/bookings',
                 lazy: async () => ({
                   Component: (await import('@/features/leasing/bookings-page')).BookingsPage,
                 }),
               },
               {
-                path: 'user/bookings/:bookingId',
+                path: 'tenant/bookings/:bookingId',
                 lazy: async () => ({
                   Component: (await import('@/features/leasing/booking-detail-page'))
                     .BookingDetailPage,
                 }),
               },
               {
-                path: 'user/bookings/:bookingId/payment',
+                path: 'tenant/bookings/:bookingId/payment',
                 lazy: async () => ({
                   Component: (await import('@/features/leasing/payment-page')).default,
                 }),

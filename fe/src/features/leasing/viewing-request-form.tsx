@@ -86,7 +86,7 @@ export function ViewingRequestForm({
         client.invalidateQueries({ queryKey: ['viewing-availability', roomId] }),
         client.invalidateQueries({ queryKey: ['viewing-configuration', roomId] }),
       ])
-      navigate(`/user/appointments/${record.id}`, { replace: true })
+      navigate(`/tenant/appointments/${record.id}`, { replace: true })
     },
     onError: (error) => {
       if (

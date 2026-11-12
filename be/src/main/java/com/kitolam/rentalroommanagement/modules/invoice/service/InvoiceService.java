@@ -26,5 +26,12 @@ public interface InvoiceService {
     /** Issued, non-cancelled invoices without deposit lines; tenancy IDs must already be authorized. */
     List<OverviewInvoice> readForReports(List<String> contractTenantIds);
 
+    /** Read issued invoices for already-authorized tenancy IDs, without calculating or updating balances. */
+    List<TenantInvoice> readForTenantOverview(List<String> contractTenantIds);
+
+    record TenantInvoice(String id, String invoiceNumber, String period, java.time.LocalDate dueDate,
+                         java.math.BigDecimal totalAmount, java.math.BigDecimal remainingAmount,
+                         com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus status) { }
+
     record OverviewInvoice(String id, String contractTenantId) { }
 }
