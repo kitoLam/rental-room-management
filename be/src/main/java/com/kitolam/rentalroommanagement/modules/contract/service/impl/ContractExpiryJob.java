@@ -27,7 +27,7 @@ public class ContractExpiryJob {
     private final RoomSlotOccupancySupport occupancySupport;
     private final Clock clock;
 
-    @Scheduled(cron = "${contract.expiry.cron:0 5 0 * * *}", zone = "Asia/Ho_Chi_Minh")
+    @Scheduled(cron = "${contract.expiry.cron:0 * * * * *}", zone = "Asia/Ho_Chi_Minh")
     @Transactional
     public void expireContracts() {
         LocalDate today = LocalDate.ofInstant(clock.instant(), ContractExpirySupport.VIETNAM_ZONE);
