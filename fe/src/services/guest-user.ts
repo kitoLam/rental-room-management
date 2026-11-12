@@ -327,6 +327,7 @@ const backendBookingSchema = z.object({
   holdExpiresAt: z.string().nullable(),
   checkInDeadline: z.string().nullable().optional(),
   contractId: databaseIdSchema.nullable().optional(),
+  contractIds: z.array(databaseIdSchema).nullish(),
   cancellationPolicy: z.string().nullable(),
   depositStatus: z.enum(['UNPAID', 'PROCESSING', 'PAID', 'REFUNDED', 'FORFEITED']),
   rejectReason: z.string().nullable(),
@@ -466,6 +467,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     createdAt,
     timeline: b.timeline,
     contractId: b.contractId || null,
+    contractIds: b.contractIds?.length ? b.contractIds : b.contractId ? [b.contractId] : [],
     selectedServices: b.selectedServices || [],
   })
 }

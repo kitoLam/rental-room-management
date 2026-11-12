@@ -195,6 +195,8 @@ export const bookingSchema = z.object({
   createdAt: z.string(),
   timeline: timelineSchema,
   contractId: databaseIdSchema.nullable(),
+  /** One contract per booked slot (real API). */
+  contractIds: z.array(databaseIdSchema).optional(),
   selectedServices: z.array(z.object({
     serviceId: databaseIdSchema,
     name: z.string(),

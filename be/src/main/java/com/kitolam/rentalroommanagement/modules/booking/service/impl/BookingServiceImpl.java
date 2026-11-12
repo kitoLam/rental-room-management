@@ -134,10 +134,11 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException("Các slot cần thuộc cùng một phòng");
         LocalDate holdStart = LocalDate.now(clock);
         for (String slotId : slotIds) ensureNoOccupancyOverlap(slotId, holdStart, null, null);
+        // One shared payment: deposit of every slot (room deposit split per slot).
         BigDecimal deposit = slots.stream().map(slot -> {
-            BigDecimal listed = room(slot.getRoomId()).getListedDepositAmount();
-            if (listed == null) throw new BadRequestException("Phòng chưa cấu hình tiền cọc");
-            return listed;
+            BigDecimal perSlot = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.deposit(room(slot.getRoomId()));
+            if (perSlot == null) throw new BadRequestException("Phòng chưa cấu hình tiền cọc");
+            return perSlot;
         }).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Booking booking = new Booking();
@@ -363,19 +364,22 @@ public class BookingServiceImpl implements BookingService {
         claimBookingSlots(booking);
         boolean manager = !isRole(principal, "TENANT");
         boolean confirmedBeforeHandover = manager && booking.getStatus() == BookingStatus.CONFIRMED;
-        Contract draft = confirmedBeforeHandover
-                ? contractRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).orElse(null) : null;
-        if (draft != null && draft.getStatus() != ContractStatus.DRAFT)
-            throw new ConflictException("Booking đã hoàn tất bàn giao, không thể hủy");
+        if (confirmedBeforeHandover && contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                .anyMatch(contract -> contract.getStatus() == ContractStatus.ACTIVE))
+            throw new ConflictException("Booking đã có hợp đồng được duyệt, không thể hủy");
         if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.AWAITING_PAYMENT && !confirmedBeforeHandover)
             throw new ConflictException("Trạng thái hiện tại không cho phép hủy yêu cầu");
         if (!confirmedBeforeHandover && paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream().anyMatch(p -> p.getStatus() == PaymentStatus.SUCCESS))
             throw new ConflictException("Đã nhận thanh toán; vui lòng liên hệ Owner để xử lý hoàn tiền");
-        if (draft != null) {
-            draft.setStatus(ContractStatus.TERMINATED);
-            draft.setTerminatedAt(clock.instant());
-            draft.setTerminationReason("Owner/Manager không thể bàn giao phòng.");
-            contractRepository.save(draft);
+        if (confirmedBeforeHandover) {
+            contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                    .filter(contract -> contract.getStatus() == ContractStatus.DRAFT)
+                    .forEach(draft -> {
+                        draft.setStatus(ContractStatus.TERMINATED);
+                        draft.setTerminatedAt(clock.instant());
+                        draft.setTerminationReason("Owner/Manager không thể bàn giao phòng.");
+                        contractRepository.save(draft);
+                    });
         }
         BookingStatus previous = booking.getStatus();
         booking.setStatus(BookingStatus.CANCELLED);
@@ -489,7 +493,7 @@ public class BookingServiceImpl implements BookingService {
         if (hasReservation(booking.getId())) {
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setDepositStatus(DepositStatus.PAID);
-            createTemporaryContract(booking);
+            createSlotContracts(booking);
         } else {
             releaseReservation(booking.getId());
             booking.setStatus(BookingStatus.EXPIRED);
@@ -561,9 +565,9 @@ public class BookingServiceImpl implements BookingService {
                 booking.setDepositStatus(DepositStatus.PAID);
             Booking saved = saveTransition(booking, previous, "Quá hạn check-in; booking hết hiệu lực theo chính sách hủy đã gửi.");
             releaseReservation(saved.getId());
-            contractRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
+            contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId()).stream()
                     .filter(contract -> contract.getStatus() == ContractStatus.DRAFT)
-                    .ifPresent(contract -> {
+                    .forEach(contract -> {
                         contract.setStatus(ContractStatus.TERMINATED);
                         contract.setTerminatedAt(now);
                         contract.setTerminationReason("Đã quá hạn check-in theo điều khoản booking.");
@@ -669,48 +673,65 @@ public class BookingServiceImpl implements BookingService {
         return selected;
     }
 
-    private void createTemporaryContract(Booking booking) {
-        Contract contract = contractRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).orElseGet(Contract::new);
-        if (contract.getId() != null) {
-            booking.setContractId(contract.getId());
+    /**
+     * After the shared deposit is paid: one DRAFT contract per booked slot, each to be signed and
+     * approved on its own. Rent / deposit are the slot's share of the room price. Optional services
+     * picked while booking go on the first contract. Idempotent.
+     */
+    private void createSlotContracts(Booking booking) {
+        List<Contract> existing = contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId());
+        if (!existing.isEmpty()) {
+            booking.setContractIds(existing.stream().map(Contract::getId).toList());
+            booking.setContractId(existing.getFirst().getId());
             return;
         }
         List<RoomSlot> slots = bookingSlotIds(booking).stream().map(this::roomSlot).toList();
         Room room = room(slots.getFirst().getRoomId());
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(booking.getTenantId()).orElse(null);
-        contract.setRoomId(room.getId());
-        contract.setRoomSlotId(slots.getFirst().getId());
-        contract.setRoomSlotIds(bookingSlotIds(booking));
-        contract.setBookingId(booking.getId());
-        contract.setTenantId(booking.getTenantId());
-        contract.setManagerId(branchManagers.managerAccountId(room.getBranchId()).orElse(null));
-        contract.setContractNumber(contractService.nextContractNumber());
-        contract.setTenantName(tenant == null ? null : tenant.getFullName());
-        contract.setTenantIdNumber(tenant == null ? null : tenant.getIdCardNumber());
-        contract.setTenantAddress(tenant == null ? null : tenant.getAddress());
-        contract.setRoomAddress((branch == null ? "" : branch.getAddress() + " · ") + room.getRoomNumber());
-        contract.setRentPrice((room.getListedRentPrice() == null ? BigDecimal.ZERO : room.getListedRentPrice())
-                .multiply(BigDecimal.valueOf(slots.size())));
-        contract.setContractDepositAmount(booking.getHoldingDepositAmount());
-        contract.setMaxOccupants(slots.size());
-        contract.setTemplateDownloadUrl(contractTemplateDownloadUrl);
-        contract.setEvidenceDeadline(clock.instant().plusSeconds(72 * 60 * 60));
-        contract.setServices(booking.getSelectedServices().stream().map(service -> {
-            ContractServiceSnapshot snapshot = new ContractServiceSnapshot();
-            snapshot.setServiceId(service.getServiceId());
-            snapshot.setName(service.getName());
-            snapshot.setUnit(service.getUnit());
-            snapshot.setUnitPrice(service.getUnitPrice());
-            snapshot.setCalculationType(service.getCalculationType());
-            snapshot.setMandatory(service.isMandatory());
-            snapshot.setSelected(true);
-            snapshot.setQuantity(service.getQuantity());
-            return snapshot;
-        }).toList());
-        contract.setStatus(ContractStatus.DRAFT);
-        Contract saved = contractRepository.save(contract);
-        booking.setContractId(saved.getId());
+        String managerAccountId = branchManagers.managerAccountId(room.getBranchId()).orElse(null);
+        BigDecimal rent = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.rent(room);
+        BigDecimal deposit = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.deposit(room);
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < slots.size(); i++) {
+            RoomSlot slot = slots.get(i);
+            Contract contract = new Contract();
+            contract.setRoomId(room.getId());
+            contract.setRoomSlotId(slot.getId());
+            contract.setRoomSlotIds(List.of(slot.getId()));
+            contract.setBookingId(booking.getId());
+            contract.setTenantId(booking.getTenantId());
+            contract.setManagerId(managerAccountId);
+            contract.setContractNumber(contractService.nextContractNumber());
+            contract.setTenantName(tenant == null ? null : tenant.getFullName());
+            contract.setTenantIdNumber(tenant == null ? null : tenant.getIdCardNumber());
+            contract.setTenantAddress(tenant == null ? null : tenant.getAddress());
+            contract.setRoomAddress((branch == null ? "" : branch.getAddress() + " · ") + room.getRoomNumber()
+                    + " · Chỗ " + slot.getSlotCode());
+            contract.setRentPrice(rent == null ? BigDecimal.ZERO : rent);
+            contract.setContractDepositAmount(deposit);
+            contract.setMaxOccupants(1);
+            contract.setTemplateDownloadUrl(contractTemplateDownloadUrl);
+            contract.setEvidenceDeadline(clock.instant().plusSeconds(72 * 60 * 60));
+            if (i == 0) {
+                contract.setServices(booking.getSelectedServices().stream().map(service -> {
+                    ContractServiceSnapshot snapshot = new ContractServiceSnapshot();
+                    snapshot.setServiceId(service.getServiceId());
+                    snapshot.setName(service.getName());
+                    snapshot.setUnit(service.getUnit());
+                    snapshot.setUnitPrice(service.getUnitPrice());
+                    snapshot.setCalculationType(service.getCalculationType());
+                    snapshot.setMandatory(service.isMandatory());
+                    snapshot.setSelected(true);
+                    snapshot.setQuantity(service.getQuantity());
+                    return snapshot;
+                }).toList());
+            }
+            contract.setStatus(ContractStatus.DRAFT);
+            ids.add(contractRepository.save(contract).getId());
+        }
+        booking.setContractIds(ids);
+        booking.setContractId(ids.getFirst());
     }
 
     private void markLatePaid(String bookingId) {
@@ -848,6 +869,7 @@ public class BookingServiceImpl implements BookingService {
         User user = tenant == null ? null : userRepository.findByEmailAndIsDeletedFalse(tenant.getEmail()).orElse(null);
         return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), bookingSlotIds(b), slots.stream().map(RoomSlot::getSlotCode).toList(), b.getExpectedMoveInDate(),
                 b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(), b.getCheckInDeadline(), b.getContractId(),
+                b.getContractIds() == null ? List.of() : List.copyOf(b.getContractIds()),
                 b.getCancellationPolicy(), b.getDepositStatus(), b.getRejectReason(), b.getStatus(),
                 b.getTermsAcceptedAt(), b.getCreatedAt(), b.getUpdatedAt(), user == null ? b.getTenantId() : user.getId(),
                 tenant == null ? null : tenant.getFullName(), tenant == null ? null : tenant.getEmail(),

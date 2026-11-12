@@ -1,13 +1,13 @@
 import { ConfirmAction, InlineError, Notice, Page, Panel, QueryState, RecordStatus } from '@/components/common/page'
+import { ContractEvidencePanel } from './contract-evidence-panel'
 import { Button } from '@/components/ui/button'
-import { dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
+import { dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
-import { bookingService, contractService } from '@/services/guest-user'
+import { bookingService } from '@/services/guest-user'
 import { provider } from '@/services/config'
 import { useSession } from '@/features/auth/session-store'
 import { invalidateActivity } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Timeline } from './activity-shared'
 
@@ -15,10 +15,6 @@ export function BookingDetailPage() {
   const { bookingId = '' } = useParams()
   const user = useSession((state) => state.user)
   const canManage = user?.roles.some((role) => ['ADMIN', 'OWNER', 'MANAGER'].includes(role)) || false
-  const [evidenceUrl, setEvidenceUrl] = useState('')
-  const [termMonths, setTermMonths] = useState('3')
-  const [managerNote, setManagerNote] = useState('')
-  const [firstBillingStartDate, setFirstBillingStartDate] = useState('')
   const recordQuery = useQuery({
     queryKey: ['bookings', bookingId],
     queryFn: () => bookingService.get(bookingId),
@@ -26,40 +22,13 @@ export function BookingDetailPage() {
     refetchInterval: 15000,
   })
   const record = recordQuery.data
-  const contractQuery = useQuery({
-    queryKey: ['booking-contract', record?.contractId],
-    queryFn: () => contractService.get(record!.contractId!),
-    enabled: provider('leasing') === 'real' && Boolean(record?.contractId),
-  })
+  // One contract per booked slot; older bookings only have contractId.
+  const contractIds = record?.contractIds?.length ? record.contractIds : record?.contractId ? [record.contractId] : []
   const refresh = async () => {
     await invalidateActivity()
-    await Promise.all([recordQuery.refetch(), contractQuery.refetch()])
+    await recordQuery.refetch()
   }
   const cancel = useMutation({ mutationFn: () => bookingService.cancel(bookingId), onSuccess: refresh })
-  const submitEvidence = useMutation({
-    mutationFn: () => contractService.submitEvidence(record!.contractId!, {
-      evidenceUrl: evidenceUrl.trim(), termMonths: Number(termMonths),
-    }),
-    onSuccess: async () => { setEvidenceUrl(''); await refresh() },
-  })
-  const reviewEvidence = useMutation({
-    mutationFn: (approved: boolean) => contractService.reviewEvidence(record!.contractId!, {
-      approved,
-      ...(managerNote.trim() ? { note: managerNote.trim() } : {}),
-      ...(firstBillingStartDate ? { firstBillingStartDate } : {}),
-    }),
-    onSuccess: refresh,
-  })
-  const billingDateMinimum = contractQuery.data?.evidenceSubmittedAt
-    ? suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt)
-    : ''
-  const validFirstBillingStartDate = Boolean(
-    firstBillingStartDate && firstBillingStartDate >= billingDateMinimum && firstBillingStartDate.endsWith('-01'),
-  )
-  useEffect(() => {
-    if (contractQuery.data?.evidenceSubmittedAt)
-      setFirstBillingStartDate(suggestedFirstBillingStartDate(contractQuery.data.evidenceSubmittedAt))
-  }, [contractQuery.data?.evidenceSubmittedAt])
   if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/user/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
 
   return (
@@ -82,10 +51,9 @@ export function BookingDetailPage() {
           {record.status === 'AWAITING_PAYMENT' && <Notice tone="warning">Các slot được giữ trong 24 giờ. Thanh toán sau hạn không khôi phục booking và khoản tiền đến muộn sẽ chờ manager xử lý hoàn.</Notice>}
           {record.status === 'EXPIRED' && <Notice tone="warning">Booking đã hết hạn và slot đã được trả về inventory. Khoản thanh toán đến muộn cần được hoàn.</Notice>}
           {record.depositStatus === 'PROCESSING' && <Notice tone="warning">Khoản cọc đang được xử lý hoàn tiền.</Notice>}
-          {record.status === 'CONFIRMED' && <Notice tone="success">Đã nhận cọc. Hợp đồng tạm đã được tạo; tenancy chỉ kích hoạt sau khi manager duyệt bằng chứng.</Notice>}
+          {record.status === 'CONFIRMED' && <Notice tone="success">Đã nhận cọc chung cho {contractIds.length} chỗ. Mỗi chỗ có một hợp đồng riêng: ký, nộp bản ký và chờ quản lý duyệt từng hợp đồng; chỗ nào được duyệt thì vào được không gian thuê của chỗ đó.</Notice>}
           <div className="mt-6 flex flex-wrap gap-3">
             {!canManage && record.status === 'AWAITING_PAYMENT' && <Button asChild><Link to={`/user/bookings/${record.id}/payment`}>Thanh toán cọc</Link></Button>}
-            {record.contractId && <Button asChild variant="outline"><Link to={`/tenant/contracts/${record.contractId}`}>Mở hợp đồng tạm</Link></Button>}
             {['REQUESTED', 'AWAITING_PAYMENT'].includes(record.status) && <ConfirmAction
               label="Hủy giữ chỗ" title="Hủy giữ chỗ?" description="Các slot sẽ được giải phóng. Nếu đã thanh toán, khoản cọc sẽ được chuyển sang xử lý hoàn."
               pending={cancel.isPending} onConfirm={() => cancel.mutateAsync()} />}
@@ -95,37 +63,10 @@ export function BookingDetailPage() {
         </Panel>}
       </QueryState>
 
-      {record?.contractId && provider('leasing') === 'real' && <Panel className="mt-5">
-        <h2 className="text-lg font-bold">Hợp đồng tạm</h2>
-        <QueryState pending={contractQuery.isPending} error={contractQuery.error} retry={contractQuery.refetch}>
-          {contractQuery.data && <div className="mt-4 grid gap-5">
-            <p className="text-sm">{contractQuery.data.contractNumber} · {contractQuery.data.status} · {contractQuery.data.roomSlotIds?.length ?? 1} slot</p>
-            {contractQuery.data.templateDownloadUrl && <a className="text-sm text-primary underline" href={contractQuery.data.templateDownloadUrl} target="_blank" rel="noreferrer">Tải mẫu hợp đồng</a>}
-            {contractQuery.data.evidenceDeadline && <Notice>Hạn nộp evidence: {dateTime(contractQuery.data.evidenceDeadline)}</Notice>}
-            {contractQuery.data.evidenceNote && <Notice tone="warning">Manager yêu cầu gửi lại: {contractQuery.data.evidenceNote}</Notice>}
-            {contractQuery.data.evidenceSubmittedAt && <Notice>Evidence đã gửi lúc {dateTime(contractQuery.data.evidenceSubmittedAt)}; đang chờ manager duyệt.</Notice>}
-            {!canManage && contractQuery.data.status === 'DRAFT' && !contractQuery.data.evidenceSubmittedAt && <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); submitEvidence.mutate() }}>
-              <label className="grid gap-1 text-sm">Link ảnh/PDF hợp đồng đã ký<input className="input" type="url" required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} /></label>
-              <label className="grid gap-1 text-sm">Thời hạn hợp đồng<select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>{[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}</select></label>
-              <InlineError error={submitEvidence.error} />
-              <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>
-            </form>}
-            {canManage && contractQuery.data.evidenceSubmittedAt && <div className="grid gap-4">
-              {contractQuery.data.signedEvidenceUrl && <a className="text-sm text-primary underline" href={contractQuery.data.signedEvidenceUrl} target="_blank" rel="noreferrer">Xem evidence đã gửi</a>}
-              <label className="grid gap-1 text-sm">Ngày bắt đầu kỳ tính tiền đầu tiên<input className="input disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" type="date" required min={billingDateMinimum} value={firstBillingStartDate} disabled /></label>
-              <label className="grid gap-1 text-sm">Ghi chú / lý do gửi lại<textarea className="input min-h-20" value={managerNote} onChange={(event) => setManagerNote(event.target.value)} /></label>
-              <InlineError error={reviewEvidence.error} />
-              <div className="flex flex-wrap gap-3"><Button disabled={!validFirstBillingStartDate} loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(true)}>Duyệt evidence</Button><Button variant="outline" loading={reviewEvidence.isPending} onClick={() => reviewEvidence.mutate(false)}>Yêu cầu gửi lại</Button></div>
-            </div>}
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div><dt className="font-semibold">Giá thuê theo tháng</dt><dd>{formatVnd(contractQuery.data.rentPrice)}</dd></div>
-              <div><dt className="font-semibold">Tiền cọc</dt><dd>{formatVnd(contractQuery.data.contractDepositAmount)}</dd></div>
-              {contractQuery.data.startDate && <div><dt className="font-semibold">Hiệu lực</dt><dd>{contractQuery.data.startDate} → {contractQuery.data.endDate}</dd></div>}
-              {contractQuery.data.services.map((service) => <div key={service.serviceId}><dt className="font-semibold">{service.name}</dt><dd>{service.quantity ?? 'Theo chỉ số'} {service.unit} · {formatVnd(service.unitPrice)}</dd></div>)}
-            </dl>
-          </div>}
-        </QueryState>
-      </Panel>}
+      {provider('leasing') === 'real' && contractIds.map((contractId, index) => (
+        <ContractEvidencePanel key={contractId} contractId={contractId} index={contractIds.length > 1 ? index : undefined}
+          canManage={canManage} onChanged={refresh} />
+      ))}
     </Page>
   )
 }

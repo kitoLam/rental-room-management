@@ -23,6 +23,7 @@ public record BookingResponse(
         Instant holdExpiresAt,
         Instant checkInDeadline,
         String contractId,
+        List<String> contractIds,
         String cancellationPolicy,
         DepositStatus depositStatus,
         String rejectReason,

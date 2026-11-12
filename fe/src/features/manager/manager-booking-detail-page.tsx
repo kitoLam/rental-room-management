@@ -102,10 +102,12 @@ export function ManagerBookingDetail() {
                     Duyệt xử lý hoàn cọc
                   </Button>
                 )}
-                {query.data.contractId && (
-                  <ManagerLink to={`/manager/contracts/${query.data.contractId}`}>
-                    Mở hợp đồng
-                  </ManagerLink>
+                {(query.data.contractIds?.length ? query.data.contractIds : query.data.contractId ? [query.data.contractId] : []).map(
+                  (contractId, index, all) => (
+                    <ManagerLink key={contractId} to={`/manager/contracts/${contractId}`}>
+                      {all.length > 1 ? `Hợp đồng chỗ #${index + 1}` : 'Mở hợp đồng'}
+                    </ManagerLink>
+                  ),
                 )}
               </div>
             </Panel>
