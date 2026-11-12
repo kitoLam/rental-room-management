@@ -69,6 +69,7 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class ReportRequestServiceImpl implements ReportRequestService {
+    /** Đọc tóm tắt danh sách yêu cầu hỗ trợ theo tenantIds và contractId phục vụ màn hình tổng quan khách thuê. */
     @Override
     public java.util.List<TenantSupport> readForTenantOverview(java.util.List<String> tenantIds, String contractId) {
         if (tenantIds.isEmpty() || contractId == null) return java.util.List.of();
@@ -98,6 +99,12 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
 
+    /**
+     * Tenant/Owner tạo yêu cầu hỗ trợ mới:
+     * - Kiểm tra hợp đồng thuê còn hiệu lực và validate ảnh đính kèm.
+     * - Tự động gán Manager phụ trách theo hợp đồng/phòng/chi nhánh.
+     * - Lưu phiếu ở trạng thái PENDING, liên kết nội thất/dịch vụ (nếu có) và ghi nhật ký CREATED.
+     */
     @Override
     @Transactional
     public ReportRequestResponse create(ReportRequestCreateRequest request, AuthPrincipal principal) {
@@ -217,6 +224,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(saved.getId(), principal);
     }
 
+    /** Lấy chi tiết một yêu cầu hỗ trợ theo ID kèm toàn bộ timeline lịch sử xử lý (có kiểm tra quyền xem). */
     @Override
     public ReportRequestResponse getById(String id, AuthPrincipal principal) {
         ReportRequest report = findReport(id);
@@ -229,6 +237,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return buildResponse(report, timeline);
     }
 
+    /** Tìm kiếm, lọc và phân trang danh sách yêu cầu hỗ trợ theo phạm vi quyền của từng vai trò (Tenant/Manager/Owner/Admin). */
     @Override
     public PagedResponse<ReportRequestResponse> search(ReportRequestFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
         List<Criteria> baseFilterCriteria = MongoQueryHelper.baseCriteria();
@@ -322,6 +331,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }));
     }
 
+    /** Manager bắt đầu tiếp nhận và xử lý yêu cầu (chuyển từ PENDING hoặc WAITING_INFO sang IN_PROGRESS, gán người phụ trách). */
     @Override
     @Transactional
     public ReportRequestResponse startProcessing(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
@@ -388,6 +398,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager phân công hoặc thay đổi người phụ trách xử lý yêu cầu và ghi lịch sử ASSIGNED. */
     @Override
     @Transactional
     public ReportRequestResponse assign(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
@@ -438,6 +449,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager yêu cầu Tenant bổ sung thêm thông tin (chuyển từ PENDING/IN_PROGRESS sang WAITING_INFO). */
     @Override
     @Transactional
     public ReportRequestResponse requestInfo(String id, ReportRequestInfoRequest request, AuthPrincipal principal) {
@@ -469,6 +481,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant gửi bổ sung thông tin và ảnh minh chứng (chuyển từ WAITING_INFO quay lại PENDING để Manager tiếp nhận). */
     @Override
     @Transactional
     public ReportRequestResponse supplementInfo(String id, ReportRequestSupplementRequest request, AuthPrincipal principal) {
@@ -512,6 +525,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager từ chối yêu cầu hỗ trợ kèm lý do (chuyển từ PENDING/IN_PROGRESS/WAITING_INFO sang REJECTED). */
     @Override
     @Transactional
     public ReportRequestResponse reject(String id, ReportRequestRejectRequest request, AuthPrincipal principal) {
@@ -545,6 +559,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager cập nhật tiến độ và ảnh minh chứng trong quá trình xử lý (giữ/đưa về trạng thái IN_PROGRESS). */
     @Override
     @Transactional
     public ReportRequestResponse updateProgress(String id, ReportRequestProgressRequest request, AuthPrincipal principal) {
@@ -577,6 +592,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager hoàn thành xử lý, lưu kết quả giải quyết và thời điểm hoàn tất (chuyển sang RESOLVED). */
     @Override
     @Transactional
     public ReportRequestResponse resolve(String id, ReportRequestResolveRequest request, AuthPrincipal principal) {
@@ -611,6 +627,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant xem kết quả, xác nhận hài lòng và đóng phiếu yêu cầu (chuyển từ RESOLVED sang CLOSED). */
     @Override
     @Transactional
     public ReportRequestResponse confirmClose(String id, AuthPrincipal principal) {
@@ -642,6 +659,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant không hài lòng với kết quả nên yêu cầu mở lại xử lý (chuyển từ RESOLVED quay lại IN_PROGRESS). */
     @Override
     @Transactional
     public ReportRequestResponse reopen(String id, ReportRequestReopenRequest request, AuthPrincipal principal) {
@@ -675,6 +693,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     }
 
 
+    /** Tenant chủ động hủy yêu cầu khi chưa xử lý (từ PENDING hoặc WAITING_INFO sang CANCELLED). */
     @Override
     @Transactional
     public ReportRequestResponse cancel(String id, AuthPrincipal principal) {
@@ -705,6 +724,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Cập nhật thông tin chung của phiếu yêu cầu hỗ trợ (PATCH) khi phiếu chưa kết thúc. */
     @Override
     @Transactional
     public ReportRequestResponse update(String id, ReportRequestUpdateRequest request, AuthPrincipal principal) {
@@ -731,6 +751,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(updated.getId(), principal);
     }
 
+    /** Xóa mềm phiếu yêu cầu hỗ trợ (chỉ ADMIN, OWNER hoặc MANAGER). */
     @Override
     @Transactional
     public void delete(String id, AuthPrincipal principal) {
@@ -742,6 +763,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
 
     // ================= HELPER METHODS =================
 
+    /** Ghép dữ liệu hiển thị (tên phòng, slot, người phụ trách, tên khách thuê, timeline) thành ReportRequestResponse. */
     private ReportRequestResponse buildResponse(ReportRequest r, List<ReportRecordResponse> timeline) {
         String roomName = null;
         String slotName = null;
@@ -809,11 +831,13 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return ReportRequestResponse.from(r, timeline, roomName, slotName, assigneeName, assigneePhone, tenantName);
     }
 
+    /** Tìm phiếu yêu cầu chưa bị xóa mềm theo ID; ném NotFoundException nếu không tồn tại. */
     private ReportRequest findReport(String id) {
         return reportRequestRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy yêu cầu hỗ trợ với id: " + id));
     }
 
+    /** Kiểm tra giới hạn số lượng ảnh, định dạng (JPG/PNG/WebP), dung lượng base64 (tối đa 5 MB) và độ dài URL. */
     private void validateAttachments(List<String> attachments) {
         if (attachments == null || attachments.isEmpty()) {
             return;
@@ -848,6 +872,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Lấy tên hiển thị của người thực hiện thao tác từ AuthPrincipal hoặc dùng tên mặc định. */
     private String resolveActorName(AuthPrincipal principal, String defaultName) {
         if (principal == null) return defaultName;
         if (StringUtils.hasText(principal.fullName())) return principal.fullName();
@@ -855,6 +880,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return defaultName;
     }
 
+    /** Ghi một bản ghi lịch sử mới vào collection report_records cho mỗi thao tác thay đổi trên phiếu. */
     private void createRecord(String reportRequestId, String actorId, String actorRole, String actorName,
                               String managerId, ReportRecordAction action, ReportRequestStatus statusFrom,
                               ReportRequestStatus statusTo, String note, List<String> attachments) {
@@ -874,6 +900,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         reportRecordRepository.save(record);
     }
 
+    /** Xác định hồ sơ Tenant tương ứng với người dùng hiện tại (tự đồng bộ tạo mới Tenant từ User nếu chưa có). */
     private Tenant resolveTenant(AuthPrincipal principal, String inputTenantId) {
         if (principal != null && "TENANT".equals(principal.role())) {
             List<Tenant> existing = findTenantsByEmail(principal.email());
@@ -929,6 +956,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return tenantRepository.save(newTenant);
     }
 
+    /** Tìm hợp đồng thuê còn hiệu lực (ACTIVE/SIGNED) mà khách thuê là chủ hợp đồng hoặc thành viên ở ghép (ưu tiên theo roomId). */
     private Contract findActiveContract(String tenantId, String roomId) {
         try {
             if (!StringUtils.hasText(tenantId)) {
@@ -985,6 +1013,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Tự động xác định ID quản lý phụ trách theo thứ tự ưu tiên: hợp đồng -> phòng -> quản lý đang hoạt động của chi nhánh. */
     private String resolveManager(Room room, Contract contract) {
         try {
             if (contract != null && StringUtils.hasText(contract.getManagerId())) {
@@ -1004,6 +1033,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return null;
     }
 
+    /** Kiểm tra Tenant hiện tại có phải chủ sở hữu của phiếu yêu cầu hay không (ADMIN/MANAGER/OWNER được bỏ qua). */
     private void ensureTenantOwnsOrAdmin(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "MANAGER".equals(principal.role()) || "OWNER".equals(principal.role())) return;
@@ -1013,6 +1043,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Gom tất cả ID định danh có thể gắn với Tenant hiện tại (userId từ token và các tenantId trùng email). */
     private Set<String> collectTenantActorIds(AuthPrincipal principal) {
         Set<String> ids = new LinkedHashSet<>();
         if (principal == null) return ids;
@@ -1027,6 +1058,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return ids;
     }
 
+    /** Tìm danh sách hồ sơ Tenant theo email (khớp chính xác và khớp không phân biệt hoa thường). */
     private List<Tenant> findTenantsByEmail(String email) {
         if (!StringUtils.hasText(email)) return List.of();
         List<Tenant> results = new ArrayList<>();
@@ -1049,6 +1081,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return results;
     }
 
+    /** Tìm hồ sơ Manager chưa bị xóa theo email (hỗ trợ tìm không phân biệt hoa thường). */
     private Manager findManagerByEmail(String email) {
         if (!StringUtils.hasText(email)) return null;
         Manager direct = managerRepository.findByEmailAndIsDeletedFalse(email).orElse(null);
@@ -1064,6 +1097,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Tìm tài khoản User chưa bị xóa theo email (hỗ trợ tìm không phân biệt hoa thường). */
     private User findUserByEmail(String email) {
         if (!StringUtils.hasText(email)) return null;
         User direct = userRepository.findByEmailAndIsDeletedFalse(email).orElse(null);
@@ -1079,6 +1113,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Lấy danh sách ID các chi nhánh (Branch) thuộc sở hữu của Owner. */
     private List<String> findOwnerBranchIds(String ownerAccountId) {
         if (!StringUtils.hasText(ownerAccountId)) return List.of();
         try {
@@ -1094,6 +1129,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Bổ sung điều kiện lọc MongoDB theo danh sách branchId (khớp theo branchId trực tiếp hoặc roomId thuộc chi nhánh). */
     private void addBranchFilter(List<Criteria> target, List<String> branchIds) {
         if (branchIds == null || branchIds.isEmpty()) return;
         List<Criteria> branchMatch = new ArrayList<>();
@@ -1115,6 +1151,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 : new Criteria().orOperator(branchMatch.toArray(new Criteria[0])));
     }
 
+    /** Chuyển tập String ID sang danh sách gồm cả String và ObjectId (nếu hợp lệ) để query MongoDB không sót kiểu dữ liệu. */
     private List<Object> toIdValues(Collection<String> ids) {
         List<Object> values = new ArrayList<>();
         for (String id : ids) {
@@ -1127,6 +1164,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return values;
     }
 
+    /** Tra cứu họ tên khách thuê từ collection Tenant hoặc fallback sang User. */
     private String resolveTenantName(String tenantId) {
         if (!StringUtils.hasText(tenantId)) return null;
         try {
@@ -1143,6 +1181,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return null;
     }
 
+    /** Kiểm tra quyền xem chi tiết phiếu: Admin/Manager/Owner xem được, Tenant chỉ xem được phiếu của chính mình. */
     private void ensureCanView(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "MANAGER".equals(principal.role()) || "OWNER".equals(principal.role())) {
@@ -1153,6 +1192,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Kiểm tra người dùng hiện tại có thuộc vai trò quản lý (ADMIN, OWNER, MANAGER) được phép xử lý phiếu hay không. */
     private void ensureCanManage(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "OWNER".equals(principal.role()) || "MANAGER".equals(principal.role())) {
@@ -1161,6 +1201,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         throw new ForbiddenException("Vai trò hiện tại (" + principal.role() + ") không được phép thực hiện thao tác quản lý yêu cầu này.");
     }
 
+    /** Xác thực AuthPrincipal phải có một trong các vai trò được chỉ định, ngược lại ném ForbiddenException. */
     private void requireRole(AuthPrincipal principal, String... roles) {
         if (principal == null) return;
         for (String r : roles) {
@@ -1168,6 +1209,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
         throw new ForbiddenException("Vai trò hiện tại (" + principal.role() + ") không được phép thực hiện thao tác này.");
     }
+    /** Đọc nhanh danh sách tóm tắt yêu cầu hỗ trợ theo danh sách roomId phục vụ màn hình tổng quan. */
     @Override
     public List<OverviewReport> readForOverview(List<String> ids) {
         if (ids.isEmpty()) return List.of();

@@ -27,6 +27,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
     private final ReportRecordRepository reportRecordRepository;
     private final MongoTemplate mongoTemplate;
 
+    /** Tạo mới một bản ghi nhật ký / tiến độ xử lý cho phiếu yêu cầu hỗ trợ. */
     @Override
     public ReportRecordResponse create(ReportRecordCreateRequest request) {
         ReportRecord record = new ReportRecord();
@@ -47,6 +48,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return ReportRecordResponse.from(saved);
     }
 
+    /** Lấy chi tiết một bản ghi nhật ký xử lý báo cáo theo ID. */
     @Override
     public ReportRecordResponse getById(String id) {
         ReportRecord record = reportRecordRepository.findByIdAndIsDeletedFalse(id)
@@ -54,6 +56,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return ReportRecordResponse.from(record);
     }
 
+    /** Lấy toàn bộ dòng thời gian (timeline) lịch sử xử lý của một phiếu yêu cầu theo thứ tự thời gian tăng dần. */
     @Override
     public List<ReportRecordResponse> getByReportRequestId(String reportRequestId) {
         List<ReportRecord> records = reportRecordRepository
@@ -61,6 +64,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return records.stream().map(ReportRecordResponse::from).toList();
     }
 
+    /** Tìm kiếm và phân trang nhật ký xử lý theo phiếu, quản lý, người thao tác, hành động hoặc trạng thái. */
     @Override
     public PagedResponse<ReportRecordResponse> search(ReportRecordFilterRequest filter, Pageable pageable) {
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
@@ -77,6 +81,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return PagedResponse.from(page.map(ReportRecordResponse::from));
     }
 
+    /** Xóa mềm một bản ghi nhật ký xử lý báo cáo theo ID. */
     @Override
     public void delete(String id) {
         ReportRecord record = reportRecordRepository.findByIdAndIsDeletedFalse(id)
@@ -85,6 +90,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         reportRecordRepository.save(record);
     }
 
+    /** Đọc nhanh các sự kiện nhật ký theo danh sách reportRequestId trong khoảng [from, to) cho màn hình tổng quan. */
     @Override
     public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
         if (ids.isEmpty()) return java.util.List.of();
