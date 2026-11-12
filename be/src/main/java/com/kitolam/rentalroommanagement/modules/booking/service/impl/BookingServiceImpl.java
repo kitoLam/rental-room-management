@@ -46,11 +46,6 @@ import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepo
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
-import com.kitolam.rentalroommanagement.modules.serviceitem.document.ServiceItem;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.ServiceStatus;
-import com.kitolam.rentalroommanagement.modules.serviceitem.repository.ServiceItemRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import java.math.BigDecimal;
@@ -88,7 +83,7 @@ public class BookingServiceImpl implements BookingService {
     private final RoomRepository roomRepository;
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository roomSlotOccupancyRepository;
-    private final ServiceItemRepository serviceItemRepository;
+    private final com.kitolam.rentalroommanagement.modules.slotservice.repository.SlotServiceRepository slotServiceRepository;
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
@@ -153,7 +148,7 @@ public class BookingServiceImpl implements BookingService {
         Instant deadline = clock.instant().plusSeconds(24 * 60 * 60);
         booking.setPaymentDeadline(deadline);
         booking.setHoldExpiresAt(deadline);
-        booking.setSelectedServices(selectedServices(request.selectedServices(), slotIds.size()));
+        booking.setSelectedServices(selectedServices(request.selectedServices(), room(roomId).getBranchId()));
         booking.setStatus(BookingStatus.AWAITING_PAYMENT);
         booking.setDepositStatus(DepositStatus.UNPAID);
         Booking saved = saveTransition(booking, null, "Đã giữ các slot trong 24 giờ; đang chờ thanh toán cọc.");
@@ -645,53 +640,32 @@ public class BookingServiceImpl implements BookingService {
         return bookingSlotIds(booking).stream().map(slotId -> reservation(booking, slotId)).toList();
     }
 
-    private List<SelectedServiceSnapshot> selectedServices(List<BookingCreateRequest.SelectedServiceRequest> requested, int slotCount) {
-        Map<String, Integer> quantities = new java.util.LinkedHashMap<>();
-        if (requested != null) requested.forEach(item -> {
-            if (quantities.containsKey(item.serviceId())) throw new BadRequestException("Không được chọn lặp dịch vụ");
-            quantities.put(item.serviceId(), item.quantity());
-        });
+    /**
+     * Optional services picked while booking, taken from the branch's slot service catalog.
+     * They are only a wish list: the contract starts using them once staff activate the contract.
+     */
+    private List<SelectedServiceSnapshot> selectedServices(List<BookingCreateRequest.SelectedServiceRequest> requested, String branchId) {
         List<SelectedServiceSnapshot> selected = new ArrayList<>();
-        Set<String> consumed = new HashSet<>();
-        List<ServiceItem> catalog = serviceItemRepository.findAll().stream()
-                .filter(item -> !Boolean.TRUE.equals(item.getIsDeleted()) && item.getStatus() == ServiceStatus.ACTIVE).toList();
-        for (ServiceItem item : catalog) {
-            Integer input = quantities.get(item.getId());
-            if (!item.isMandatory() && input == null) continue;
-            if (item.getUnit() != null && "lần".equalsIgnoreCase(item.getUnit().trim())) continue;
-            QuantityRule rule = item.getQuantityRule();
-            if (rule == null) rule = switch (item.getCalculationType()) {
-                case METERED -> QuantityRule.METERED;
-                case PER_SLOT, PER_PERSON -> QuantityRule.PER_SLOT;
-                default -> QuantityRule.FIXED_ONE;
-            };
-            Integer quantity = switch (rule) {
-                case METERED -> null;
-                case PER_SLOT -> slotCount;
-                case FIXED_ONE -> 1;
-                case USER_INPUT -> {
-                    if (input == null) throw new BadRequestException("Cần nhập số lượng cho dịch vụ " + item.getName());
-                    if (input > slotCount) throw new BadRequestException("Số lượng dịch vụ không được vượt số slot đã chọn");
-                    if (input == 0 && item.isMandatory()) throw new BadRequestException("Dịch vụ bắt buộc không thể có số lượng bằng 0");
-                    yield input;
-                }
-            };
-            consumed.add(item.getId());
-            if (quantity != null && quantity == 0) continue;
+        if (requested == null || requested.isEmpty()) return selected;
+        Set<String> seen = new HashSet<>();
+        for (BookingCreateRequest.SelectedServiceRequest item : requested) {
+            if (!seen.add(item.serviceId())) throw new BadRequestException("Không được chọn lặp dịch vụ");
+            if (item.quantity() != null && item.quantity() == 0) continue;
+            var service = slotServiceRepository.findByIdAndIsDeletedFalse(item.serviceId())
+                    .filter(s -> s.getStatus() == com.kitolam.rentalroommanagement.modules.slotservice.enums.SlotServiceStatus.ACTIVE)
+                    .filter(s -> branchId.equals(s.getBranchId()))
+                    .orElseThrow(() -> new BadRequestException("Có dịch vụ không tồn tại hoặc đã ngừng cung cấp"));
             SelectedServiceSnapshot snapshot = new SelectedServiceSnapshot();
-            snapshot.setServiceId(item.getId());
-            snapshot.setName(item.getName());
-            snapshot.setUnit(item.getUnit() != null && "người/tháng".equalsIgnoreCase(item.getUnit().trim())
-                    ? "slot/tháng" : item.getUnit());
-            snapshot.setUnitPrice(item.getUnitPrice());
-            snapshot.setCalculationType(item.getCalculationType());
-            snapshot.setQuantityRule(rule);
-            snapshot.setMandatory(item.isMandatory());
-            snapshot.setQuantity(quantity);
+            snapshot.setServiceId(service.getId());
+            snapshot.setName(service.getName());
+            snapshot.setUnit(service.getUnit());
+            snapshot.setUnitPrice(service.getUnitPrice());
+            snapshot.setCalculationType("FIXED");
+            snapshot.setQuantityRule("USER_INPUT");
+            snapshot.setMandatory(false);
+            snapshot.setQuantity(item.quantity() == null ? 1 : item.quantity());
             selected.add(snapshot);
         }
-        if (!consumed.containsAll(quantities.keySet()))
-            throw new BadRequestException("Có dịch vụ không tồn tại hoặc đã ngừng cung cấp");
         return selected;
     }
 
@@ -728,7 +702,7 @@ public class BookingServiceImpl implements BookingService {
             snapshot.setName(service.getName());
             snapshot.setUnit(service.getUnit());
             snapshot.setUnitPrice(service.getUnitPrice());
-            snapshot.setCalculationType(service.getCalculationType() == null ? null : service.getCalculationType().name());
+            snapshot.setCalculationType(service.getCalculationType());
             snapshot.setMandatory(service.isMandatory());
             snapshot.setSelected(true);
             snapshot.setQuantity(service.getQuantity());

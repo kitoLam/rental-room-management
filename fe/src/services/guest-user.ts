@@ -93,9 +93,7 @@ const publicServiceSchema = z.object({
   name: z.string(),
   unit: z.string(),
   unitPrice: z.coerce.number(),
-  calculationType: z.string(),
-  quantityRule: z.enum(['FIXED_ONE', 'PER_SLOT', 'USER_INPUT', 'METERED']).nullable().optional(),
-  mandatory: z.boolean(),
+  description: z.string().nullish(),
 })
 const publicRoomSchema = z.object({
   utilityRates: utilityRatesSchema.nullish(),
@@ -234,26 +232,21 @@ export const catalogService = {
         calculationType: s.calculationType ?? 'FIXED',
         quantityRule: 'FIXED_ONE',
       }))
+    // Dịch vụ tự chọn của chi nhánh: khách chọn trước khi đặt, kích hoạt khi hợp đồng có hiệu lực.
     const items = await request(
       'catalog',
-      `/api/v1/public/services?${new URLSearchParams({ serviceScope: 'SLOT' })}`,
+      `/api/v1/public/branches/${encodeURIComponent(room.branchId)}/slot-services`,
       z.array(publicServiceSchema),
     )
-    return items.map((s) => {
-      const unit = s.unit.trim().toLocaleLowerCase('vi-VN') === 'người/tháng' ? 'slot/tháng' : s.unit
-      return {
-        id: s.id,
-        name: s.name,
-        unit,
-        price: s.unitPrice,
-        mandatory: s.mandatory,
-        calculationType: s.calculationType,
-        quantityRule: s.quantityRule ?? (s.calculationType === 'METERED' ? 'METERED'
-          : ['PER_SLOT', 'PER_PERSON'].includes(s.calculationType) ? 'PER_SLOT'
-            : ['xe/tháng', 'chỗ/tháng'].includes(unit.trim().toLocaleLowerCase('vi-VN')) ? 'USER_INPUT'
-              : 'FIXED_ONE'),
-      }
-    })
+    return items.map((s) => ({
+      id: s.id,
+      name: s.name,
+      unit: s.unit,
+      price: s.unitPrice,
+      mandatory: false,
+      calculationType: 'FIXED',
+      quantityRule: 'USER_INPUT',
+    }))
   },
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }

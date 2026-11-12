@@ -418,17 +418,17 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'services',
+                path: 'room-services',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-services-page'))
-                    .ManagerServices,
+                  Component: (await import('@/features/manager/manager-service-catalog-page'))
+                    .ManagerRoomServiceCatalog,
                 }),
               },
               {
-                path: 'room-services',
+                path: 'slot-services',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-room-services-page'))
-                    .ManagerRoomServices,
+                  Component: (await import('@/features/manager/manager-service-catalog-page'))
+                    .ManagerSlotServiceCatalog,
                 }),
               },
               {
@@ -497,8 +497,8 @@ export const router = createBrowserRouter([
               {
                 path: 'service-requests',
                 lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-service-requests-page'))
-                    .ManagerServiceRequests,
+                  Component: (await import('@/features/manager/manager-slot-service-requests-page'))
+                    .ManagerSlotServiceRequests,
                 }),
               },
               {
@@ -679,7 +679,7 @@ export const router = createBrowserRouter([
               {
                 path: 'services',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/services-page')).ServicesPage,
+                  Component: (await import('@/features/tenant/slot-services-page')).SlotServicesPage,
                 }),
               },
               {

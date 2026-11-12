@@ -136,23 +136,26 @@ export const tenantApi = {
     ),
   services: async (id: string): Promise<TenantService[]> => {
     if (provider('utilities') === 'real') {
-      // BE tự xác định phòng / chỗ của người thuê từ token, FE không gửi roomId / contractId.
-      const items = await utilitiesService.serviceRequests.catalog()
-      return items.map((s) => ({
-        id: s.serviceId,
-        name: s.name,
-        mandatory: false,
-        unit: s.unit,
-        unitPrice: s.subscription?.unitPrice ?? s.unitPrice,
-        subscriptionId: s.subscription?.id ?? null,
-        requestId: s.openRequest?.id ?? null,
-        status: s.displayStatus,
-        allowedActions: s.allowedActions,
-        startDate: s.subscription?.startDate ?? s.openRequest?.proposedDate ?? null,
-        endDate: s.subscription?.endDate ?? null,
-        note: '',
-        history: [],
-      }))
+      // Dịch vụ tự chọn đang dùng trên các hợp đồng đang hiệu lực của người thuê.
+      const { serviceCatalogApi, isInUse } = await import('./service-catalog')
+      const contracts = await serviceCatalogApi.myContracts()
+      return contracts
+        .filter((c) => c.status === 'ACTIVE')
+        .flatMap((c) => (c.activeSlotServices || []).filter((s) => isInUse(s)))
+        .map((s) => ({
+          id: s.slotServiceId,
+          name: s.name || 'Dịch vụ',
+          mandatory: false,
+          unit: s.unit || '',
+          unitPrice: s.unitPrice ?? 0,
+          subscriptionId: null,
+          requestId: null,
+          status: 'APPROVED' as const,
+          startDate: s.startDate ?? null,
+          endDate: s.endDate ?? null,
+          note: '',
+          history: [],
+        }))
     }
     return request('tenant', path(id, 'services'), z.array(serviceSchema))
   },

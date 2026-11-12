@@ -52,6 +52,7 @@ public record ContractResponse(
         Instant terminatedAt,
         String terminationReason,
         ContractStatus status,
+        List<com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService> activeSlotServices,
         Instant createdAt,
         Instant updatedAt
 ) {

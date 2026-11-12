@@ -550,7 +550,9 @@ public class ContractServiceImpl implements ContractService {
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
                 c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getTemplateDownloadUrl(),
-                c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
+                c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(),
+                c.getActiveSlotServices() == null ? List.of() : List.copyOf(c.getActiveSlotServices()),
+                c.getCreatedAt(), c.getUpdatedAt());
     }
 
     private void addEvidenceHistory(Contract contract, String action, Instant at, String note) {

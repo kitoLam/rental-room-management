@@ -26,7 +26,7 @@ const nav = [
   ['/tenant/contracts', 'Hợp đồng', FileText],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
   ['/tenant/payments', 'Thanh toán', Wallet],
-  ['/tenant/services', 'Dịch vụ', Plug],
+  ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Điện & nước', Droplets],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
 ] as const

@@ -49,8 +49,8 @@ const groups = [
   {
     label: 'Dịch vụ & vận hành',
     items: [
-      ['services', 'Dịch vụ', Plug],
-      ['room-services', 'Dịch vụ phòng', Plug],
+      ['room-services', 'Dịch vụ theo phòng', Plug],
+      ['slot-services', 'Dịch vụ tự chọn', Plug],
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
       ['utility-charges', 'Điện nước', Droplets],
       ['cost-allocations', 'Phân bổ phí', Scale],

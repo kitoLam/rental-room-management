@@ -84,6 +84,9 @@ public class Contract extends BaseDocument {
 
     private List<ContractServiceSnapshot> services = new ArrayList<>();
 
+    /** Optional services in use, managed through slot service requests. */
+    private List<ActiveSlotService> activeSlotServices = new ArrayList<>();
+
     private Integer paymentDueDay;
 
     private String terms;
