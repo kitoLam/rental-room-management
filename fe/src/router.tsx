@@ -772,6 +772,18 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'user/payments',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/my-payments-page')).default,
+                }),
+              },
+              {
+                path: 'user/contracts',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/my-contracts-page')).default,
+                }),
+              },
+              {
                 path: 'notifications',
                 lazy: async () => ({
                   Component: (await import('@/features/user/notifications-page')).default,

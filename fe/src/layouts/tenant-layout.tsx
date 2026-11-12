@@ -63,12 +63,12 @@ export function TenantLayout() {
       <Container className="py-10">
         <Notice tone="warning">
           {waiting > 0
-            ? `Bạn có ${waiting} hợp đồng chưa được duyệt. Hãy nộp bản ký trong Hồ sơ → Hợp đồng; quản lý duyệt xong bạn mới vào được không gian thuê.`
+            ? `Bạn có ${waiting} hợp đồng chưa được duyệt. Hãy nộp bản ký ở mục Hợp đồng; quản lý duyệt xong bạn mới vào được không gian thuê.`
             : 'Bạn chưa có hợp đồng thuê nào đang hiệu lực.'}
         </Notice>
         <div className="mt-5 flex flex-wrap gap-3">
           <Button asChild>
-            <Link to="/profile?tab=contracts">Mở hợp đồng của tôi</Link>
+            <Link to="/user/contracts">Mở hợp đồng của tôi</Link>
           </Button>
           <Button asChild variant="outline">
             <Link to="/rooms">Tìm phòng</Link>

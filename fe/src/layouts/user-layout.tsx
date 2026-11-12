@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router'
-import { CalendarDays, House, KeyRound, UserRound } from 'lucide-react'
+import { CalendarDays, CreditCard, FileSignature, House, KeyRound, UserRound } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/features/auth/session-store'
@@ -18,6 +18,12 @@ export function UserLayout() {
               { to: dashboardPath(user?.roles ?? []), label: 'Tổng quan', icon: House },
               { to: viewingAppointmentsPath(user?.roles ?? [], { branchId }), label: 'Lịch xem phòng', icon: CalendarDays },
               { to: '/user/bookings', label: 'Giữ chỗ', icon: KeyRound },
+              ...(user?.roles.includes('TENANT')
+                ? [
+                    { to: '/user/payments', label: 'Thanh toán', icon: CreditCard },
+                    { to: '/user/contracts', label: 'Hợp đồng', icon: FileSignature },
+                  ]
+                : []),
               { to: '/profile', label: 'Hồ sơ', icon: UserRound },
             ].map(({ to, label, icon: Icon }) => (
               <NavLink
