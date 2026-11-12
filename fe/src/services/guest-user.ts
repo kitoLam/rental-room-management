@@ -628,7 +628,7 @@ export const contractService = {
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
-    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema, write('POST', value)),
+    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
 }
 export const profileService = {
   get: async (): Promise<User> => {

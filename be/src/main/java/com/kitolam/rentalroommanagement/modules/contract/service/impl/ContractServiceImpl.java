@@ -68,6 +68,9 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -288,6 +291,8 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Chỉ hợp đồng đang hiệu lực mới gia hạn được");
         if (contract.getEndDate() == null)
             throw new ConflictException("Hợp đồng chưa có ngày kết thúc để gia hạn");
+        if (contract.getEndDate().isBefore(LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE)))
+            throw new ConflictException("Hợp đồng đã hết hạn");
         if (contract.getRenewedToContractId() != null)
             throw new ConflictException("Hợp đồng này đã được gia hạn");
         // Slot đã có người đặt cho giai đoạn sau khi hợp đồng này kết thúc?
@@ -297,10 +302,12 @@ public class ContractServiceImpl implements ContractService {
         LocalDate newStart = contract.getEndDate().plusDays(1);
         LocalDate newEnd = newStart.plusMonths(termMonths);
         Contract renewal = copyForRenewal(contract, newStart, newEnd);
+        renewal.setTermMonths(termMonths);
         String renewalId = renewal.getId();
         // Atomic claim: chỉ một request chuyển được renewedToContractId từ null -> renewalId.
         Contract claimed = mongoTemplate.findAndModify(
-                Query.query(Criteria.where("_id").is(new ObjectId(id)).and("renewedToContractId").is(null)),
+                Query.query(Criteria.where("_id").is(new ObjectId(id))
+                        .and("status").is(ContractStatus.ACTIVE).and("renewedToContractId").is(null)),
                 new Update().set("renewedToContractId", renewalId).set("updatedAt", clock.instant()),
                 FindAndModifyOptions.options().returnNew(true), Contract.class);
         if (claimed == null) throw new ConflictException("Hợp đồng này đã được gia hạn");
@@ -376,7 +383,6 @@ public class ContractServiceImpl implements ContractService {
         c.setServices(old.getServices() == null ? new ArrayList<>() : new ArrayList<>(old.getServices()));
         c.setActiveSlotServices(new ArrayList<>());
         c.setContractUrl(old.getContractUrl());
-        c.setTermMonths(old.getTermMonths());
         c.setFirstBillingStartDate(null);
         c.setStatus(ContractStatus.ACTIVE);
         c.setRenewedFromContractId(old.getId());
@@ -455,9 +461,13 @@ public class ContractServiceImpl implements ContractService {
     @Override
     public ContractResponse getById(String id, AuthPrincipal principal) {
         Contract contract = find(id);
-        if (principal != null && "TENANT".equals(principal.role())) requireTenant(contract, principal);
-        else requireManager(room(contract.getRoomId()), principal);
-        return response(contract);
+        if (principal != null && "TENANT".equals(principal.role())) {
+            requireTenant(contract, principal);
+            return response(contract);
+        }
+        Room contractRoom = room(contract.getRoomId());
+        requireManager(contractRoom, principal);
+        return response(contract, roomName(contractRoom));
     }
 
     @Override
@@ -472,7 +482,7 @@ public class ContractServiceImpl implements ContractService {
         if ("TENANT".equals(principal.role())) {
             Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
             if (tenant == null) {
-                return PagedResponse.from(org.springframework.data.domain.Page.empty(pageable), this::response);
+                return PagedResponse.from(org.springframework.data.domain.Page.<Contract>empty(pageable), this::response);
             }
             List<Criteria> ownership = new ArrayList<>();
             ownership.add(new Criteria().orOperator(
@@ -487,9 +497,12 @@ public class ContractServiceImpl implements ContractService {
             List<String> branchIds = "OWNER".equals(principal.role())
                     ? new ArrayList<>(branchAccess.ownedBranchIds(principal.userId()))
                     : branchAccess.managedBranches(principal).stream().map(com.kitolam.rentalroommanagement.modules.branch.dto.response.BranchResponse::id).toList();
-            List<String> roomIds = roomRepository.findByBranchIdInAndIsDeletedFalse(branchIds).stream().map(Room::getId).toList();
-            if (roomIds.isEmpty()) criteria.add(Criteria.where("roomId").exists(false));
-            else criteria.add(Criteria.where("roomId").in(roomIds.stream().map(MongoQueryHelper::toObjectId).toList()));
+            Map<String, Room> roomsById = roomRepository.findByBranchIdInAndIsDeletedFalse(branchIds).stream()
+                    .collect(Collectors.toMap(Room::getId, Function.identity()));
+            if (roomsById.isEmpty()) criteria.add(Criteria.where("roomId").exists(false));
+            else criteria.add(Criteria.where("roomId").in(roomsById.keySet().stream().map(MongoQueryHelper::toObjectId).toList()));
+            return PagedResponse.from(MongoQueryHelper.page(mongoTemplate, criteria, pageable, Contract.class),
+                    contract -> response(contract, roomName(roomsById.get(contract.getRoomId()))));
         }
         return PagedResponse.from(MongoQueryHelper.page(mongoTemplate, criteria, pageable, Contract.class), this::response);
     }
@@ -590,6 +603,15 @@ public class ContractServiceImpl implements ContractService {
     }
 
     private ContractResponse response(Contract c) {
+        return response(c, null);
+    }
+
+    private String roomName(Room room) {
+        if (room == null) return null;
+        return room.getTitle() == null || room.getTitle().isBlank() ? room.getRoomNumber() : room.getTitle();
+    }
+
+    private ContractResponse response(Contract c, String roomName) {
         List<ContractEvidenceHistoryEntry> evidenceHistory = c.getEvidenceHistory() == null
                 ? new ArrayList<>() : new ArrayList<>(c.getEvidenceHistory());
         if (evidenceHistory.isEmpty()) {
@@ -602,7 +624,7 @@ public class ContractServiceImpl implements ContractService {
                 evidenceHistory.add(new ContractEvidenceHistoryEntry("RESUBMISSION_REQUESTED", c.getUpdatedAt(), c.getEvidenceNote()));
             }
         }
-        return new ContractResponse(c.getId(), c.getRoomId(), c.getRoomSlotId(), c.getRoomSlotIds() == null ? List.of() : List.copyOf(c.getRoomSlotIds()),
+        return new ContractResponse(c.getId(), c.getRoomId(), roomName, c.getRoomSlotId(), c.getRoomSlotIds() == null ? List.of() : List.copyOf(c.getRoomSlotIds()),
                 c.getBookingId(), c.getTenantId(), c.getManagerId(),
                 c.getContractNumber(), c.getStartDate(), c.getEndDate(), c.getRentPrice(), c.getContractDepositAmount(),
                 c.getLandlordName(), c.getLandlordIdNumber(), c.getLandlordAddress(), c.getTenantName(), c.getTenantIdNumber(),
@@ -615,7 +637,7 @@ public class ContractServiceImpl implements ContractService {
                 c.getActiveSlotServices() == null ? List.of() : List.copyOf(c.getActiveSlotServices()),
                 com.kitolam.rentalroommanagement.modules.contract.service.support.ContractExpirySupport
                         .isExpiringSoon(c, LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE)),
-                c.getCreatedAt(), c.getUpdatedAt());
+                c.getRenewedFromContractId(), c.getRenewedToContractId(), c.getCreatedAt(), c.getUpdatedAt());
     }
 
     @Override
