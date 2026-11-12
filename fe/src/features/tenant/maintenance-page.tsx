@@ -19,7 +19,12 @@ export function MaintenancePage() {
       }
       return roles.includes('TENANT') || roles.includes('OWNER')
     }),
-    query = useTenantQuery('maintenance', tenantApi.reports, [], true),
+    query = useTenantQuery(
+      'maintenance',
+      (tenancyId) => tenantApi.reports(tenancyId, t?.roomId),
+      [t?.roomId],
+      true,
+    ),
     [state, setState] = useState(''),
     [category, setCategory] = useState(''),
     [page, setPage] = useState(1)

@@ -76,7 +76,6 @@ export function ManagerMaintenanceDetail() {
           ['progress', 'Cập nhật tiến độ'],
           ['resolve', 'Báo kết quả giải quyết'],
           ['request-info', 'Yêu cầu bổ sung'],
-          ['reject', 'Từ chối'],
         ]
       case 'WAITING_INFO':
         return [

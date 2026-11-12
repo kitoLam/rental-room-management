@@ -107,7 +107,7 @@ export function PaymentsPage() {
       >
         <Panel>
           {rows.slice((current - 1) * 6, current * 6).map((p) => (
-            <PaymentRow key={p.id} payment={p} onOpen={() => show(p.id)} />
+            <PaymentRow key={p.id} payment={p} />
           ))}
         </Panel>
         <Pagination page={current} totalPages={pages} onPage={setPage} />

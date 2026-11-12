@@ -252,5 +252,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  if (
+    matches('/api/v1/public/upload(/multiple)?') &&
+    ['POST', 'DELETE'].includes(verb)
+  )
+    return null
+
   return 'Chức năng này hiện chưa khả dụng. Vui lòng thử lại khi có thông báo cập nhật.'
 }
