@@ -341,13 +341,7 @@ export default function RoomDetailPage() {
                             <span className="grid gap-0.5 leading-snug">
                               <span className="font-medium">{s.label}</span>
                               {!s.available ? (
-                                s.availableFrom ? (
-                                  <span className="text-xs text-warning">
-                                    Đang thuê · nhận phòng từ {dateOnly(s.availableFrom)}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">Đã kín</span>
-                                )
+                                <span className="text-xs text-muted-foreground">Đã được đặt</span>
                               ) : s.availableFrom ? (
                                 <span className="text-xs text-muted-foreground">
                                   Từ {dateOnly(s.availableFrom)}

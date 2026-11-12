@@ -49,6 +49,7 @@ const backendContractDto = z.object({
   electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
   electricityRate: z.number().nullable().optional(), waterRate: z.number().nullable().optional(), parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
+  expiringSoon: z.boolean().optional(), renewedFromContractId: z.string().nullable().optional(), renewedToContractId: z.string().nullable().optional(),
   services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
 }).passthrough()
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
@@ -67,6 +68,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     firstBillingStartDate: value.firstBillingStartDate, evidenceSubmittedAt: value.evidenceSubmittedAt,
     evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
     evidenceNote: value.evidenceNote, contractUrl: value.contractUrl,
+    expiringSoon: value.expiringSoon, renewedFromContractId: value.renewedFromContractId, renewedToContractId: value.renewedToContractId,
     rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
@@ -967,7 +969,6 @@ export const managerApi = {
       }
     }
     if (resource === 'bookings' && provider('manager') === 'real' && id) {
-      if (action === 'convert') return contractService.createDraftFromBooking(id, value)
       if (action === 'reconcile') {
         const v = value as { paymentId: string; successful: boolean; reason: string }
         return bookingService.reconcile(id, v.paymentId, v.successful, v.reason)
@@ -982,6 +983,8 @@ export const managerApi = {
     }
     if (resource === 'contracts' && provider('manager') === 'real' && id && action === 'review-evidence')
       return contractService.reviewEvidence(id, value as { approved: boolean; note?: string; firstBillingStartDate?: string })
+    if (resource === 'contracts' && provider('manager') === 'real' && id && action === 'renew')
+      return contractService.renewContract(id, value as { termMonths: number })
     if (resource === 'services' && provider('utilities') === 'real') {
       if (method === 'DELETE' && id) {
         await utilitiesService.catalog.delete(id)

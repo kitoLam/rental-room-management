@@ -133,7 +133,6 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST') ||
       (matches('/api/v1/contracts') && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
-      (matches(`/api/v1/contracts/from-booking/${id}`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence/review`) && verb === 'POST') ||
       (matches('/api/v1/contract-tenants') && ['GET', 'POST'].includes(verb)) ||

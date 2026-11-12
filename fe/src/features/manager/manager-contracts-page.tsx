@@ -1,6 +1,6 @@
 import { dateOnly } from '@/lib/activity'
 import { useState } from 'react'
-import { ManagerLink, ManagerPage, ManagerStatus, Records, SearchBox } from './components'
+import { ManagerLink, ManagerPage, ManagerStatus, Records, SearchBox, ExpiringSoonBadge } from './components'
 import { useManagerList } from './context'
 
 export function ManagerContracts() {
@@ -9,14 +9,7 @@ export function ManagerContracts() {
     [page, setPage] = useState(1),
     query = useManagerList('contracts', { q, status, page: String(page - 1) }, true)
   return (
-    <ManagerPage
-      title="Hợp đồng thuê"
-      actions={
-        <ManagerLink to="/manager/bookings" button>
-          Tạo hợp đồng từ booking đã xác nhận
-        </ManagerLink>
-      }
-    >
+    <ManagerPage title="Hợp đồng thuê">
       <div className="flex flex-wrap gap-3">
         <SearchBox
           value={q}
@@ -77,7 +70,12 @@ export function ManagerContracts() {
               </>
             ),
           },
-          { label: 'Trạng thái', render: (c) => <ManagerStatus value={c.status} /> },
+          { label: 'Trạng thái', render: (c) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <ManagerStatus value={c.status} />
+              {c.expiringSoon && <ExpiringSoonBadge />}
+            </div>
+          ) },
         ]}
       />
     </ManagerPage>

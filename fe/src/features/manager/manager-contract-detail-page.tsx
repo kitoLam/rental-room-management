@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { z } from 'zod'
-import { ActionDialog, ManagerForm, ManagerLink, ManagerPage } from './components'
+import { ActionDialog, ManagerForm, ManagerLink, ManagerPage, ManagerStatus, ExpiringSoonBadge } from './components'
 import { useManagerAction, useManagerQuery } from './context'
 import { History } from './leasing-shared'
 export function ManagerContractDetail() {
@@ -49,7 +49,11 @@ export function ManagerContractDetail() {
         {query.data && (
           <>
             <Panel>
-              <h2 className="mb-5 text-xl font-bold">{query.data.code}</h2>
+              <div className="mb-5 flex flex-wrap items-center gap-3">
+                <h2 className="text-xl font-bold">{query.data.code}</h2>
+                <ManagerStatus value={query.data.status} />
+                {query.data.expiringSoon && <ExpiringSoonBadge />}
+              </div>
               <Facts
                 items={[
                   [
@@ -106,6 +110,9 @@ export function ManagerContractDetail() {
                     <Button onClick={() => setAction('check-in')}>Ghi nhận bàn giao và ký giấy</Button>
                   </>
                 )}
+                {query.data.status === 'ACTIVE' && !query.data.renewedToContractId && (
+                  <Button onClick={() => setAction('renew')}>Gia hạn</Button>
+                )}
                 {query.data.status === 'ACTIVE' && (
                   <Button variant="outline" onClick={() => setAction('end')}>
                     Kết thúc khi hết hạn
@@ -125,7 +132,20 @@ export function ManagerContractDetail() {
           </>
         )}
       </QueryState>
-      {action === 'check-in' ? <Modal title="Bàn giao và lưu hợp đồng đã ký" open onOpenChange={(open) => !open && setAction('')}>
+      {action === 'renew' ? <Modal title="Gia hạn hợp đồng" open onOpenChange={(open) => !open && setAction('')}>
+        <ManagerForm
+          schema={z.object({ termMonths: z.enum(['3', '6', '8', '12']) })}
+          defaults={{ termMonths: '3' }}
+          fields={[{
+            name: 'termMonths', label: 'Số tháng gia hạn', kind: 'select',
+            options: [{ value: '3', label: '3 tháng' }, { value: '6', label: '6 tháng' }, { value: '8', label: '8 tháng' }, { value: '12', label: '12 tháng' }],
+          }]}
+          pending={mutation.isPending}
+          error={mutation.error}
+          submitLabel="Xác nhận gia hạn"
+          onSubmit={(value) => mutation.mutate({ resource: 'contracts', id: contractId, action: 'renew', value: { termMonths: Number(value.termMonths) } })}
+        />
+      </Modal> : action === 'check-in' ? <Modal title="Bàn giao và lưu hợp đồng đã ký" open onOpenChange={(open) => !open && setAction('')}>
         <ManagerForm
           schema={z.object({ signedFileUrl: z.string().url() })}
           defaults={{ signedFileUrl: '' }}

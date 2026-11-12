@@ -618,8 +618,6 @@ export const bookingService = {
     adaptBooking(await request('manager', `/api/v1/bookings/${id}/refund/approve`, backendBookingSchema, write('POST'))),
 }
 export const contractService = {
-  createDraftFromBooking: (bookingId: string, value: unknown) =>
-    request('manager', `/api/v1/contracts/from-booking/${bookingId}`, backendContractSchema, write('POST', value)),
   get: (id: string) => request('leasing', `/api/v1/contracts/${id}`, backendContractSchema),
   selectServices: (id: string, selectedServiceIds: string[]) =>
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
@@ -629,6 +627,8 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
+  renewContract: (id: string, value: { termMonths: number }) =>
+    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema, write('POST', value)),
 }
 export const profileService = {
   get: async (): Promise<User> => {
