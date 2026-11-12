@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router'
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { CalendarDays, House, KeyRound, UserRound } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,15 @@ import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 import { TenantLayout } from './tenant-layout'
 export function UserLayout() {
   const user = useSession((state) => state.user)
+  const location = useLocation()
   const branchId = useManagerSelection((state) => (user ? state.byUser[user.id] : undefined))
+  if (user?.roles.includes('ADMIN') && location.pathname === '/profile')
+    return (
+      <Navigate
+        to={{ pathname: '/admin/profile', search: location.search, hash: location.hash }}
+        replace
+      />
+    )
   if (user?.roles.includes('TENANT')) return <TenantLayout />
   return (
     <>

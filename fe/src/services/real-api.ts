@@ -8,6 +8,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'admin' && pathname === '/api/v1/admin/dashboard' && verb === 'GET') return null
   if (
     feature === 'tenant' &&
     verb === 'GET' &&

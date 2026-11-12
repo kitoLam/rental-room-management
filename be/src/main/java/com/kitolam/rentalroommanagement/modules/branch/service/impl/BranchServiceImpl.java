@@ -42,6 +42,16 @@ public class BranchServiceImpl implements BranchService {
     private final Clock clock;
 
     @Override
+    public com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics readStatisticsForAdmin() {
+        var recent = branchRepository.readRecentForAdmin(PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "_id")))
+                .stream().map(b -> new com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics.RecentBranch(
+                        b.getId(), b.getName(), b.getStatus() == null ? "UNKNOWN" : b.getStatus().name(), b.getCreatedAt())).toList();
+        return new com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics(
+                branchRepository.readStatusTotalsForAdmin(), recent);
+    }
+
+    @Override
     public void requireManagementAccess(String branchId, AuthPrincipal principal) {
         if (principal == null) throw new UnauthorizedException("Vui lòng đăng nhập");
         var branch = getById(branchId);

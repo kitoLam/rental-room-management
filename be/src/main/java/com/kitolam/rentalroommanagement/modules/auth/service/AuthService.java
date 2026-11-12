@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AuthService {
+    /** Internal read-only projection; caller must authorize the Admin scope. */
+    AdminAccountStatistics readStatisticsForAdmin(int year);
     Optional<AccountIdentityResponse> findAccount(String id);
     List<AccountIdentityResponse> activeManagementAccounts();
     MessageResponse signup(SignupRequest request);

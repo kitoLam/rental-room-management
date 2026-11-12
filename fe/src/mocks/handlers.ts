@@ -344,7 +344,7 @@ export const handlers = [
       const branch = path.match(/^\/api\/v1\/public\/branches\/([^/]+)$/)
       if (branch) return ok(db.branch(branch[1]))
       const user = current(request)
-      if (path === '/api/users' || path.startsWith('/api/users/') || path.startsWith('/api/admin/'))
+      if (path === '/api/users' || path.startsWith('/api/users/') || path.startsWith('/api/admin/') || path === '/api/v1/admin/dashboard')
         return await handleAdmin(request, user, scenario === 'empty')
       if (path.startsWith('/api/tenant/'))
         return await handleTenant(request, user.id, scenario === 'empty')

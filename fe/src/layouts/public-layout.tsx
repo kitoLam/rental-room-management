@@ -192,13 +192,13 @@ export function SiteHeader() {
                   : []),
 
                 ['Tìm phòng', '/rooms'],
-                [
+                ...(!user.roles.includes('ADMIN') ? [[
                   'Lịch xem phòng',
                   viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id }),
-                ],
+                ]] : []),
                 ...(!user.roles.includes('ADMIN') ? [['Yêu cầu giữ chỗ', '/tenant/bookings']] : []),
                 ...(!isStaffOnly ? [['Thông báo', '/notifications']] : []),
-                ['Hồ sơ', '/profile'],
+                ['Hồ sơ', user.roles.includes('ADMIN') ? '/admin/profile' : '/profile'],
               ]
             : [
                 ['Trang chủ', '/'],

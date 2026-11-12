@@ -376,6 +376,12 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="/admin/dashboard" replace /> },
               {
+                path: 'profile',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/profile-page')).default,
+                }),
+              },
+              {
                 path: 'dashboard',
                 lazy: async () => ({
                   Component: (await import('@/features/admin/admin-dashboard-page')).AdminDashboard,

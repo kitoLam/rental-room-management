@@ -20,6 +20,10 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class RoomSlotServiceImpl implements RoomSlotService {
+    @Override
+    public List<StatusTotal> readStatusTotalsForAdmin() {
+        return roomSlotRepository.readStatusTotalsForAdmin();
+    }
 
     private final RoomSlotRepository roomSlotRepository;
     private final MongoTemplate mongoTemplate;

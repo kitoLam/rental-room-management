@@ -110,7 +110,7 @@ export function AdminLayout() {
                 ))}
               </select>
               <div className="mt-3 flex gap-5 text-sm font-bold text-primary lg:mt-5 lg:grid lg:gap-3">
-                <Link to="/profile">Hồ sơ cá nhân</Link>
+                <Link to="/admin/profile">Hồ sơ cá nhân</Link>
               </div>
               <label
                 className="sr-only text-xs font-bold text-muted-foreground lg:not-sr-only lg:mt-6 lg:block"

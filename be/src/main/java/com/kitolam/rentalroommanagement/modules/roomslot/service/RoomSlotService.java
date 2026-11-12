@@ -10,6 +10,9 @@ import com.kitolam.rentalroommanagement.modules.roomslot.dto.response.RoomSlotRe
 import org.springframework.data.domain.Pageable;
 
 public interface RoomSlotService {
+    /** Internal read-only platform statistics. */
+    List<StatusTotal> readStatusTotalsForAdmin();
+    record StatusTotal(String status, long count) { }
 
     RoomSlotResponse create(RoomSlotCreateRequest request);
 
