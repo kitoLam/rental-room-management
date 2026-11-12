@@ -20,6 +20,70 @@ export const dateTime = (value: string) =>
   })
 export const dateOnly = (value: string) =>
   new Date(`${value}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+export const vnDateKey = (value?: string | null) => {
+  if (!value) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value.slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+/** Cộng tháng theo đúng quy tắc LocalDate.plusMonths của Java: giữ ngày, kẹp về cuối tháng nếu tháng đích ngắn hơn. */
+export const addMonths = (date: string, months: number) => {
+  const [year, month, day] = date.split('-').map(Number)
+  const firstOfTarget = new Date(Date.UTC(year, month - 1 + months, 1))
+  const lastDay = new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0)).getUTCDate()
+  firstOfTarget.setUTCDate(Math.min(day, lastDay))
+  return firstOfTarget.toISOString().slice(0, 10)
+}
+/** Ngày hiệu lực thật của booking. Backend duyệt evidence dùng expectedMoveInDate, booking cũ chưa có thì lùi 1 ngày sau
+ * lúc nộp evidence; mock không mang expectedMoveInDate nên rơi về startDate đã gán sẵn. */
+export const bookingMoveInDate = (booking?: { expectedMoveInDate?: string | null; startDate?: string }) =>
+  booking
+    ? booking.expectedMoveInDate === undefined
+      ? booking.startDate
+      : booking.expectedMoveInDate ?? undefined
+    : undefined
+/** Ngày kế tiếp (giờ Việt Nam) của một mốc instant; backend dùng quy tắc này khi booking cũ thiếu ngày dọn vào. */
+export const dayAfterVietnamDate = (instant: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(instant))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+  const next = new Date(`${part('year')}-${part('month')}-${part('day')}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return next.toISOString().slice(0, 10)
+}
+export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Date(), moveInDate?: string | null) => {
+  const vietnamDate = (value: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(value)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
+    return `${part('year')}-${part('month')}-${part('day')}`
+  }
+  // Ngày bắt đầu thuê = ngày dọn vào đã chốt của booking; booking cũ chưa có thì hôm sau ngày nộp bằng chứng.
+  const startDate = moveInDate || dayAfterVietnamDate(evidenceSubmittedAt)
+  const [year, month] = startDate.split('-').map(Number)
+  // Kỳ tính tiền đầu tiên luôn là mùng 1 của tháng kế tiếp tháng bắt đầu thuê:
+  // 01/12 → 01/01, 15/12 → 01/01, 30/12 → 01/01, 01/01 → 01/02.
+  // Date.UTC nhận tháng 0-based nên month (1-based) chính là tháng kế tiếp, tự quấn qua năm.
+  let candidate = new Date(Date.UTC(year, month, 1))
+  // Booking cũ có ngày bắt đầu đã qua: đẩy tiếp từng tháng để kỳ đầu không rơi vào quá khứ.
+  const today = new Date(`${vietnamDate(now)}T00:00:00Z`)
+  while (candidate < today) candidate = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth() + 1, 1))
+  return candidate.toISOString().slice(0, 10)
+}
 export function referenceLink(type: string | null, id: string | null, tenancyId?: string, branchId?:string) {
   if(type==='ADMIN_VERIFICATION'&&id)return `/admin/owner-verifications/${encodeURIComponent(id)}`
   if(type==='ADMIN_USER'&&id)return `/admin/users/${encodeURIComponent(id)}`
@@ -46,8 +110,8 @@ export function referenceLink(type: string | null, id: string | null, tenancyId?
   if (id && type && routes[type] && tenancyId)
     return `${routes[type]}?tenancyId=${encodeURIComponent(tenancyId)}${type === 'TENANT_PAYMENT' ? `&paymentId=${encodeURIComponent(id)}` : ''}`
   return id && type === 'APPOINTMENT'
-    ? `/user/appointments/${id}`
+    ? `/tenant/appointments/${id}`
     : id && type === 'BOOKING'
-      ? `/user/bookings/${id}`
+      ? `/tenant/bookings/${id}`
       : null
 }

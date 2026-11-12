@@ -1,13 +1,5 @@
 package com.kitolam.rentalroommanagement.modules.payment.service.impl;
 
-import org.springframework.data.mongodb.core.MongoTemplate;
-
-import com.kitolam.rentalroommanagement.modules.payment.document.Payment;
-
-import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
-
-import java.util.List;
-
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
@@ -33,8 +25,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -42,15 +34,28 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
-
-    private final MongoTemplate overviewMongo;
 
     private final PaymentRepository paymentRepository;
     private final ContractRepository contractRepository;
     private final TenantRepository tenantRepository;
     private final MongoTemplate mongo;
+
+    @Autowired
+    public PaymentServiceImpl(
+            PaymentRepository paymentRepository,
+            ContractRepository contractRepository,
+            TenantRepository tenantRepository,
+            MongoTemplate mongo) {
+        this.paymentRepository = paymentRepository;
+        this.contractRepository = contractRepository;
+        this.tenantRepository = tenantRepository;
+        this.mongo = mongo;
+    }
+
+    public PaymentServiceImpl(MongoTemplate mongo, PaymentRepository paymentRepository) {
+        this(paymentRepository, null, null, mongo);
+    }
 
     @Override
     public PaymentResponse create(PaymentCreateRequest request) {
@@ -266,6 +271,7 @@ public class PaymentServiceImpl implements PaymentService {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
     }
+
     @Override
     public List<OverviewPayment> readForOverview(List<String> ids, java.time.Instant from, java.time.Instant to) {
         if (ids.isEmpty()) return List.of();
@@ -274,9 +280,10 @@ public class PaymentServiceImpl implements PaymentService {
         query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").in("SUCCESS", "LATE_PAID"));
         query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("bookingId").is(null));
         query.fields().include("invoiceId", "amount");
-        return overviewMongo.find(query, Payment.class).stream()
+        return mongo.find(query, Payment.class).stream()
                 .map(item -> new OverviewPayment(item.getInvoiceId(), item.getAmount())).toList();
     }
+
     @Override
     public List<ReportPayment> readForReports(List<String> invoiceIds, java.time.Instant from, java.time.Instant to) {
         if (invoiceIds.isEmpty() || !from.isBefore(to)) return List.of();
@@ -285,7 +292,7 @@ public class PaymentServiceImpl implements PaymentService {
         query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").in("SUCCESS", "LATE_PAID"));
         query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("bookingId").is(null));
         query.fields().include("invoiceId", "amount", "paidAt");
-        return overviewMongo.find(query, Payment.class).stream()
+        return mongo.find(query, Payment.class).stream()
                 .map(item -> new ReportPayment(item.getInvoiceId(), item.getAmount(), item.getPaidAt())).toList();
     }
 }
