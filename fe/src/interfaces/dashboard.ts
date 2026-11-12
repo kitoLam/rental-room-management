@@ -89,3 +89,44 @@ export const managementOverviewSchema = z.object({
   ),
 })
 export type ManagementOverviewData = z.infer<typeof managementOverviewSchema>
+
+const reportRoom = z.object({
+  id: z.string(),
+  roomNumber: z.string(),
+  branchId: z.string(),
+  branchName: z.string(),
+  receipts: z.number(),
+  receiptShare: z.number(),
+  newLeases: count,
+  leasedSlots: count,
+  unknownSlotContracts: count,
+  monthlyReceipts: z.array(z.number()),
+})
+export const managementReportSchema = z.object({
+  fromMonth: z.string(),
+  toMonth: z.string(),
+  generatedAt: z.string(),
+  branchOptions: z.array(branch),
+  roomOptions: z.array(z.object({ id: z.string(), branchId: z.string(), roomNumber: z.string() })),
+  metrics: z.object({
+    receipts: z.number(),
+    previousReceipts: z.number(),
+    newLeases: count,
+    leasedSlots: count,
+    unknownSlotContracts: count,
+  }),
+  months: z.array(z.object({ month: z.string(), receipts: z.number(), newLeases: count })),
+  topReceipts: z.array(reportRoom),
+  topRentals: z.array(reportRoom),
+  rooms: pageSchema(reportRoom),
+  branches: z.array(
+    branch.extend({
+      roomCount: count,
+      receipts: z.number(),
+      newLeases: count,
+      leasedSlots: count,
+      unknownSlotContracts: count,
+    }),
+  ),
+})
+export type ManagementReportData = z.infer<typeof managementReportSchema>

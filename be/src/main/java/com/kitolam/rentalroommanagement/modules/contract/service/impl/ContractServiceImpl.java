@@ -567,6 +567,18 @@ public class ContractServiceImpl implements ContractService {
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
     }
 
+    @Override
+    public List<ReportContract> readForReports(List<String> roomIds) {
+        if (roomIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", roomIds);
+        query.fields().include("roomId", "roomSlotId", "roomSlotIds", "status", "startDate", "endDate", "terminatedAt");
+        return mongoTemplate.find(query, Contract.class).stream()
+                .map(item -> new ReportContract(item.getId(), item.getRoomId(), item.getStatus(), item.getStartDate(),
+                        item.getEndDate(), item.getTerminatedAt(),
+                        item.getRoomSlotIds() != null && !item.getRoomSlotIds().isEmpty() ? List.copyOf(item.getRoomSlotIds())
+                                : item.getRoomSlotId() == null ? List.of() : List.of(item.getRoomSlotId()))).toList();
+    }
+
     private void addEvidenceHistory(Contract contract, String action, Instant at, String note) {
         if (contract.getEvidenceHistory() == null) contract.setEvidenceHistory(new ArrayList<>());
         if (contract.getEvidenceHistory().isEmpty() && contract.getEvidenceSubmittedAt() != null && !"SUBMITTED".equals(action))

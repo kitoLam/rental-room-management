@@ -10,7 +10,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (
     (feature === 'manager' || feature === 'owner') &&
-    pathname === '/api/v1/dashboard/management' &&
+    ['/api/v1/dashboard/management', '/api/v1/dashboard/reports'].includes(pathname) &&
     verb === 'GET'
   )
     return null

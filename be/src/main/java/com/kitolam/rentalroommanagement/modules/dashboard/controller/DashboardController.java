@@ -6,6 +6,10 @@ import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.ManagementOverviewResponse;
 import com.kitolam.rentalroommanagement.modules.dashboard.service.DashboardService;
+import com.kitolam.rentalroommanagement.modules.dashboard.service.ManagementReportService;
+import com.kitolam.rentalroommanagement.modules.dashboard.dto.request.ManagementReportRequest;
+import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.ManagementReportResponse;
+import jakarta.validation.Valid;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,6 +28,15 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 public class DashboardController {
     private final DashboardService dashboardService;
+    private final ManagementReportService managementReportService;
+
+    @GetMapping("/reports")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
+    public StandardResponse<ManagementReportResponse> reports(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @ModelAttribute ManagementReportRequest request) {
+        return StandardResponse.success(managementReportService.report(principal, request));
+    }
 
     @GetMapping("/management")
     @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")

@@ -65,4 +65,15 @@ public class InvoiceServiceImpl implements InvoiceService {
         return overviewMongo.find(query, Invoice.class).stream()
                 .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
     }
+    @Override
+    public List<OverviewInvoice> readForReports(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        // A partial receipt cannot be split between rent and deposit without allocation data.
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("items.type").ne("DEPOSIT"));
+        query.fields().include("contractTenantId");
+        return overviewMongo.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
+    }
 }

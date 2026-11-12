@@ -67,4 +67,15 @@ public class PaymentServiceImpl implements PaymentService {
         return overviewMongo.find(query, Payment.class).stream()
                 .map(item -> new OverviewPayment(item.getInvoiceId(), item.getAmount())).toList();
     }
+    @Override
+    public List<ReportPayment> readForReports(List<String> invoiceIds, java.time.Instant from, java.time.Instant to) {
+        if (invoiceIds.isEmpty() || !from.isBefore(to)) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("invoiceId", invoiceIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("paidAt").gte(from).lt(to));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").in("SUCCESS", "LATE_PAID"));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("bookingId").is(null));
+        query.fields().include("invoiceId", "amount", "paidAt");
+        return overviewMongo.find(query, Payment.class).stream()
+                .map(item -> new ReportPayment(item.getInvoiceId(), item.getAmount(), item.getPaidAt())).toList();
+    }
 }

@@ -24,4 +24,9 @@ public interface PaymentService {
     List<OverviewPayment> readForOverview(List<String> ids, java.time.Instant from, java.time.Instant to);
 
     record OverviewPayment(String invoiceId, java.math.BigDecimal amount) { }
+
+    /** Successful invoice receipts in [from, to); IDs must already be authorized by the caller. */
+    List<ReportPayment> readForReports(List<String> invoiceIds, java.time.Instant from, java.time.Instant to);
+
+    record ReportPayment(String invoiceId, java.math.BigDecimal amount, java.time.Instant paidAt) { }
 }

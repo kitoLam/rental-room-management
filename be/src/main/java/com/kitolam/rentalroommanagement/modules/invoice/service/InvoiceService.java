@@ -23,5 +23,8 @@ public interface InvoiceService {
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewInvoice> readForOverview(List<String> ids);
 
+    /** Issued, non-cancelled invoices without deposit lines; tenancy IDs must already be authorized. */
+    List<OverviewInvoice> readForReports(List<String> contractTenantIds);
+
     record OverviewInvoice(String id, String contractTenantId) { }
 }

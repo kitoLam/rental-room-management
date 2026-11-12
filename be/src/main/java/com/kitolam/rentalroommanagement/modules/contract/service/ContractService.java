@@ -43,6 +43,14 @@ public interface ContractService {
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewContract> readForOverview(List<String> ids);
 
+    /** Read-only report projection, scoped to room IDs already authorized by the caller. */
+    List<ReportContract> readForReports(List<String> roomIds);
+
+    record ReportContract(String id, String roomId,
+                          com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus status,
+                          java.time.LocalDate startDate, java.time.LocalDate endDate,
+                          java.time.Instant terminatedAt, List<String> roomSlotIds) { }
+
     record OverviewContract(String id, String roomId, String tenantId, String bookingId, String contractNumber,
                             com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus status,
                             java.time.LocalDate startDate, java.time.LocalDate endDate, java.time.Instant evidenceSubmittedAt,

@@ -90,7 +90,7 @@ export function ManagerLayout() {
     [demoMessage, setDemoMessage] = useState('')
   const owner = user.roles.includes('OWNER')
   const root = owner ? '/owner' : '/manager'
-  const ownerOverview = owner && /^\/owner(?:\/dashboard)?\/?$/.test(location.pathname)
+  const ownerOverview = owner && /^\/owner(?:\/(dashboard|reports))?\/?$/.test(location.pathname)
   const list = useQuery({
       queryKey: ['manager-branches', user.id, params.get('demo'), params.get('workspace')],
       queryFn: managerApi.branches,
