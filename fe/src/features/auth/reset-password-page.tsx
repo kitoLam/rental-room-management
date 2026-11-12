@@ -14,13 +14,21 @@ import { useSession } from './session-store'
 export function ResetPasswordPage() {
   const [params] = useSearchParams()
   const token = params.get('token') || ''
+  const isSetup = params.get('mode') === 'setup'
   const navigate = useNavigate()
   const form = useForm<z.infer<typeof resetSchema>>({
     resolver: zodResolver(resetSchema),
     defaultValues: { password: '', confirmPassword: '' },
   })
   const reset = useMutation({
-    mutationFn: (password: string) => authService.reset(token, password),
+    mutationFn: (values: { password: string; confirmPassword: string }) =>
+      isSetup
+        ? authService.setupPassword({
+            token,
+            password: values.password,
+            confirmPassword: values.confirmPassword,
+          })
+        : authService.reset(token, values.password),
     onSuccess: () => {
       useSession.getState().clear()
       queryClient.clear()
@@ -29,8 +37,10 @@ export function ResetPasswordPage() {
   })
   return (
     <>
-      <Heading title="Chọn mật khẩu mới.">
-        Dùng mật khẩu riêng cho TroPro để bảo vệ tài khoản của bạn.
+      <Heading title={isSetup ? 'Thiết lập mật khẩu tài khoản.' : 'Chọn mật khẩu mới.'}>
+        {isSetup
+          ? 'Email đã được xác thực. Hãy đặt mật khẩu riêng (Quản lý/Chủ cơ sở không biết mật khẩu này).'
+          : 'Dùng mật khẩu riêng cho TroPro để bảo vệ tài khoản của bạn.'}
       </Heading>
       {!token ? (
         <Notice tone="warning">
@@ -44,7 +54,7 @@ export function ResetPasswordPage() {
         <form
           className="grid gap-5"
           noValidate
-          onSubmit={form.handleSubmit((v) => reset.mutate(v.password))}
+          onSubmit={form.handleSubmit((v) => reset.mutate(v))}
         >
           <Field
             label="Mật khẩu mới"
@@ -71,7 +81,7 @@ export function ResetPasswordPage() {
           <InlineError error={reset.error} />
           <Button type="submit" loading={reset.isPending}>
             <ShieldCheck />
-            Đổi mật khẩu
+            {isSetup ? 'Lưu mật khẩu & Kích hoạt' : 'Đổi mật khẩu'}
           </Button>
         </form>
       )}

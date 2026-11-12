@@ -129,16 +129,16 @@ export function CreateMaintenancePage() {
                     >
                       {tenancies.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.roomName} ({item.branchName})
-                          {item.slotName ? ` · ${item.slotName}` : ''}
+                          {item.roomName}
+                          {item.slotName ? ` - ${item.slotName}` : ''}
                         </option>
                       ))}
                     </select>
                   </Field>
                 ) : (
                   <Notice>
-                    {currentTenancy.branchName} · {currentTenancy.roomName}
-                    {currentTenancy.slotName ? ` · ${currentTenancy.slotName}` : ''}
+                    {currentTenancy.roomName}
+                    {currentTenancy.slotName ? ` - ${currentTenancy.slotName}` : ''}
                   </Notice>
                 )}
 
@@ -195,7 +195,7 @@ export function CreateMaintenancePage() {
                         id="report-scope"
                         className="input bg-muted/20"
                         readOnly
-                        value={`${currentTenancy.roomName} (${currentTenancy.branchName})`}
+                        value={`${currentTenancy.roomName}${currentTenancy.slotName ? ` - ${currentTenancy.slotName}` : ''}`}
                       />
                     </Field>
                   )}

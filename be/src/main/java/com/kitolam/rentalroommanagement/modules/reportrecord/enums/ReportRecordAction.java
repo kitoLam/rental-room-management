@@ -12,7 +12,5 @@ public enum ReportRecordAction {
     REJECTED,           // Manager từ chối kèm lý do
     CLOSED,             // Tenant xác nhận hài lòng / Đã đóng
     REOPENED,           // Mở lại yêu cầu để tiếp tục xử lý
-    ESCALATED_ADMIN,    // Chuyển Admin phân xử tranh chấp
-    ADMIN_RESOLVED,     // Admin xác minh và đưa ra kết luận
     CANCELLED           // Hủy yêu cầu
 }

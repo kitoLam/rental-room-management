@@ -47,6 +47,23 @@ export const userCreateSchema = z
     path: ['email'],
     message: 'Nhập email hoặc số điện thoại.',
   })
+/** Backend user row (ObjectId ids, single role) for GET /api/v1/admin/users. */
+export const backendAdminUserSchema = z.object({
+  id: z.string(),
+  fullName: z.string(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  role: roleSchema,
+  status: accountStatusSchema,
+  createdAt: z.string().nullable(),
+})
+export const backendAdminUsersSchema = z.object({
+  content: z.array(backendAdminUserSchema),
+  number: z.number().int(),
+  size: z.number().int(),
+  totalElements: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+})
 export const springUsersSchema = z.object({
   content: z.array(adminUserSchema),
   number: z.number().int().nonnegative(),

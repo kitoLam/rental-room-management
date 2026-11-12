@@ -60,7 +60,6 @@ export function MaintenancePage() {
             'CLOSED',
             'REJECTED',
             'CANCELLED',
-            'ESCALATED_ADMIN',
           ].map((s) => (
             <option key={s} value={s}>
               {tenantStatusLabel(s)}

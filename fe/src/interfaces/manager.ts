@@ -130,6 +130,9 @@ export const contractInputSchema = z.object({
 export const contractSchema = contractInputSchema.extend({
   // Draft contracts created after deposit may not have manager-authored terms yet.
   terms: z.string().max(4000),
+  // Nháp từ booking chưa có ngày hiệu lực cho tới khi manager duyệt evidence.
+  startDate: date.nullable(),
+  endDate: date.nullable(),
   landlordName: z.string().nullable().optional(),
   landlordIdNumber: z.string().nullable().optional(),
   landlordAddress: z.string().nullable().optional(),
@@ -155,7 +158,7 @@ export const contractSchema = contractInputSchema.extend({
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   signedFileUrl: z.string().nullable().optional(),
   services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
   roomName: z.string().optional(),
@@ -258,6 +261,8 @@ export const managerInvoiceSchema = invoiceSchema.extend({
   tenantName: z.string(),
   roomName: z.string(),
   roomId: uuid,
+  /** Days past dueDate while outstanding (debt list from the backend); absent elsewhere. */
+  overdueDays: z.number().int().nonnegative().optional(),
 })
 export const invoiceInputSchema = z.object({
   contractTenantId: uuid,
@@ -299,13 +304,13 @@ export const invoiceSourcesSchema = z.object({
 })
 export type InvoiceSources = z.infer<typeof invoiceSourcesSchema>
 export const managerPaymentSchema = z.object({
-  id: uuid,
-  branchId: uuid,
+  id: databaseIdSchema,
+  branchId: databaseIdSchema,
   reference: z.string(),
   targetType: z.enum(['BOOKING_HOLD', 'INVOICE', 'PREPAID_RENT']),
-  invoiceId: uuid.nullable(),
-  bookingId: uuid.nullable(),
-  contractTenantId: uuid.nullable(),
+  invoiceId: databaseIdSchema.nullable(),
+  bookingId: databaseIdSchema.nullable(),
+  contractTenantId: databaseIdSchema.nullable(),
   payerName: z.string(),
   tenantName: z.string(),
   amountReceived: vnd,

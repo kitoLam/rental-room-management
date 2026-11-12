@@ -13,6 +13,7 @@ import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.UtilityR
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.UtilityRatesResponse;
 
 public interface BranchService {
+    com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics readStatisticsForAdmin();
     void requireManagementAccess(String branchId, AuthPrincipal principal);
     UtilityRatesResponse utilityRates(String branchId, AuthPrincipal principal);
     UtilityRatesResponse updateUtilityRates(String branchId, UtilityRatesRequest request, AuthPrincipal principal);

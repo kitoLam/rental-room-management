@@ -13,18 +13,13 @@ import {
   Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Modal,
-  InlineError,
-  Notice,
-  Page,
-  Panel,
-  QueryState,
-} from '@/components/common/page'
+import { Modal, InlineError, Notice, Page, Panel, QueryState } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { bookingService, catalogService } from '@/services/guest-user'
 import { provider } from '@/services/config'
+import { viewingDependenciesService } from '@/services/viewing-dependencies'
 import { databaseIdSchema } from '@/interfaces/domain'
+import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
@@ -35,25 +30,37 @@ import { useSession } from '@/features/auth/session-store'
 import { managerApi } from '@/services/manager'
 
 const readJson = <T,>(raw: string | null, fallback: T): T => {
-  try { return raw ? JSON.parse(raw) as T : fallback } catch { return fallback }
+  try {
+    return raw ? (JSON.parse(raw) as T) : fallback
+  } catch {
+    return fallback
+  }
 }
 
 export default function RoomDetailPage() {
   const { roomId = '' } = useParams()
   const user = useSession((state) => state.user)
-  const branches = useQuery({ queryKey: ['manager-branches', user?.id], queryFn: managerApi.branches,
-    enabled: !!user?.roles.some((role) => role === 'OWNER' || role === 'MANAGER'), retry: false })
+  const branches = useQuery({
+    queryKey: ['manager-branches', user?.id],
+    queryFn: managerApi.branches,
+    enabled: !!user?.roles.some((role) => role === 'OWNER' || role === 'MANAGER'),
+    retry: false,
+  })
   const validRoomId = databaseIdSchema.safeParse(roomId).success
   const [params] = useSearchParams()
   const [gallery, setGallery] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
-  const [selectedSlots, setSelectedSlots] = useState<string[]>(() => readJson(params.get('slots'), []))
+  const [selectedSlots, setSelectedSlots] = useState<string[]>(() =>
+    readJson(params.get('slots'), []),
+  )
   const room = useQuery({
     queryKey: ['rooms', roomId],
     queryFn: () => catalogService.room(roomId),
     enabled: validRoomId,
   })
-  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>(() => readJson(params.get('services'), {}))
+  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>(() =>
+    readJson(params.get('services'), {}),
+  )
   const roomServices = useQuery({
     queryKey: ['room-services', roomId],
     queryFn: () => catalogService.services(room.data!),
@@ -71,6 +78,13 @@ export default function RoomDetailPage() {
     },
     enabled: validRoomId && bookingAvailabilityEnabled,
   })
+  const viewing = useQuery({
+    queryKey: ['viewing-eligibility', roomId],
+    queryFn: () => viewingDependenciesService.eligibility(roomId),
+    enabled: validRoomId && provider('viewing') === 'real',
+    retry: false,
+    refetchInterval: 30000,
+  })
   if (!validRoomId)
     return (
       <Page title="Không tìm thấy phòng" back="/rooms">
@@ -85,6 +99,19 @@ export default function RoomDetailPage() {
     selectedSlots.length > 0 &&
     selectedSlots.every((id) => available.data.slots.some((s) => s.id === id && s.available))
   const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
+  const viewingUrl = `/rooms/${roomId}/appointments/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
+  const canView =
+    !!viewing.data?.canReceiveRequest &&
+    selectedSlots.length > 0 &&
+    selectedSlots.every((id) =>
+      viewing.data.slots.some((slot) => slot.id === id && slot.selectable),
+    )
+  const earliestAvailableFrom =
+    (available.data?.slots ?? [])
+      .flatMap((s) =>
+        (s.available || s.availableFrom) && s.availableFrom ? [s.availableFrom] : [],
+      )
+      .sort()[0] ?? null
   return (
     <Page
       wide
@@ -222,7 +249,7 @@ export default function RoomDetailPage() {
                         onChange={setServiceSelection}
                       />
                     </>
-                      ) : (
+                  ) : (
                     <p className="text-sm text-muted-foreground">
                       Liên hệ chi nhánh để được cung cấp giá dịch vụ.
                     </p>
@@ -232,11 +259,19 @@ export default function RoomDetailPage() {
                   key={r.id}
                   room={r}
                   slotCount={selectedSlots.length}
-                  extras={selectedServiceCosts(roomServices.data ?? [], serviceSelection, selectedSlots.length)}
+                  extras={selectedServiceCosts(
+                    roomServices.data ?? [],
+                    serviceSelection,
+                    selectedSlots.length,
+                  )}
                 />
-                {branches.data?.some((branch) => branch.id === r.branchId) && <Button asChild variant="outline" className="mt-4">
-                  <Link to={`/rooms/${r.id}/utility-rates`}>Cấu hình đơn giá điện, nước và gửi xe</Link>
-                </Button>}
+                {branches.data?.some((branch) => branch.id === r.branchId) && (
+                  <Button asChild variant="outline" className="mt-4">
+                    <Link to={`/rooms/${r.id}/utility-rates`}>
+                      Cấu hình đơn giá điện, nước và gửi xe
+                    </Link>
+                  </Button>
+                )}
                 <Panel>
                   <p className="mb-2 text-xs text-muted-foreground">CHI NHÁNH</p>
                   <h2 className="font-bold">{r.branchName}</h2>
@@ -263,31 +298,62 @@ export default function RoomDetailPage() {
                       {getPriceUnit(r)}
                     </span>
                   </p>
+                  {earliestAvailableFrom && (
+                    <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
+                      <CalendarDays size={14} className="shrink-0" />
+                      Có thể nhận phòng từ {dateOnly(earliestAvailableFrom)}
+                    </p>
+                  )}
                   <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                     Giá thuê chính thức được thỏa thuận khi lập hợp đồng. Khoản giữ chỗ được thông
                     báo riêng.
                   </p>
                   {available.data && (
                     <fieldset className="mt-5">
-                      <legend className="mb-3 text-sm font-bold">Chọn các slot muốn thuê</legend>
+                      <legend className="mb-3 text-sm font-bold">
+                        Chọn các slot muốn thuê / xem phòng
+                      </legend>
                       <div className="grid grid-cols-2 gap-2">
                         {available.data.slots.map((s) => (
                           <label
                             key={s.id}
-                            className={`flex min-h-12 items-center gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
+                            className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
                           >
                             <input
                               type="checkbox"
-                              className="accent-primary"
+                              className="mt-0.5 accent-primary"
                               value={s.id}
                               checked={selectedSlots.includes(s.id)}
-                              disabled={!s.available}
-                              onChange={(event) => setSelectedSlots((current) => event.target.checked
-                                ? [...current, s.id]
-                                : current.filter((id) => id !== s.id))}
+                              disabled={
+                                !s.available &&
+                                !viewing.data?.slots.some(
+                                  (slot) => slot.id === s.id && slot.selectable,
+                                )
+                              }
+                              onChange={(event) =>
+                                setSelectedSlots((current) =>
+                                  event.target.checked
+                                    ? [...current, s.id]
+                                    : current.filter((id) => id !== s.id),
+                                )
+                              }
                             />
-                            {s.label}
-                            {!s.available && ' · Đã kín'}
+                            <span className="grid gap-0.5 leading-snug">
+                              <span className="font-medium">{s.label}</span>
+                              {!s.available ? (
+                                s.availableFrom ? (
+                                  <span className="text-xs text-warning">
+                                    Đang thuê · nhận phòng từ {dateOnly(s.availableFrom)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Đã kín</span>
+                                )
+                              ) : s.availableFrom ? (
+                                <span className="text-xs text-muted-foreground">
+                                  Từ {dateOnly(s.availableFrom)}
+                                </span>
+                              ) : null}
+                            </span>
                           </label>
                         ))}
                       </div>
@@ -302,7 +368,8 @@ export default function RoomDetailPage() {
                           ? available.error.message
                           : available.data?.available
                             ? 'Chọn slot còn trống để giữ trong 24 giờ.'
-                            : available.data?.reason || 'Không có lịch trống phù hợp với khoảng ngày đã chọn.'}
+                            : available.data?.reason ||
+                              'Không có lịch trống phù hợp với khoảng ngày đã chọn.'}
                   </div>
                   <div className="grid gap-3">
                     {bookable && !available.isFetching ? (
@@ -318,9 +385,9 @@ export default function RoomDetailPage() {
                         Yêu cầu giữ chỗ
                       </Button>
                     )}
-                    {r.operationalStatus === 'ACTIVE' ? (
+                    {r.operationalStatus === 'ACTIVE' && canView ? (
                       <Button asChild variant="outline">
-                        <Link to={`/rooms/${r.id}/appointments/new`}>
+                        <Link to={viewingUrl}>
                           <CalendarDays />
                           Đặt lịch xem phòng
                         </Link>
@@ -328,13 +395,30 @@ export default function RoomDetailPage() {
                     ) : (
                       <Button disabled variant="outline">
                         <CalendarDays />
-                        Tạm ngừng nhận lịch xem
+                        Đặt lịch xem phòng
                       </Button>
                     )}
                   </div>
+                  {!selectedSlots.length && viewing.data?.canReceiveRequest && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Chọn ít nhất một slot để đặt lịch xem phòng, kể cả phòng chỉ có một slot.
+                    </p>
+                  )}
+                  {viewing.data?.reason === 'VIEWING_DISABLED' && (
+                    <p role="status" className="mt-3 text-sm text-warning">
+                      Owner/Manager đang tắt tính năng đặt lịch xem phòng.
+                    </p>
+                  )}
+                  {selectedSlots.length > 0 && viewing.data?.canReceiveRequest && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Slot đang thuê vẫn chọn được để xem trong tương lai. Ngày và ca xem sẽ được
+                      kiểm tra ở bước tiếp theo.
+                    </p>
+                  )}
                   {!bookable && available.data?.available && (
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Chọn ít nhất một slot còn trống để tiếp tục.
+                      Để giữ chỗ, chỉ chọn các slot được phép giữ chỗ. Điều kiện ngày xem phòng được
+                      kiểm tra riêng ở bước tiếp theo.
                     </p>
                   )}
                   <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
@@ -355,9 +439,9 @@ export default function RoomDetailPage() {
               ) : (
                 <Button disabled>Giữ chỗ</Button>
               )}
-              {r.operationalStatus === 'ACTIVE' ? (
+              {r.operationalStatus === 'ACTIVE' && canView ? (
                 <Button asChild variant="outline" className="px-3">
-                  <Link to={`/rooms/${r.id}/appointments/new`} aria-label="Đặt lịch xem phòng">
+                  <Link to={viewingUrl} aria-label="Đặt lịch xem phòng">
                     <CalendarDays />
                   </Link>
                 </Button>

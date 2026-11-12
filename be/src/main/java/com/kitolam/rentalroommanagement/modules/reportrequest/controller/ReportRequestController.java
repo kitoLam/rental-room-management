@@ -3,9 +3,8 @@ package com.kitolam.rentalroommanagement.modules.reportrequest.controller;
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
+import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestInfoRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestProgressRequest;
@@ -75,12 +74,23 @@ public class ReportRequestController {
     }
 
     @PostMapping("/{id}/start")
-    @Operation(summary = "Manager bắt đầu xử lý yêu cầu (chuyển PENDING sang IN_PROGRESS)")
+    @Operation(summary = "Manager bắt đầu xử lý yêu cầu (chuyển PENDING sang IN_PROGRESS, kèm gắn người phụ trách)")
     @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
     public StandardResponse<ReportRequestResponse> start(
             @PathVariable String id,
+            @Valid @RequestBody(required = false) ReportRequestAssignRequest request,
             @AuthenticationPrincipal AuthPrincipal principal) {
-        return StandardResponse.success("Bắt đầu xử lý yêu cầu", reportRequestService.startProcessing(id, principal));
+        return StandardResponse.success("Bắt đầu xử lý yêu cầu", reportRequestService.startProcessing(id, request, principal));
+    }
+
+    @PostMapping("/{id}/assign")
+    @Operation(summary = "Manager phân công hoặc đổi người phụ trách xử lý yêu cầu")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN', 'OWNER')")
+    public StandardResponse<ReportRequestResponse> assign(
+            @PathVariable String id,
+            @Valid @RequestBody ReportRequestAssignRequest request,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Đã cập nhật người phụ trách", reportRequestService.assign(id, request, principal));
     }
 
     @PostMapping("/{id}/request-info")
@@ -152,25 +162,6 @@ public class ReportRequestController {
         return StandardResponse.success("Đã mở lại yêu cầu", reportRequestService.reopen(id, request, principal));
     }
 
-    @PostMapping("/{id}/escalate-admin")
-    @Operation(summary = "Tenant chuyển tranh chấp lên Admin phân xử")
-    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
-    public StandardResponse<ReportRequestResponse> escalateAdmin(
-            @PathVariable String id,
-            @Valid @RequestBody ReportRequestEscalateAdminRequest request,
-            @AuthenticationPrincipal AuthPrincipal principal) {
-        return StandardResponse.success("Đã chuyển tranh chấp lên Admin", reportRequestService.escalateAdmin(id, request, principal));
-    }
-
-    @PostMapping("/{id}/admin-resolve")
-    @Operation(summary = "Admin ghi nhận kết quả phân xử tranh chấp và đóng hồ sơ")
-    @PreAuthorize("hasRole('ADMIN')")
-    public StandardResponse<ReportRequestResponse> adminResolve(
-            @PathVariable String id,
-            @Valid @RequestBody ReportRequestAdminResolveRequest request,
-            @AuthenticationPrincipal AuthPrincipal principal) {
-        return StandardResponse.success("Admin đã kết luận và đóng hồ sơ", reportRequestService.adminResolve(id, request, principal));
-    }
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Tenant tự hủy yêu cầu khi chưa được xử lý")

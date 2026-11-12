@@ -1,7 +1,7 @@
 import { InlineError, Notice, Panel, QueryState } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
-import { dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
+import { addMonths, dateOnly, dateTime, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { contractService } from '@/services/guest-user'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -17,11 +17,17 @@ export function ContractEvidencePanel({
   canManage,
   onChanged,
   index,
+  moveInDate,
+  rentalStartDate,
 }: {
   contractId: string
   canManage: boolean
   onChanged?: () => unknown
   index?: number
+  /** Booking move-in date; first billing month is not before it. */
+  moveInDate?: string | null
+  /** Booking rental start, for the "expected term" preview while choosing the term. */
+  rentalStartDate?: string | null
 }) {
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [termMonths, setTermMonths] = useState('3')
@@ -43,7 +49,9 @@ export function ContractEvidencePanel({
   })
   const data = contractQuery.data
   // Billing starts on the 1st of the month after the contract takes effect (field is read-only).
-  const billingDateMinimum = data?.evidenceSubmittedAt ? suggestedFirstBillingStartDate(data.evidenceSubmittedAt) : ''
+  const billingDateMinimum = data?.evidenceSubmittedAt
+    ? suggestedFirstBillingStartDate(data.evidenceSubmittedAt, undefined, moveInDate)
+    : ''
   const firstBillingStartDate = billingDateMinimum
   const validFirstBillingStartDate = Boolean(firstBillingStartDate && firstBillingStartDate.endsWith('-01'))
   const reviewEvidence = useMutation({
@@ -56,6 +64,10 @@ export function ContractEvidencePanel({
     onSuccess: refresh,
   })
   const stage = data ? contractStage(data) : null
+  // Expected contract term: from the rental start date for the chosen number of months.
+  const termPreview = rentalStartDate
+    ? `${dateOnly(rentalStartDate)} → ${dateOnly(addMonths(rentalStartDate, Number(termMonths)))}`
+    : null
 
   return (
     <Panel className="mt-5">
@@ -69,8 +81,8 @@ export function ContractEvidencePanel({
         {data && (
           <div className="mt-4 grid gap-5">
             {data.roomAddress && <p className="text-sm text-muted-foreground">{data.roomAddress}</p>}
-            {data.templateDownloadUrl && (
-              <a className="text-sm text-primary underline" href={data.templateDownloadUrl} target="_blank" rel="noreferrer">
+            {data.contractUrl && (
+              <a className="text-sm text-primary underline" href={data.contractUrl} target="_blank" rel="noreferrer">
                 Tải mẫu hợp đồng
               </a>
             )}
@@ -101,6 +113,9 @@ export function ContractEvidencePanel({
                     ))}
                   </select>
                 </label>
+                {termPreview && (
+                  <p className="text-xs text-muted-foreground">Hiệu lực dự kiến: {termPreview} (bắt đầu từ ngày bắt đầu thuê)</p>
+                )}
                 <InlineError error={submitEvidence.error} />
                 <Button loading={submitEvidence.isPending}>Gửi bản ký hợp đồng</Button>
               </form>

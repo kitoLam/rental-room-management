@@ -41,6 +41,7 @@ export function ViewingAppointmentActions({
       client.invalidateQueries({ queryKey: ['viewing-appointment'] }),
       client.invalidateQueries({ queryKey: ['viewing-appointments'] }),
       client.invalidateQueries({ queryKey: ['viewing-availability', record.roomId] }),
+      client.invalidateQueries({ queryKey: ['management-overview'] }),
     ])
   }
   const mutation = useMutation({
@@ -100,6 +101,7 @@ export function ViewingAppointmentActions({
     mutation.error instanceof ApiError && mutation.error.status === 409
       ? 'Lịch hoặc điều kiện xử lý đã thay đổi. Dữ liệu đã được tải lại; hãy kiểm tra trước khi thao tác tiếp.'
       : mutation.error?.message
+  const visibleActions = record.allowedActions.filter((value) => !manager || value !== 'REJECT')
   return (
     <Panel className="mt-6">
       <h2 className="font-bold">Xử lý lịch xem</h2>
@@ -115,7 +117,7 @@ export function ViewingAppointmentActions({
       )}
       {!selection && (
         <div className="mt-4 flex flex-wrap gap-3">
-          {record.allowedActions.map((value) => (
+          {visibleActions.map((value) => (
             <Button
               key={value}
               variant={value === 'APPROVE' ? 'default' : 'outline'}
@@ -126,7 +128,7 @@ export function ViewingAppointmentActions({
           ))}
         </div>
       )}
-      {!selection && record.allowedActions.length === 0 && (
+      {!selection && visibleActions.length === 0 && (
         <p className="mt-3 text-sm text-muted-foreground">
           Không có thao tác phù hợp với quyền, trạng thái và thời gian hiện tại.
         </p>

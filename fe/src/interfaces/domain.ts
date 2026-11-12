@@ -12,6 +12,10 @@ export const userSchema = z.object({
   phone: z.string().nullable(),
   dateOfBirth: z.string().nullable(),
   gender: z.string().nullable(),
+  permanentAddress: z.string().nullable().optional(),
+  cccdNumber: z.string().nullable().optional(),
+  cccdIssueDate: z.string().nullable().optional(),
+  cccdIssuePlace: z.string().nullable().optional(),
   status: z.enum(['INVITED', 'PENDING_VERIFICATION', 'ACTIVE', 'LOCKED', 'DISABLED']),
 })
 export type User = z.infer<typeof userSchema>
@@ -126,7 +130,12 @@ export const availabilitySchema = z.object({
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
-  slots: z.array(z.object({ id: databaseIdSchema, label: z.string(), available: z.boolean() })),
+  slots: z.array(z.object({
+    id: databaseIdSchema,
+    label: z.string(),
+    available: z.boolean(),
+    availableFrom: z.string().nullable().optional(),
+  })),
 })
 export type Availability = z.infer<typeof availabilitySchema>
 export const appointmentStatuses = [
@@ -178,6 +187,8 @@ export const bookingSchema = z.object({
   slotLabel: z.string().nullable(),
   slotLabels: z.array(z.string()).default([]),
   hasRentalDates: z.boolean().default(true),
+  /** Ngày dọn vào chốt từ slot khi đặt cọc; null với booking cũ, backend khi đó lùi 1 ngày sau evidence. */
+  expectedMoveInDate: z.string().nullable().optional(),
   rentalMode: modeSchema,
   startDate: z.string(),
   endDate: z.string(),

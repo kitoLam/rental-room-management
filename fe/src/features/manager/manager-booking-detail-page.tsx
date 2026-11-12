@@ -68,7 +68,10 @@ export function ManagerBookingDetail() {
                   ...(query.data.hasRentalDates ? [[
                     'Thời hạn thuê',
                     `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`,
-                  ] as [string, string]] : []),
+                  ] as [string, string]] : [[
+                    'Ngày bắt đầu thuê dự kiến',
+                    dateOnly(query.data.startDate),
+                  ] as [string, string]]),
                   ['Khoản giữ', formatVnd(query.data.holdAmount)],
                   [
                     'Người đặt',

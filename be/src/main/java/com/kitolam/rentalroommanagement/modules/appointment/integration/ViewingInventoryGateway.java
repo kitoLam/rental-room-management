@@ -10,6 +10,10 @@ import org.springframework.data.domain.Pageable;
 public interface ViewingInventoryGateway {
     ViewingRoomSnapshot getRoom(String roomId);
 
+    default java.util.List<ViewingSlotSnapshot> slotsForViewing(String roomId, java.time.LocalDate date) {
+        throw new UnsupportedOperationException("Tích hợp slot xem phòng chưa sẵn sàng");
+    }
+
     /** Authoritative branch membership, including private/unavailable rooms for management.
      * No inference from FE data or from which rooms already have shift configurations.
      */

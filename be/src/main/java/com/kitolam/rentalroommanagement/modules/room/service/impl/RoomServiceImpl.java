@@ -52,6 +52,11 @@ public class RoomServiceImpl implements RoomService {
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository occupancyRepository;
 
+    @Override
+    public List<StatusTotal> readStatusTotalsForAdmin() {
+        return roomRepository.readStatusTotalsForAdmin();
+    }
+
     private Room find(String id) {
         return roomRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
@@ -191,6 +196,8 @@ public class RoomServiceImpl implements RoomService {
             slot.setSlotNumber(next);
             slot.setSlotCode("S" + next);
             slot.setStatus(RoomSlotStatus.AVAILABLE);
+            // New slots are bookable right away (RoomSlot.availableFrom, Vietnam date).
+            slot.setAvailableFrom(java.time.LocalDate.now(clock.withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))));
             roomSlotRepository.save(slot);
         }
     }

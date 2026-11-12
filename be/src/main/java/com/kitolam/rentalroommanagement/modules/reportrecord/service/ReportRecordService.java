@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.reportrecord.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.reportrecord.dto.request.ReportRecordCreateRequest;
 import com.kitolam.rentalroommanagement.modules.reportrecord.dto.request.ReportRecordFilterRequest;
@@ -19,4 +21,7 @@ public interface ReportRecordService {
     PagedResponse<ReportRecordResponse> search(ReportRecordFilterRequest filter, Pageable pageable);
 
     void delete(String id);
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

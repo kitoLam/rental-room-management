@@ -8,6 +8,11 @@ public record RoomAvailabilityResponse(
         LocalDate startDate,
         LocalDate endDate,
         boolean available,
-        String reason
+        String reason,
+        LocalDate availableFrom
 ) {
+    public RoomAvailabilityResponse(String roomSlotId, String slotCode, LocalDate startDate, LocalDate endDate,
+                                    boolean available, String reason) {
+        this(roomSlotId, slotCode, startDate, endDate, available, reason, null);
+    }
 }

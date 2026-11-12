@@ -71,7 +71,9 @@ export function ManagerContracts() {
             label: 'Thời hạn',
             render: (c) => (
               <>
-                {dateOnly(c.startDate)} – {dateOnly(c.endDate)}
+                {c.startDate && c.endDate
+                  ? `${dateOnly(c.startDate)} – ${dateOnly(c.endDate)}`
+                  : 'Chưa duyệt evidence'}
               </>
             ),
           },

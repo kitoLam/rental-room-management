@@ -26,4 +26,20 @@ public interface SlotServiceRequestService {
     SlotServiceRequestResponse approve(String id, SlotServiceRequestDecisionRequest request, AuthPrincipal principal);
 
     SlotServiceRequestResponse reject(String id, SlotServiceRequestDecisionRequest request, AuthPrincipal principal);
+
+    // ----- read-only projections for dashboards; callers must already have authorized the scope
+
+    /** Requests of the given rooms. */
+    java.util.List<OverviewServiceRequest> readForOverview(java.util.List<String> roomIds);
+
+    record OverviewServiceRequest(String roomId, com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus status,
+                                  String id, String tenantName, String serviceName, String slotCode) {
+    }
+
+    /** Statuses of a contract's requests (tenant overview). */
+    java.util.List<com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus> statusesForContract(String contractId);
+
+    /** Created / processed events of the given requests in [from, to). */
+    java.util.List<com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot> readActivitiesForOverview(
+            java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

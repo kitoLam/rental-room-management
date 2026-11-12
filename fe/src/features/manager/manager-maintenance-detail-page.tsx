@@ -1,4 +1,4 @@
-import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
+import { Field, InlineError, Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
 import { Facts } from '@/features/tenant/components'
@@ -16,7 +16,7 @@ import { EvidenceInput } from './evidence-input'
 
 export function ManagerMaintenanceDetail() {
   const { reportId = '' } = useParams(),
-    isAdmin = useSession((s) => Boolean(s.user?.roles.includes('ADMIN') || s.activeRole === 'ADMIN')),
+    currentUser = useSession((s) => s.user),
     query = useManagerQuery(
       'maintenance-detail',
       (b) => managerApi.get(b, 'maintenance', reportId),
@@ -26,11 +26,40 @@ export function ManagerMaintenanceDetail() {
     [action, setAction] = useState(''),
     [recordId, setRecordId] = useState(''),
     [evidence, setEvidence] = useState<Attachment[]>([]),
+    defaultManagerName = currentUser?.fullName || 'Quản lý khu trọ',
+    [assigneeDept, setAssigneeDept] = useState('Quản lý trực tiếp'),
+    [assigneeName, setAssigneeName] = useState(''),
+    [assigneePhone, setAssigneePhone] = useState(''),
     mutation = useManagerAction(() => {
       setAction('')
       setEvidence([])
       query.refetch()
     })
+
+  const openAction = (nextAction: string) => {
+    if (nextAction === 'start' || nextAction === 'assign') {
+      const existing = query.data?.assignedTo
+      if (existing && existing !== 'Quản lý phụ trách' && existing !== 'Quản lý') {
+        const match = existing.match(/^(.*?)\s*\(([^)]+)\)$/)
+        const rawLabel = match ? match[1].trim() : existing.trim()
+        const rawPhone = match ? match[2].trim() : ''
+        const parts = rawLabel.split(' - ')
+        if (parts.length > 1) {
+          setAssigneeName(parts[0].trim())
+          setAssigneeDept(parts.slice(1).join(' - ').trim())
+        } else {
+          setAssigneeName(rawLabel)
+          setAssigneeDept('Quản lý trực tiếp')
+        }
+        setAssigneePhone(rawPhone)
+      } else {
+        setAssigneeDept('Quản lý trực tiếp')
+        setAssigneeName(defaultManagerName)
+        setAssigneePhone((currentUser as any)?.phone || '')
+      }
+    }
+    setAction(nextAction)
+  }
 
   const getActionButtons = (status: string): [string, string][] => {
     switch (status) {
@@ -111,35 +140,11 @@ export function ManagerMaintenanceDetail() {
                   <p className="mt-1 whitespace-pre-wrap">{query.data.rejectReason}</p>
                 </div>
               )}
-              {query.data.status === 'ESCALATED_ADMIN' && (
-                <div className="mt-6 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
-                  <p className="font-bold">Hồ sơ đã chuyển lên Admin phân xử. Đang chờ kết luận:</p>
-                  <p className="mt-1 whitespace-pre-wrap">
-                    Lý do khiếu nại: {query.data.disputeReason || 'Chờ phân xử'}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      Các thao tác của Quản lý tạm khóa chờ Admin giải quyết.
-                    </p>
-                    {isAdmin && (
-                      <Button onClick={() => setAction('admin-resolve')}>
-                        Admin phân xử & đóng
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-              {query.data.adminConclusion && query.data.status === 'CLOSED' && (
-                <div className="mt-6 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-900 dark:text-emerald-200">
-                  <p className="font-bold">Hồ sơ đã được Admin phân xử & đóng:</p>
-                  <p className="mt-1 whitespace-pre-wrap">Kết luận Admin: {query.data.adminConclusion}</p>
-                </div>
-              )}
 
               {/* Action buttons (for Manager) */}
               <div className="mt-6 flex flex-wrap gap-3">
                 {getActionButtons(query.data.status).map(([a, label]) => (
-                  <Button variant="outline" key={a} onClick={() => setAction(a)}>
+                  <Button variant="outline" key={a} onClick={() => openAction(a)}>
                     {label}
                   </Button>
                 ))}
@@ -289,38 +294,126 @@ export function ManagerMaintenanceDetail() {
             <EvidenceInput value={evidence} onChange={setEvidence} disabled={mutation.isPending} />
           </ManagerForm>
         </Modal>
-      ) : action === 'admin-resolve' && isAdmin ? (
+      ) : action === 'start' || action === 'assign' ? (
         <Modal
-          title="Admin phân xử & Đóng hồ sơ tranh chấp"
-          description="Đưa ra kết luận phân xử chính thức. Quyết định của Admin là quyết định cuối cùng và hồ sơ sẽ được đóng hoàn tất."
+          title={
+            action === 'start'
+              ? 'Tiếp nhận & Gắn người phụ trách xử lý'
+              : 'Phân công / Đổi người phụ trách'
+          }
+          description="Chọn nhanh hoặc nhập tên người trực tiếp phụ trách xử lý yêu cầu này để khách thuê tiện theo dõi và liên hệ."
           open
           onOpenChange={(v) => {
             if (!v && !mutation.isPending) setAction('')
           }}
         >
-          <ManagerForm
-            schema={z.object({
-              adminConclusion: z.string().trim().min(5, 'Cần nhập kết luận phân xử ít nhất 5 ký tự'),
-            })}
-            defaults={{ adminConclusion: '' }}
-            fields={[
-              {
-                name: 'adminConclusion',
-                label: 'Kết luận phân xử chính thức (bắt buộc)',
-                kind: 'textarea',
-              },
-            ]}
-            pending={mutation.isPending}
-            error={mutation.error}
-            onSubmit={(value) =>
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const rawName = assigneeName.trim() || defaultManagerName
+              const dept = assigneeDept.trim()
+              const finalName =
+                dept && !rawName.toLowerCase().includes(dept.toLowerCase())
+                  ? `${rawName} - ${dept}`
+                  : rawName
               mutation.mutate({
                 resource: 'maintenance',
                 id: reportId,
-                action: 'admin-resolve',
-                value: { adminConclusion: value.adminConclusion },
+                action,
+                value: {
+                  assigneeName: finalName,
+                  assigneePhone: assigneePhone.trim() || undefined,
+                },
               })
-            }
-          />
+            }}
+          >
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">Chọn bộ phận phụ trách:</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'Quản lý trực tiếp', dept: 'Quản lý trực tiếp', phone: (currentUser as any)?.phone || '' },
+                  { label: 'Kỹ thuật viên Điện / Nước', dept: 'Kỹ thuật viên Điện / Nước', phone: '0909 112 233' },
+                  { label: 'Thợ sửa chữa Nội thất', dept: 'Thợ sửa chữa Nội thất', phone: '0909 445 566' },
+                  { label: 'Bộ phận Dịch vụ / Vệ sinh', dept: 'Bộ phận Dịch vụ / Vệ sinh', phone: '0909 778 899' },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setAssigneeDept(preset.dept)
+                      if (preset.phone) {
+                        setAssigneePhone(preset.phone)
+                      }
+                    }}
+                    className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                      assigneeDept === preset.dept
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-background hover:bg-muted'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Field id="assignee-name" label="Tên người phụ trách xử lý (bắt buộc)">
+              <input
+                id="assignee-name"
+                className="input"
+                value={assigneeName}
+                onChange={(e) => setAssigneeName(e.target.value)}
+                placeholder="VD: Nguyễn Văn A - Quản lý / Thợ kỹ thuật..."
+                required
+              />
+            </Field>
+
+            <Field id="assignee-phone" label="Số điện thoại liên hệ (tùy chọn)">
+              <input
+                id="assignee-phone"
+                className="input"
+                value={assigneePhone}
+                onChange={(e) => setAssigneePhone(e.target.value)}
+                placeholder="VD: 0909 123 456"
+              />
+            </Field>
+
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              Hiển thị ở mục Phụ trách:{' '}
+              <span className="font-semibold text-foreground">
+                {(() => {
+                  const rawName = assigneeName.trim() || defaultManagerName
+                  const dept = assigneeDept.trim()
+                  const combined =
+                    dept && !rawName.toLowerCase().includes(dept.toLowerCase())
+                      ? `${rawName} - ${dept}`
+                      : rawName
+                  return assigneePhone.trim() ? `${combined} (${assigneePhone.trim()})` : combined
+                })()}
+              </span>
+            </div>
+
+            {mutation.error && <InlineError error={mutation.error} />}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAction('')}
+                disabled={mutation.isPending}
+              >
+                Đóng
+              </Button>
+              <Button type="submit" disabled={mutation.isPending || !assigneeName.trim()}>
+                {mutation.isPending
+                  ? 'Đang lưu...'
+                  : action === 'start'
+                    ? 'Bắt đầu xử lý'
+                    : 'Lưu người phụ trách'}
+              </Button>
+            </div>
+          </form>
         </Modal>
       ) : (
         <ActionDialog
@@ -339,9 +432,9 @@ export function ManagerMaintenanceDetail() {
           }}
           fields={
             action === 'request-info'
-              ? [{ name: 'note', label: 'Nội dung thông tin cần bổ sung (bắt buộc)' }]
+              ? [{ name: 'note', label: 'Nội dung thông tin cần bổ sung (bắt buộc)', kind: 'textarea' }]
               : action === 'reject'
-                ? [{ name: 'reason', label: 'Lý do từ chối (bắt buộc)' }]
+                ? [{ name: 'reason', label: 'Lý do từ chối (bắt buộc)', kind: 'textarea' }]
                 : []
           }
           pending={mutation.isPending}

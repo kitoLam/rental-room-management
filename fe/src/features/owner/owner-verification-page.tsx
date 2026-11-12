@@ -61,7 +61,7 @@ export function OwnerVerificationPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               {query.data.eligible ? (
                 <Button asChild>
-                  <Link to="/owner/dashboard">Vào không gian chủ trọ</Link>
+                  <Link to="/manager/dashboard">Vào quản lý chi nhánh</Link>
                 </Button>
               ) : ['NOT_SUBMITTED', 'REJECTED'].includes(query.data.status) ? (
                 <Button asChild>

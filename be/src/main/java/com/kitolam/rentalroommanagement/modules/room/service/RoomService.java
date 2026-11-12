@@ -11,6 +11,9 @@ import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomUti
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.UtilityRatesResponse;
 
 public interface RoomService {
+    /** Internal read-only platform statistics. */
+    java.util.List<StatusTotal> readStatusTotalsForAdmin();
+    record StatusTotal(String status, long count) { }
     UtilityRatesResponse publicUtilityRates(String roomId);
     RoomUtilityRatesResponse utilityRateConfiguration(String roomId, AuthPrincipal principal);
     PagedResponse<RoomResponse> listByBranch(String branchId, Pageable pageable);

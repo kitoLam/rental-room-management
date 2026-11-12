@@ -68,6 +68,7 @@ public class ShiftServiceImpl implements ShiftService {
             updated.add(new Shift.Period(id, type, input.startTime(), input.endTime(), input.isActive()));
         }
         current.setPeriods(List.copyOf(updated));
+        if (request.viewingEnabled() != null) current.setViewingEnabled(request.viewingEnabled());
         try {
             return repository.save(current);
         } catch (OptimisticLockingFailureException concurrentEdit) {

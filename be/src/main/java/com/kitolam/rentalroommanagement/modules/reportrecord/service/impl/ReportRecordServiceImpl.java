@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.reportrecord.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
@@ -81,5 +83,16 @@ public class ReportRecordServiceImpl implements ReportRecordService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy nhật ký xử lý với id: " + id));
         record.markDeleted();
         reportRecordRepository.save(record);
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("reportRequestId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("createdAt").gte(from).lt(to));
+        query.fields().include("reportRequestId", "action", "createdAt", "actorId", "actorName", "note");
+        return mongoTemplate.find(query, ReportRecord.class).stream().map(item -> new ActivitySnapshot(
+                item.getId(), item.getReportRequestId(), item.getAction() == null ? null : item.getAction().name(),
+                item.getCreatedAt(), item.getActorId(), item.getActorName(), item.getNote())).toList();
     }
 }

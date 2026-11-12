@@ -45,12 +45,14 @@ const errors: Record<string, string> = {
 export function ViewingRequestForm({
   account,
   roomId,
+  roomSlotIds,
   date,
   period,
   version,
 }: {
   account: ViewingContext
   roomId: string
+  roomSlotIds: string[]
   date: string
   period: ViewingAvailability['periods'][number] | undefined
   version: number
@@ -80,10 +82,11 @@ export function ViewingRequestForm({
       remember(null)
       await Promise.all([
         client.invalidateQueries({ queryKey: ['viewing-appointments'] }),
+        client.invalidateQueries({ queryKey: ['management-overview'] }),
         client.invalidateQueries({ queryKey: ['viewing-availability', roomId] }),
         client.invalidateQueries({ queryKey: ['viewing-configuration', roomId] }),
       ])
-      navigate(`/user/appointments/${record.id}`, { replace: true })
+      navigate(`/tenant/appointments/${record.id}`, { replace: true })
     },
     onError: (error) => {
       if (
@@ -102,6 +105,7 @@ export function ViewingRequestForm({
     if (attemptRef.current || create.isPending || !period) return
     const input = viewingAppointmentInputSchema.safeParse({
       roomId,
+      roomSlotIds,
       shiftId: period.id,
       appointmentDate: date,
       configurationVersion: version,

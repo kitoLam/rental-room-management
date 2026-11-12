@@ -37,6 +37,10 @@ public class ReportRequest extends BaseDocument {
     @Indexed
     private String managerId;
 
+    private String assigneeName;
+
+    private String assigneePhone;
+
     private ReportRequestType type;
 
     private String title;
@@ -53,9 +57,6 @@ public class ReportRequest extends BaseDocument {
 
     private String solutionResult;
 
-    private String disputeReason;
-
-    private String adminConclusion;
 
     private ReportRequestStatus status = ReportRequestStatus.PENDING;
 

@@ -55,17 +55,17 @@ export const tenantContractSchema = z.object({
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
 })
 export type TenantContract = z.infer<typeof tenantContractSchema>
 export const tenancySchema = z.object({
-  id,
-  userId: id,
-  contractId: id,
-  branchId: id,
-  roomId: id,
-  roomSlotId: id.nullable(),
+  id: databaseId,
+  userId: databaseId,
+  contractId: databaseId,
+  branchId: databaseId,
+  roomId: databaseId,
+  roomSlotId: databaseId.nullable(),
   branchName: z.string(),
   roomName: z.string(),
   slotName: z.string().nullable(),
@@ -84,11 +84,11 @@ export const tenancySchema = z.object({
   prepaidLastRequired: money,
   terms: z.string(),
   sharedTerms: z.string(),
-  document: z.object({ name: z.string(), url: z.string().url(), issuedAt: z.string() }).nullable(),
+  document: z.object({ name: z.string(), url: z.string(), issuedAt: z.string() }).nullable(),
 })
 export type Tenancy = z.infer<typeof tenancySchema>
 export const assetSchema = z.object({
-  id,
+  id: databaseId,
   name: z.string(),
   category: z.enum(['FURNITURE', 'SERVICE']),
   condition: z.string(),
@@ -139,9 +139,9 @@ export const invoiceSchema = z.object({
 })
 export type Invoice = z.infer<typeof invoiceSchema>
 export const tenantPaymentSchema = z.object({
-  id,
-  contractTenantId: id,
-  invoiceId: id.nullable(),
+  id: databaseId,
+  contractTenantId: databaseId,
+  invoiceId: databaseId.nullable(),
   reference: z.string(),
   amountReceived: money,
   allocatedAmount: money,
@@ -258,6 +258,7 @@ export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
   id: z.string(),
   contractTenantId: z.string(),
+  roomName: z.string().nullable().optional(),
   assetName: z.string(),
   status: z.enum([
     'OPEN',
@@ -270,15 +271,12 @@ export const reportSchema = reportInputSchema.extend({
     'WAITING_INFO',
     'RESOLVED',
     'CLOSED',
-    'ESCALATED_ADMIN',
   ]),
   createdAt: z.string(),
   assignedTo: z.string().nullable(),
   solutionResult: z.string().nullable().optional(),
   rejectReason: z.string().nullable().optional(),
   requestedInfoNote: z.string().nullable().optional(),
-  disputeReason: z.string().nullable().optional(),
-  adminConclusion: z.string().nullable().optional(),
   records: z.array(
     z.object({
       id: z.string(),

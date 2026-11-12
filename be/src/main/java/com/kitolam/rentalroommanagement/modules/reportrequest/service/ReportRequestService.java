@@ -1,10 +1,11 @@
 package com.kitolam.rentalroommanagement.modules.reportrequest.service;
 
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
+import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestInfoRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestProgressRequest;
@@ -17,6 +18,12 @@ import com.kitolam.rentalroommanagement.modules.reportrequest.dto.response.Repor
 import org.springframework.data.domain.Pageable;
 
 public interface ReportRequestService {
+    /** Read-only summary for an authorized contract and the current account/profile IDs. */
+    java.util.List<TenantSupport> readForTenantOverview(java.util.List<String> tenantIds, String contractId);
+
+    record TenantSupport(String id, String title,
+                         com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status,
+                         java.time.Instant updatedAt) { }
 
     /**
      * Tenant tạo yêu cầu:
@@ -34,7 +41,10 @@ public interface ReportRequestService {
     PagedResponse<ReportRequestResponse> search(ReportRequestFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
     /** Manager bắt đầu tiếp nhận và xử lý (chuyển PENDING sang IN_PROGRESS) */
-    ReportRequestResponse startProcessing(String id, AuthPrincipal principal);
+    ReportRequestResponse startProcessing(String id, ReportRequestAssignRequest request, AuthPrincipal principal);
+
+    /** Manager phân công / đổi người phụ trách xử lý yêu cầu */
+    ReportRequestResponse assign(String id, ReportRequestAssignRequest request, AuthPrincipal principal);
 
     /** Manager yêu cầu Tenant bổ sung thông tin (chuyển sang WAITING_INFO) */
     ReportRequestResponse requestInfo(String id, ReportRequestInfoRequest request, AuthPrincipal principal);
@@ -57,11 +67,6 @@ public interface ReportRequestService {
     /** Tenant không hài lòng, mở lại để tiếp tục xử lý (chuyển lại IN_PROGRESS) */
     ReportRequestResponse reopen(String id, ReportRequestReopenRequest request, AuthPrincipal principal);
 
-    /** Không giải quyết được -> Chuyển tranh chấp lên Admin xác minh (chuyển sang ESCALATED_ADMIN) */
-    ReportRequestResponse escalateAdmin(String id, ReportRequestEscalateAdminRequest request, AuthPrincipal principal);
-
-    /** Admin tiếp nhận tranh chấp, xác minh và ghi nhận kết luận giải quyết (chuyển sang CLOSED) */
-    ReportRequestResponse adminResolve(String id, ReportRequestAdminResolveRequest request, AuthPrincipal principal);
 
     /** Tenant tự hủy yêu cầu khi chưa xử lý (từ PENDING hoặc WAITING_INFO sang CANCELLED) */
     ReportRequestResponse cancel(String id, AuthPrincipal principal);
@@ -71,4 +76,13 @@ public interface ReportRequestService {
 
     /** Xóa mềm yêu cầu */
     void delete(String id, AuthPrincipal principal);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewReport> readForOverview(List<String> ids);
+
+    record OverviewReport(String roomId, com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status,
+                          String id, String title, String tenantId) {
+        public OverviewReport(String roomId, com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus status) {
+            this(roomId, status, null, null, null);
+        }
+    }
 }

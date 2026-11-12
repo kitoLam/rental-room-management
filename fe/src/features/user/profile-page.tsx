@@ -185,6 +185,30 @@ function ProfileInfoForm({ user }: { user: User }) {
           </Field>
         </div>
 
+        {(user.permanentAddress || user.cccdNumber || user.cccdIssueDate || user.cccdIssuePlace) && (
+          <div className="rounded-lg border border-border/80 bg-muted/30 p-4 grid gap-3">
+            <p className="text-xs font-bold text-foreground">Thông tin thường trú & CCCD đã đăng ký</p>
+            <div className="grid gap-3 sm:grid-cols-2 text-sm">
+              <div className="sm:col-span-2">
+                <span className="text-xs text-muted-foreground block">Địa chỉ thường trú</span>
+                <span className="font-medium text-foreground">{user.permanentAddress || 'Chưa cập nhật'}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Số CCCD</span>
+                <span className="font-medium text-foreground">{user.cccdNumber || 'Chưa cập nhật'}</span>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground block">Ngày cấp CCCD</span>
+                <span className="font-medium text-foreground">{user.cccdIssueDate || 'Chưa cập nhật'}</span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-xs text-muted-foreground block">Nơi cấp CCCD</span>
+                <span className="font-medium text-foreground">{user.cccdIssuePlace || 'Chưa cập nhật'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <InlineError error={update.error} />
         {saved && <Notice tone="success">Đã cập nhật thông tin cá nhân thành công!</Notice>}
 
@@ -456,14 +480,14 @@ export default function ProfilePage() {
                   Lối tắt nhanh
                 </p>
                 <Link
-                  to="/user/appointments"
+                  to="/tenant/appointments"
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >
                   <span>Quản lý lịch hẹn xem phòng</span>
                   <ArrowRight size={13} />
                 </Link>
                 <Link
-                  to="/user/bookings"
+                  to="/tenant/bookings"
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >
                   <span>Yêu cầu đặt phòng & giữ chỗ</span>
@@ -476,13 +500,15 @@ export default function ProfilePage() {
                   <span>Lời mời làm quản lý</span>
                   <ArrowRight size={13} />
                 </Link>
-                <Link
-                  to={activeUser?.roles?.includes('OWNER') ? '/owner/dashboard' : '/owner/onboarding'}
-                  className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
-                >
-                  <span>{activeUser?.roles?.includes('OWNER') ? 'Không gian chủ trọ' : 'Đăng ký làm chủ trọ'}</span>
-                  <ArrowRight size={13} />
-                </Link>
+                {!activeUser?.roles?.includes('OWNER') && (
+                  <Link
+                    to="/owner/onboarding"
+                    className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
+                  >
+                    <span>Đăng ký làm chủ trọ</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                )}
               </div>
 
               <InlineError error={logout.error} />

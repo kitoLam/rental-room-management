@@ -13,6 +13,15 @@ export type CostEstimateInput = {
 /** Số lượng dịch vụ tùy chọn đang tích, theo id dịch vụ. Dịch vụ bắt buộc không nằm ở đây. */
 export type ServiceSelection = Record<string, number>
 
+/**
+ * Dịch vụ hiện ở mục "Dịch vụ tham khảo". Ẩn dịch vụ tính theo lần (không phải phí tháng) và gửi xe
+ * (đơn vị xe/tháng): tiền gửi xe đã tính theo "Số xe" × đơn giá gửi xe của phòng, cùng giá ghi vào hợp đồng.
+ */
+export function shownOnRoomPage(service: { unit?: string }) {
+  const unit = service.unit?.trim().toLocaleLowerCase('vi-VN')
+  return unit !== 'lần' && unit !== 'xe/tháng'
+}
+
 /** Chi phí tháng của dịch vụ đã chọn; dịch vụ tính theo chỉ số (điện, nước) đã có ở phần ước tính riêng. */
 export function selectedServiceCosts(
   services: { id: string; name: string; unit?: string; price: number; mandatory: boolean; calculationType: string; quantityRule?: string }[],
@@ -20,7 +29,7 @@ export function selectedServiceCosts(
   slotCount = 1,
 ) {
   return services
-    .filter((s) => s.unit?.trim().toLocaleLowerCase('vi-VN') !== 'lần'
+    .filter((s) => shownOnRoomPage(s)
       && s.calculationType !== 'METERED' && (s.mandatory || (selection[s.id] ?? 0) > 0))
     .map((s) => {
       const quantity = s.quantityRule === 'PER_SLOT' ? slotCount

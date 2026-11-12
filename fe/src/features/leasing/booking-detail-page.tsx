@@ -1,7 +1,7 @@
 import { ConfirmAction, InlineError, Notice, Page, Panel, QueryState, RecordStatus } from '@/components/common/page'
 import { ContractEvidencePanel } from './contract-evidence-panel'
 import { Button } from '@/components/ui/button'
-import { dateTime } from '@/lib/activity'
+import { bookingMoveInDate, dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { bookingService } from '@/services/guest-user'
 import { provider } from '@/services/config'
@@ -29,10 +29,10 @@ export function BookingDetailPage() {
     await recordQuery.refetch()
   }
   const cancel = useMutation({ mutationFn: () => bookingService.cancel(bookingId), onSuccess: refresh })
-  if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/user/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
+  if (!bookingId) return <Page title="Liên kết giữ chỗ không hợp lệ" back="/tenant/bookings"><Notice>Chọn một yêu cầu từ danh sách.</Notice></Page>
 
   return (
-    <Page title="Chi tiết giữ chỗ" back="/user/bookings" narrow>
+    <Page title="Chi tiết giữ chỗ" back="/tenant/bookings" narrow>
       <QueryState pending={recordQuery.isPending} error={recordQuery.error} retry={recordQuery.refetch}>
         {record && <Panel>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -43,6 +43,7 @@ export function BookingDetailPage() {
           <p className="mt-3 break-all text-xs text-muted-foreground">Mã giữ chỗ: {record.id}</p>
           <dl className="my-7 grid gap-5 sm:grid-cols-2">
             <div><dt className="text-xs text-muted-foreground">Các slot</dt><dd className="mt-2 text-sm font-bold">{record.slotLabels.join(', ') || '—'}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{record.hasRentalDates ? 'Ngày bắt đầu thuê' : 'Ngày bắt đầu thuê dự kiến'}</dt><dd className="mt-2 text-sm font-bold">{dateOnly(record.startDate)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Tiền cọc</dt><dd className="mt-2 font-bold text-primary">{formatVnd(record.holdAmount)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Hạn thanh toán</dt><dd className="mt-2 text-sm">{record.paymentDueAt ? dateTime(record.paymentDueAt) : '—'}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Tạo lúc</dt><dd className="mt-2 text-sm">{dateTime(record.createdAt)}</dd></div>
@@ -53,7 +54,7 @@ export function BookingDetailPage() {
           {record.depositStatus === 'PROCESSING' && <Notice tone="warning">Khoản cọc đang được xử lý hoàn tiền.</Notice>}
           {record.status === 'CONFIRMED' && <Notice tone="success">Đã nhận cọc chung cho {contractIds.length} chỗ. Mỗi chỗ có một hợp đồng riêng: ký, nộp bản ký và chờ quản lý duyệt từng hợp đồng; chỗ nào được duyệt thì vào được không gian thuê của chỗ đó.</Notice>}
           <div className="mt-6 flex flex-wrap gap-3">
-            {!canManage && record.status === 'AWAITING_PAYMENT' && <Button asChild><Link to={`/user/bookings/${record.id}/payment`}>Thanh toán cọc</Link></Button>}
+            {!canManage && record.status === 'AWAITING_PAYMENT' && <Button asChild><Link to={`/tenant/bookings/${record.id}/payment`}>Thanh toán cọc</Link></Button>}
             {['REQUESTED', 'AWAITING_PAYMENT'].includes(record.status) && <ConfirmAction
               label="Hủy giữ chỗ" title="Hủy giữ chỗ?" description="Các slot sẽ được giải phóng. Nếu đã thanh toán, khoản cọc sẽ được chuyển sang xử lý hoàn."
               pending={cancel.isPending} onConfirm={() => cancel.mutateAsync()} />}
@@ -65,7 +66,8 @@ export function BookingDetailPage() {
 
       {provider('leasing') === 'real' && contractIds.map((contractId, index) => (
         <ContractEvidencePanel key={contractId} contractId={contractId} index={contractIds.length > 1 ? index : undefined}
-          canManage={canManage} onChanged={refresh} />
+          canManage={canManage} onChanged={refresh}
+          moveInDate={bookingMoveInDate(record)} rentalStartDate={record?.startDate} />
       ))}
     </Page>
   )

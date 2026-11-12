@@ -38,6 +38,29 @@ public class AuthServiceImpl implements AuthService {
     private final String dummyPasswordHash;
 
     @Override
+    public AdminAccountStatistics readStatisticsForAdmin(int year) {
+        var zone = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+        var from = java.time.LocalDate.of(year, 1, 1).atStartOfDay(zone).toInstant();
+        var to = java.time.LocalDate.of(year + 1, 1, 1).atStartOfDay(zone).toInstant();
+        long total = 0, active = 0, unverified = 0, inactive = 0;
+        var roles = new java.util.TreeMap<String, Long>();
+        for (var group : users.readAccountGroups()) {
+            total += group.count();
+            roles.merge(group.role() == null ? "UNKNOWN" : group.role(), group.count(), Long::sum);
+            if (!Boolean.TRUE.equals(group.emailVerified())) unverified += group.count();
+            else if (Boolean.TRUE.equals(group.enabled())) active += group.count();
+            else inactive += group.count();
+        }
+        var recent = users.readRecentForAdmin(org.springframework.data.domain.PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "_id")))
+                .stream().map(u -> new AdminAccountStatistics.RecentAccount(u.getId(), u.getFullName(),
+                        u.getRole() == null ? "UNKNOWN" : u.getRole().name(), u.getCreatedAt())).toList();
+        return new AdminAccountStatistics(total, active, unverified, inactive,
+                roles.entrySet().stream().map(e -> new AdminAccountStatistics.RoleCount(e.getKey(), e.getValue())).toList(),
+                users.readRegistrations(from, to), recent);
+    }
+
+    @Override
     public Optional<AccountIdentityResponse> findAccount(String id) {
         return users.findByIdAndIsDeletedFalse(id).map(this::identity);
     }
@@ -89,6 +112,13 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.email());
         user.setPhone(request.phone());
         user.setPasswordHash(passwords.encode(request.password()));
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPermanentAddress(request.permanentAddress());
+        user.setCccdNumber(request.cccdNumber());
+        user.setCccdIssueDate(request.cccdIssueDate());
+        user.setCccdIssuePlace(request.cccdIssuePlace());
+        user.setCccdFrontImageUrl(request.cccdFrontImageUrl());
+        user.setCccdBackImageUrl(request.cccdBackImageUrl());
         user.setRole(Role.TENANT);
         user.setEnabled(false);
         user.setEmailVerified(false);
@@ -100,8 +130,61 @@ public class AuthServiceImpl implements AuthService {
         } else {
             users.insert(user);
         }
-        sendVerification(user);
+        sendVerification(user, false, null);
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để kích hoạt tài khoản");
+    }
+
+    @Override
+    @Transactional
+    public AccountIdentityResponse createManagedTenantAccount(String fullName, String email, String phone, String branchName) {
+        String normalizedEmail = email == null ? null : email.strip().toLowerCase(java.util.Locale.ROOT);
+        String normalizedPhone = phone == null ? null : phone.strip();
+        if (normalizedPhone != null && normalizedPhone.startsWith("+84")) {
+            normalizedPhone = "0" + normalizedPhone.substring(3);
+        }
+        if (users.findByEmailAndIsDeletedFalse(normalizedEmail).isPresent() || users.existsByEmail(normalizedEmail)) {
+            throw new ConflictException("Email này đã tồn tại tài khoản trong hệ thống");
+        }
+        if (normalizedPhone != null && !normalizedPhone.isBlank()
+                && (users.findByPhoneAndIsDeletedFalse(normalizedPhone).isPresent() || users.existsByPhone(normalizedPhone))) {
+            throw new ConflictException("Số điện thoại này đã tồn tại tài khoản trong hệ thống");
+        }
+        var now = clock.instant();
+        User user = new User();
+        user.setFullName(fullName == null ? null : fullName.strip());
+        user.setEmail(normalizedEmail);
+        user.setPhone(normalizedPhone);
+        user.setPasswordHash(null);
+        user.setRole(Role.TENANT);
+        user.setEnabled(false);
+        user.setEmailVerified(false);
+        user.setLastVerificationSentAt(now);
+        users.insert(user);
+        sendVerification(user, true, branchName);
+        return identity(user);
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse resendManagedTenantVerification(String email, String branchName) {
+        String normalizedEmail = email == null ? null : email.strip().toLowerCase(java.util.Locale.ROOT);
+        var user = users.findByEmailAndIsDeletedFalse(normalizedEmail)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài khoản tương ứng với email này"));
+        if (user.isEnabled() && user.isEmailVerified() && user.getPasswordHash() != null && !user.getPasswordHash().isBlank()) {
+            throw new ConflictException("Tài khoản này đã được xác thực và kích hoạt");
+        }
+        var now = clock.instant();
+        if (!tokenStore.claimResend(user.getId(), now.minus(properties.resendCooldown()), now)) {
+            throw new TooManyRequestsException("Vui lòng chờ " + properties.resendCooldown().toSeconds()
+                    + " giây giữa hai lần gửi email xác thực");
+        }
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            user.setEmailVerified(false);
+            users.save(user);
+        }
+        tokenStore.invalidateVerifications(user.getId(), now);
+        sendVerification(user, true, branchName);
+        return new MessageResponse("Đã gửi lại liên kết xác thực và đặt mật khẩu tới email của người thuê");
     }
 
     @Override
@@ -110,33 +193,89 @@ public class AuthServiceImpl implements AuthService {
         var stored = verifications.findByTokenHashAndIsDeletedFalse(tokens.hash(token))
                 .orElseThrow(() -> new BadRequestException("Token xác thực không hợp lệ"));
         if (!tokens.matches(token, stored.getTokenHash())) throw new BadRequestException("Token xác thực không hợp lệ");
+        if (stored.getPurpose() != null && stored.getPurpose() != TokenPurpose.EMAIL_VERIFICATION) {
+            throw new BadRequestException("Token xác thực không hợp lệ");
+        }
         if (stored.getUsedAt() != null) throw new BadRequestException("Token xác thực đã được sử dụng hoặc thay thế");
         var now = clock.instant();
         if (!stored.getExpiresAt().isAfter(now)) throw new BadRequestException("Token xác thực đã hết hạn");
-        if (!tokenStore.consumeVerification(stored.getTokenHash(), now)) {
+        if (!tokenStore.consumeVerification(stored.getTokenHash(), TokenPurpose.EMAIL_VERIFICATION, now)) {
             throw new BadRequestException("Token xác thực không còn hiệu lực");
         }
         var user = users.findByIdAndIsDeletedFalse(stored.getUserId())
                 .orElseThrow(() -> new BadRequestException("Tài khoản không còn tồn tại"));
         user.setEmailVerified(true);
+        tokenStore.invalidateVerifications(user.getId(), now);
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            user.setEnabled(false);
+            users.save(user);
+            String setupToken = issuePasswordSetupToken(user);
+            return new MessageResponse(
+                    "Xác thực email thành công. Vui lòng đặt mật khẩu để hoàn tất kích hoạt tài khoản",
+                    true,
+                    setupToken);
+        }
         user.setEnabled(true);
         users.save(user);
-        tokenStore.invalidateVerifications(user.getId(), now);
         return new MessageResponse("Xác thực email thành công. Bạn có thể đăng nhập");
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse setupPassword(SetupPasswordRequest request) {
+        var stored = verifications.findByTokenHashAndIsDeletedFalse(tokens.hash(request.token()))
+                .orElseThrow(() -> new BadRequestException("Liên kết đặt mật khẩu không hợp lệ"));
+        if (!tokens.matches(request.token(), stored.getTokenHash())
+                || stored.getPurpose() != TokenPurpose.PASSWORD_SETUP) {
+            throw new BadRequestException("Liên kết đặt mật khẩu không hợp lệ");
+        }
+        if (stored.getUsedAt() != null) {
+            throw new BadRequestException("Liên kết đặt mật khẩu đã được sử dụng hoặc thay thế");
+        }
+        var now = clock.instant();
+        if (!stored.getExpiresAt().isAfter(now)) {
+            throw new BadRequestException("Liên kết đặt mật khẩu đã hết hạn");
+        }
+        var user = users.findByIdAndIsDeletedFalse(stored.getUserId())
+                .orElseThrow(() -> new BadRequestException("Tài khoản không còn tồn tại"));
+        if (!user.isEmailVerified()) {
+            throw new BadRequestException("Tài khoản chưa được xác thực email. Vui lòng xác thực email trước khi đặt mật khẩu");
+        }
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BadRequestException("Mật khẩu không được vượt quá 72 byte");
+        }
+        if (!tokenStore.consumeVerification(stored.getTokenHash(), TokenPurpose.PASSWORD_SETUP, now)) {
+            throw new BadRequestException("Liên kết đặt mật khẩu không còn hiệu lực");
+        }
+        user.setPasswordHash(passwords.encode(request.password()));
+        user.setEnabled(true);
+        if (user.getTermsAcceptedAt() == null) {
+            user.setTermsAcceptedAt(now);
+        }
+        users.save(user);
+        tokenStore.invalidateVerifications(user.getId(), now);
+        return new MessageResponse("Đặt mật khẩu thành công. Bạn có thể đăng nhập");
     }
 
     @Override
     @Transactional
     public MessageResponse resendVerification(ResendVerificationRequest request) {
         var user = users.findByEmailAndIsDeletedFalse(request.email()).orElse(null);
-        if (user == null || user.isEmailVerified()) return new MessageResponse(RESEND_MESSAGE);
+        boolean needsPasswordSetup = user != null && (user.getPasswordHash() == null || user.getPasswordHash().isBlank());
+        if (user == null || (user.isEmailVerified() && !needsPasswordSetup)) {
+            return new MessageResponse(RESEND_MESSAGE);
+        }
         var now = clock.instant();
         if (!tokenStore.claimResend(user.getId(), now.minus(properties.resendCooldown()), now)) {
             throw new TooManyRequestsException("Vui lòng chờ " + properties.resendCooldown().toSeconds()
                     + " giây giữa hai lần gửi email xác thực");
         }
+        if (needsPasswordSetup && user.isEmailVerified()) {
+            user.setEmailVerified(false);
+            users.save(user);
+        }
         tokenStore.invalidateVerifications(user.getId(), now);
-        sendVerification(user);
+        sendVerification(user, needsPasswordSetup, null);
         return new MessageResponse(RESEND_MESSAGE);
     }
 
@@ -150,7 +289,12 @@ public class AuthServiceImpl implements AuthService {
         String supplied = request.password();
         // BCrypt has a 72-byte input limit, including multibyte Unicode passwords.
         boolean tooLong = supplied.getBytes(StandardCharsets.UTF_8).length > 72;
-        boolean matches = passwords.matches(tooLong ? "" : supplied, user.getPasswordHash());
+        boolean missingPassword = user.getPasswordHash() == null || user.getPasswordHash().isBlank();
+        String hashToCheck = missingPassword ? dummyPasswordHash : user.getPasswordHash();
+        boolean matches = passwords.matches(tooLong ? "" : supplied, hashToCheck);
+        if (missingPassword) {
+            throw new ForbiddenException("Tài khoản chưa hoàn tất xác thực email và đặt mật khẩu. Vui lòng kiểm tra hộp thư email.");
+        }
         if (tooLong || !matches) {
             throw new UnauthorizedException("Mật khẩu không chính xác. Vui lòng kiểm tra lại mật khẩu.");
         }
@@ -191,15 +335,28 @@ public class AuthServiceImpl implements AuthService {
         return new MessageResponse("Đăng xuất thành công");
     }
 
-    private void sendVerification(User user) {
+    private void sendVerification(User user, boolean createdByManager, String branchName) {
         String raw = tokens.generate();
         var token = new VerificationToken();
         token.setUserId(user.getId());
+        token.setPurpose(TokenPurpose.EMAIL_VERIFICATION);
         token.setTokenHash(tokens.hash(raw));
         token.setExpiresAt(clock.instant().plus(properties.verificationTokenTtl()));
         token.setPurgeAt(token.getExpiresAt().plus(Duration.ofDays(7)));
         verifications.insert(token);
-        events.publishEvent(new VerificationMailEvent(user.getEmail(), raw));
+        events.publishEvent(new VerificationMailEvent(user.getEmail(), raw, createdByManager, branchName));
+    }
+
+    private String issuePasswordSetupToken(User user) {
+        String raw = tokens.generate();
+        var token = new VerificationToken();
+        token.setUserId(user.getId());
+        token.setPurpose(TokenPurpose.PASSWORD_SETUP);
+        token.setTokenHash(tokens.hash(raw));
+        token.setExpiresAt(clock.instant().plus(properties.verificationTokenTtl()));
+        token.setPurgeAt(token.getExpiresAt().plus(Duration.ofDays(7)));
+        verifications.insert(token);
+        return raw;
     }
 
     private TokenResponse issueTokens(User user) {
@@ -223,6 +380,9 @@ public class AuthServiceImpl implements AuthService {
         }
         User user = users.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy thông tin tài khoản"));
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            throw new BadRequestException("Tài khoản chưa được thiết lập mật khẩu");
+        }
 
         if (!passwords.matches(request.oldPassword(), user.getPasswordHash())) {
             throw new BadRequestException("Mật khẩu cũ không chính xác");
@@ -286,6 +446,10 @@ public class AuthServiceImpl implements AuthService {
                 user.getPhone(),
                 user.getDateOfBirth(),
                 user.getGender(),
+                user.getPermanentAddress(),
+                user.getCccdNumber(),
+                user.getCccdIssueDate(),
+                user.getCccdIssuePlace(),
                 user.isEnabled() ? "ACTIVE" : "DISABLED"
         );
     }

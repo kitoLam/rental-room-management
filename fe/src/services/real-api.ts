@@ -8,6 +8,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'admin' && pathname === '/api/v1/admin/dashboard' && verb === 'GET') return null
+  if (feature === 'tenant' && verb === 'GET' && ['/api/v1/dashboard/tenant', '/api/v1/dashboard/tenant/tenancies'].includes(pathname)) return null
+  if ((feature === 'manager' || feature === 'owner') && ['/api/v1/dashboard/management', '/api/v1/dashboard/reports'].includes(pathname) && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && (matches(`/api/v1/branches(/${id})?`) || pathname === '/api/v1/branches/managed') && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && matches(`/api/v1/payments(/${id})?`) && verb === 'GET') return null
   if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
   if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
   // Đăng ký / ngừng dịch vụ (BE module servicerequest).
@@ -65,10 +70,22 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/auth/login' && verb === 'POST') ||
       (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
       (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/setup-password' && verb === 'POST') ||
       (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
       (pathname === '/api/v1/auth/me' && ['GET', 'PATCH'].includes(verb)) ||
       (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
       (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
+  )
+    return null
+  if (
+    (feature === 'manager' || feature === 'owner') &&
+    ((pathname === '/api/v1/branches/managed' && verb === 'GET') ||
+      (pathname === '/api/v1/tenants' && ['GET', 'POST'].includes(verb)) ||
+      (pathname === '/api/v1/tenants/stats' && verb === 'GET') ||
+      (matches(`/api/v1/tenants/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/tenants/${id}/branch-status`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/role`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/resend-verification`) && verb === 'POST'))
   )
     return null
   if (
@@ -172,8 +189,16 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
   )
     return null
+  if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')
+    return null
 
   if (feature === 'adminUsers') {
+    if (
+      (pathname === '/api/v1/admin/users' && verb === 'GET') ||
+      (pathname === '/api/v1/admin/roles' && verb === 'GET') ||
+      (matches(`/api/v1/admin/users/${id}/role`) && verb === 'PATCH')
+    )
+      return null
     if (pathname === '/api/users' && ['GET', 'POST'].includes(verb)) return null
     if (matches(`/api/users/${id}`) && verb === 'GET') return null
     if (matches(`/api/users/${id}/active-status`) && verb === 'PATCH') return null
@@ -215,11 +240,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   }
 
   if (
-    (feature === 'tenant' || feature === 'manager' || feature === 'admin') &&
+    (feature === 'tenant' || feature === 'manager' || feature === 'owner' || feature === 'admin') &&
     ((matches('/api/v1/report-requests') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/report-requests/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
       (matches(
-        `/api/v1/report-requests/${id}/(start|request-info|supplement|reject|progress|resolve|confirm-close|reopen|escalate-admin|admin-resolve|cancel)`,
+        `/api/v1/report-requests/${id}/(start|assign|request-info|supplement|reject|progress|resolve|confirm-close|reopen|cancel)`,
       ) &&
         verb === 'POST') ||
       (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||

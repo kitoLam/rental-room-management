@@ -1,5 +1,13 @@
 package com.kitolam.rentalroommanagement.modules.invoice.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
+import com.kitolam.rentalroommanagement.modules.invoice.document.Invoice;
+
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceCreateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
@@ -14,6 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class InvoiceServiceImpl implements InvoiceService {
+
+    private final MongoTemplate overviewMongo;
 
     private final InvoiceRepository invoiceRepository;
 
@@ -45,5 +55,49 @@ public class InvoiceServiceImpl implements InvoiceService {
     public void delete(String id) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+    @Override
+    public List<OverviewInvoice> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("contractTenantId");
+        return overviewMongo.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
+    }
+    @Override
+    public List<TenantInvoice> readForTenantOverview(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("invoiceNumber", "period", "dueDate", "totalAmount", "remainingAmount", "status");
+        return overviewMongo.find(query, Invoice.class).stream().map(item -> new TenantInvoice(item.getId(),
+                item.getInvoiceNumber(), item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount(), item.getStatus())).toList();
+    }
+
+    @Override
+    public List<DebtInvoice> readDebts(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status")
+                .in("ISSUED", "PARTIALLY_PAID", "OVERDUE"));
+        query.fields().include("contractTenantId", "invoiceNumber", "period", "dueDate", "totalAmount", "remainingAmount");
+        return overviewMongo.find(query, Invoice.class).stream()
+                .filter(item -> item.getRemainingAmount() != null && item.getRemainingAmount().signum() > 0)
+                .map(item -> new DebtInvoice(item.getId(), item.getContractTenantId(), item.getInvoiceNumber(),
+                        item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount()))
+                .toList();
+    }
+
+    @Override
+    public List<OverviewInvoice> readForReports(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        // A partial receipt cannot be split between rent and deposit without allocation data.
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("items.type").ne("DEPOSIT"));
+        query.fields().include("contractTenantId");
+        return overviewMongo.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
     }
 }

@@ -15,25 +15,27 @@ import { queryClient } from '@/services/query-client'
 const groups: [string, [string, string][]][] = [
   ['Tổng quan', [['dashboard', 'Tổng quan']]],
   ['Tài sản', [['branches', 'Chi nhánh']]],
+  ['Tiếp nhận', [['appointments', 'Lịch xem']]],
   [
     'Nhân sự',
     [
       ['managers', 'Quản lý'],
       ['manager-assignments', 'Phân công'],
+      ['portfolio/tenants', 'Quản lý tài khoản'],
     ],
   ],
   [
     'Tài chính',
     [
       ['finance', 'Tài chính'],
-      ['payments', 'Giao dịch'],
+      ['portfolio/payments', 'Giao dịch'],
       ['approvals/invoices', 'Duyệt điều chỉnh'],
     ],
   ],
   [
     'Báo cáo',
     [
-      ['reports', 'Báo cáo'],
+      ['portfolio/reports', 'Báo cáo'],
       ['activity', 'Hoạt động'],
     ],
   ],
@@ -49,7 +51,8 @@ export function OwnerLayout() {
   const verification = useQuery({
     queryKey: ['owner-verification', user.id],
     queryFn: async () => {
-      if (provider('owner') === 'real') return { eligible: user.roles.includes('OWNER') || user.roles.includes('ADMIN') }
+      if (provider('owner') === 'real')
+        return { eligible: user.roles.includes('OWNER') || user.roles.includes('ADMIN') }
       try {
         return await ownerApi.verification()
       } catch {
@@ -62,7 +65,8 @@ export function OwnerLayout() {
   const gatePage = ['/owner/onboarding', '/owner/verification'].includes(location.pathname)
   const branches = useQuery<(OwnedBranch | OwnerProperty)[]>({
     queryKey: ['owner-branches', user.id],
-    queryFn: () => provider('owner') === 'real' ? ownerProperties.list() : ownerApi.branchOptions(),
+    queryFn: () =>
+      provider('owner') === 'real' ? ownerProperties.list() : ownerApi.branchOptions(),
     enabled: !!verification.data?.eligible,
     retry: false,
     refetchInterval: 3000,
@@ -174,14 +178,13 @@ export function OwnerLayout() {
                 </select>
                 {scope && allowed && (
                   <Button className="mt-4 w-full" asChild>
-                    <Link to={operationsLink(scope)}>
+                    <Link to={operationsLink(scope, 'rooms')}>
                       Vận hành chi nhánh
                       <ArrowUpRight size={16} />
                     </Link>
                   </Button>
                 )}
                 <div className="mt-5 flex flex-wrap gap-4 text-xs font-bold text-primary">
-                  <Link to="/notifications">Thông báo</Link>
                   <Link to="/profile">Hồ sơ</Link>
                   <Link to="/profile">Tài khoản</Link>
                   <Link to="/owner/verification">Xác minh</Link>

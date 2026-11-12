@@ -196,6 +196,42 @@ public class SlotServiceRequestServiceImpl implements SlotServiceRequestService 
         return toResponse(repository.save(item));
     }
 
+    @Override
+    public List<OverviewServiceRequest> readForOverview(List<String> roomIds) {
+        if (roomIds == null || roomIds.isEmpty()) return List.of();
+        return mongoTemplate.find(new org.springframework.data.mongodb.core.query.Query(new Criteria().andOperator(
+                        MongoQueryHelper.notDeleted(),
+                        Criteria.where("roomId").in(roomIds.stream().filter(ObjectId::isValid).map(ObjectId::new).toList()))),
+                SlotServiceRequest.class).stream()
+                .map(r -> new OverviewServiceRequest(r.getRoomId(), r.getStatus(), r.getId(), r.getTenantName(), r.getServiceName(), null))
+                .toList();
+    }
+
+    @Override
+    public List<SlotServiceRequestStatus> statusesForContract(String contractId) {
+        if (contractId == null || !ObjectId.isValid(contractId)) return List.of();
+        return mongoTemplate.find(new org.springframework.data.mongodb.core.query.Query(new Criteria().andOperator(
+                        MongoQueryHelper.notDeleted(), Criteria.where("contractId").is(new ObjectId(contractId)))),
+                SlotServiceRequest.class).stream().map(SlotServiceRequest::getStatus).toList();
+    }
+
+    @Override
+    public List<com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot> readActivitiesForOverview(
+            List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot> events = new ArrayList<>();
+        for (SlotServiceRequest r : repository.findAllById(ids)) {
+            String what = (r.getAction() == SlotServiceRequestAction.ADD ? "Đăng ký " : "Huỷ ") + r.getServiceName();
+            events.add(new com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot(r.getId() + ":created", r.getId(),
+                    "CREATED", r.getCreatedAt(), r.getRequesterAccountId(), r.getTenantName(), what));
+            if (r.getProcessedAt() != null) {
+                events.add(new com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot(r.getId() + ":" + r.getStatus(), r.getId(),
+                        r.getStatus().name(), r.getProcessedAt(), r.getProcessedByAccountId(), null, r.getRejectReason()));
+            }
+        }
+        return events.stream().filter(e -> e.within(from, to)).toList();
+    }
+
     /** Entry still in use (no end date, or ending in the future). */
     private Optional<ActiveSlotService> active(Contract contract, String slotServiceId) {
         LocalDate today = LocalDate.now(clock.withZone(VIETNAM));

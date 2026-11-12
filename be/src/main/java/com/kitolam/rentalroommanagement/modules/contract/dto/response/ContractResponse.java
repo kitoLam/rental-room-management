@@ -48,7 +48,7 @@ public record ContractResponse(
         Integer evidenceResubmissionCount,
         String evidenceNote,
         List<ContractEvidenceHistoryEntry> evidenceHistory,
-        String templateDownloadUrl,
+        String contractUrl,
         Instant terminatedAt,
         String terminationReason,
         ContractStatus status,

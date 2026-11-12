@@ -36,6 +36,13 @@ export const authService = {
     email: string
     password: string
     phone: string
+    dateOfBirth: string
+    permanentAddress: string
+    cccdNumber: string
+    cccdIssueDate: string
+    cccdIssuePlace: string
+    cccdFrontImageUrl: string
+    cccdBackImageUrl: string
     confirmPassword: string
     termsAccepted: boolean
   }) =>
@@ -56,6 +63,14 @@ export const authService = {
           false,
         )
       : request('auth', '/api/v1/auth/verify-email', nullable, write('POST', { token }), false),
+  setupPassword: (input: { token: string; password: string; confirmPassword: string }) =>
+    request(
+      'auth',
+      '/api/v1/auth/setup-password',
+      nullable,
+      write('POST', input),
+      false,
+    ),
   logout: () =>
     request(
       'auth',
@@ -351,6 +366,7 @@ const backendSlotAvailabilitySchema = z.object({
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
+  availableFrom: z.string().nullable().optional(),
 })
 const backendRoomSlotSchema = z.object({
   id: databaseIdSchema,
@@ -358,6 +374,7 @@ const backendRoomSlotSchema = z.object({
   slotCode: z.string(),
   slotNumber: z.number().nullable(),
   status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
+  availableFrom: z.string().nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 })
@@ -413,7 +430,7 @@ const backendContractSchema = z.object({
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   services: z.array(z.object({
     serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
@@ -439,6 +456,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     slotLabel: b.slotCode,
     slotLabels: b.slotCodes || [b.slotCode],
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
+    expectedMoveInDate: b.expectedMoveInDate,
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
@@ -546,7 +564,14 @@ export const bookingService = {
     const checked = slots.content.length
       ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
       : []
-    const slotAvailability = checked.map((slot) => ({ id: slot.roomSlotId, label: slot.slotCode, available: slot.available }))
+    const availableFromById = new Map(slots.content.map((slot) => [slot.id, slot.availableFrom]))
+    const slotAvailability = checked.map((slot) => ({
+      id: slot.roomSlotId,
+      label: slot.slotCode,
+      available: slot.available,
+      // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
+      availableFrom: slot.availableFrom ?? availableFromById.get(slot.roomSlotId) ?? null,
+    }))
     const available = slotAvailability.some((slot) => slot.available)
     return {
       roomId,

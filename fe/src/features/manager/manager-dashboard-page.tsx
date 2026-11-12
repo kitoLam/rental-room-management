@@ -8,7 +8,23 @@ import { useState } from 'react'
 import { ManagerLink, ManagerPage, ManagerStatus } from './components'
 import { useManager, useManagerQuery } from './context'
 import { PeriodChart } from './dashboard-shared'
+import { ManagementOverview } from '@/features/dashboard/management-overview'
+import { useSession } from '@/features/auth/session-store'
+
 export function ManagerDashboard({ report = false }: { report?: boolean }) {
+  return report ? <LegacyManagerSummary report /> : <ManagerOverviewPage />
+}
+function ManagerOverviewPage() {
+  const { branch, overviewBranchId } = useManager()
+  const owner = useSession((s) => s.user?.roles.includes('OWNER'))
+  return (
+    <ManagementOverview
+      role={owner ? 'owner' : 'manager'}
+      branchId={owner ? overviewBranchId : branch.id}
+    />
+  )
+}
+function LegacyManagerSummary({ report = false }: { report?: boolean }) {
   const { branch } = useManager(),
     [month, setMonth] = useState(new Date().toISOString().slice(0, 7)),
     query = useManagerQuery('summary', (b) => managerApi.summary(b, month), [month], true)

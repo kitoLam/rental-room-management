@@ -98,14 +98,40 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
         }
         boolean cannotReceive = !room.branchActive() || !room.roomOperational();
         boolean noRentableUnits = room.totalUnits() - room.occupiedUnits() - room.officiallyHeldUnits() <= 0;
+        boolean officialBlock = room.officiallyHeldUnits() > 0;
+        String slotReason = null;
+        String revision = room.sourceRevision();
+        var relatedBookings = room.officialBookingIds();
+        if (appointment.getRoomSlotIds() != null && !appointment.getRoomSlotIds().isEmpty()) {
+            try {
+                var slotStates = inventory.slotsForViewing(appointment.getRoomId(), appointment.getAppointmentDate());
+                boolean missing = appointment.getRoomSlotIds().stream().anyMatch(id -> slotStates.stream().noneMatch(s -> id.equals(s.id())));
+                noRentableUnits = missing || slotStates.stream().anyMatch(s -> appointment.getRoomSlotIds().contains(s.id())
+                        && !s.available() && !"SLOT_TEMPORARY_HOLD".equals(s.reason()));
+                officialBlock = slotStates.stream().anyMatch(s -> appointment.getRoomSlotIds().contains(s.id())
+                        && !s.available() && "SLOT_OFFICIAL_HOLD".equals(s.reason()));
+                slotReason = missing ? "Slot đã chọn không còn tồn tại hoặc không còn thuộc phòng."
+                        : slotStates.stream().filter(s -> appointment.getRoomSlotIds().contains(s.id()) && !s.available()
+                                && !"SLOT_TEMPORARY_HOLD".equals(s.reason()))
+                          .map(s -> s.message() == null ? "Slot " + s.slotCode() + " không còn nhận lịch xem." : s.message())
+                          .collect(java.util.stream.Collectors.joining("\n"));
+                revision += ":" + slotStates.hashCode();
+                // Room-wide booking references cannot be attributed to a selected slot.
+                relatedBookings = List.of();
+            } catch (RuntimeException unavailable) {
+                log.warn("Could not refresh viewing slot dates for appointment {}", appointment.getId());
+                return;
+            }
+        }
         if (!cannotReceive && !noRentableUnits) return;
-        var cause = !cannotReceive && room.officiallyHeldUnits() > 0 ? CancellationCause.OFFICIAL_BOOKING : CancellationCause.ROOM_UNAVAILABLE;
+        var cause = !cannotReceive && officialBlock ? CancellationCause.OFFICIAL_BOOKING : CancellationCause.ROOM_UNAVAILABLE;
         String reason = cause == CancellationCause.OFFICIAL_BOOKING ? "Phòng không còn chỗ thuê do quyền giữ chỗ chính thức có hiệu lực"
                 : "Phòng hoặc chi nhánh không còn đủ điều kiện tiếp khách";
+        if (!cannotReceive && slotReason != null && !slotReason.isBlank()) reason = slotReason;
         Instant at = viewingClock.instant();
         String eventId = new ObjectId().toHexString();
         var event = new Appointment.HistoryEntry(eventId, "SYSTEM_CANCELLED", null, "Hệ thống", at,
-                appointment.getStatus(), AppointmentStatus.CANCELLED, reason, null, null, cause, room.officialBookingIds(), room.sourceRevision());
+                appointment.getStatus(), AppointmentStatus.CANCELLED, reason, null, null, cause, relatedBookings, revision);
         var update = new Update().set("status", AppointmentStatus.CANCELLED).set("cancellationCause", cause)
                 .set("cancellationReason", reason).push("history", event);
         notifications.plan(appointment, eventId, "SYSTEM_CANCELLED", at, null, reason).appendTo(update);

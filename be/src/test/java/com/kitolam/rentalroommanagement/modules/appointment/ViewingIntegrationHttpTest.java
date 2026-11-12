@@ -119,14 +119,23 @@ class ViewingIntegrationHttpTest {
         when(branches.getById("branch")).thenReturn(branch);
         when(branch.id()).thenReturn("branch");
         when(branch.status()).thenReturn(BranchStatus.ACTIVE);
-        var inventory = new DatabaseViewingInventoryGateway(rooms, branches, bookings, java.time.Clock.systemUTC());
-        when(bookings.currentRoomHold("room")).thenReturn(new EffectiveRoomHoldResponse(List.of(), true, "temporary"));
+        var slots = mock(com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService.class);
+        var free = new com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService.OverviewSlot("slot", "room", "S01", com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus.AVAILABLE, null);
+        when(slots.readForOverview(List.of("room"))).thenReturn(List.of(free));
+        var inventory = new DatabaseViewingInventoryGateway(rooms, branches, bookings, java.time.Clock.systemUTC(), slots,
+                mock(com.kitolam.rentalroommanagement.modules.roomslotoccupancy.service.RoomSlotOccupancyService.class),
+                mock(com.kitolam.rentalroommanagement.modules.contract.service.ContractService.class));
+        var deadline = java.time.Instant.now().plusSeconds(3600);
+        when(bookings.readForOverview(List.of("slot"))).thenReturn(List.of(new BookingService.OverviewBooking("booking", "tenant", "slot", List.of("slot"), null, null, deadline, deadline, null,
+                com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.AWAITING_PAYMENT)));
         assertEquals(1, inventory.getRoom("room").temporarilyHeldUnits());
         assertEquals(0, inventory.getRoom("room").officiallyHeldUnits());
-        when(bookings.currentRoomHold("room")).thenReturn(new EffectiveRoomHoldResponse(List.of("booking"), true, "official"));
+        when(bookings.readForOverview(List.of("slot"))).thenReturn(List.of(new BookingService.OverviewBooking("booking", "tenant", "slot", List.of("slot"), null, null, deadline, deadline, null,
+                com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.CONFIRMED)));
         assertEquals(0, inventory.getRoom("room").temporarilyHeldUnits());
         assertEquals(1, inventory.getRoom("room").officiallyHeldUnits());
         when(room.status()).thenReturn(RoomStatus.OCCUPIED);
+        when(slots.readForOverview(List.of("room"))).thenReturn(List.of(new com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService.OverviewSlot("slot", "room", "S01", com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus.OCCUPIED, null)));
         assertEquals(1, inventory.getRoom("room").occupiedUnits());
         assertEquals(0, inventory.getRoom("room").officiallyHeldUnits());
     }

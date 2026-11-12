@@ -1,5 +1,5 @@
 import { Notice, Panel, QueryState } from '@/components/common/page'
-import { dateOnly, dateTime } from '@/lib/activity'
+import { addMonths, dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import type { TenantContract, Tenancy } from '@/interfaces/tenant'
@@ -10,7 +10,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { EmptyRows, Facts, TenantLink, TenantPage, TenantStatus } from './components'
 import { useTenant, useTenantQuery } from './context'
 import { PrepaidPanel } from './prepaid-panel'
-import { catalogService, contractService, roomSlotService } from '@/services/guest-user'
+import { catalogService, bookingService, contractService, roomSlotService } from '@/services/guest-user'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/common/page'
 
@@ -54,6 +54,14 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     slotsQuery.data?.find((slot) => slot.id === id)?.slotCode,
   ).filter((code): code is string => Boolean(code))
   const roomName = roomQuery.data?.title || contract?.roomAddress?.split(' · ').at(-1) || 'Phòng thuê'
+  // Hợp đồng nháp lấy ngày bắt đầu thuê từ booking gốc (nguồn chốt lúc đặt cọc).
+  const sourceBooking = useQuery({
+    queryKey: ['contract-booking', contract?.bookingId],
+    queryFn: () => bookingService.get(contract!.bookingId!),
+    enabled: Boolean(contract?.bookingId && !contract?.startDate && !terms),
+    retry: false,
+  })
+  const expectedStartDate = contract?.startDate || sourceBooking.data?.startDate || null
   const placeName = slotCodes.length
     ? `${roomName} · ${slotCodes.join(', ')}`
     : contract?.roomSlotIds?.length
@@ -96,7 +104,9 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                           'Thời hạn',
                           contract?.startDate && contract.endDate
                             ? `${dateOnly(contract.startDate)} – ${dateOnly(contract.endDate)} (không gồm ngày kết thúc)`
-                            : 'Manager chưa duyệt thời hạn hợp đồng',
+                            : expectedStartDate
+                              ? `Dự kiến từ ${dateOnly(expectedStartDate)}${contract?.termMonths ? ` · ${contract.termMonths} tháng` : ''} — chờ manager duyệt`
+                              : 'Manager chưa duyệt thời hạn hợp đồng',
                         ],
                         ...(tenancyMatchesContract
                           ? [
@@ -186,7 +196,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
               <Panel>
                 <h2 className="mb-3 font-bold">Văn bản hợp đồng</h2>
                 <a
-                  href={contract?.templateDownloadUrl || 'https://www.youtube.com/'}
+                  href={contract?.contractUrl || 'https://www.youtube.com/'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-primary"
@@ -249,6 +259,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                       {[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}
                     </select>
                   </label>
+                  {expectedStartDate && <p className="text-xs text-muted-foreground">Hiệu lực dự kiến: {dateOnly(expectedStartDate)} → {dateOnly(addMonths(expectedStartDate, Number(termMonths)))}</p>}
                   <InlineError error={submitEvidence.error} />
                   <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>
                 </form>}

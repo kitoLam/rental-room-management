@@ -41,7 +41,7 @@ export function PaymentsTab() {
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-primary">{formatVnd(b.holdAmount)}</span>
                   <Button asChild>
-                    <Link to={`/user/bookings/${b.id}/payment`}>
+                    <Link to={`/tenant/bookings/${b.id}/payment`}>
                       <CreditCard size={16} />
                       Thanh toán
                     </Link>
@@ -79,7 +79,7 @@ export function PaymentsTab() {
                     <td className="py-3 pr-3">
                       {p.invoiceId ? 'Hoá đơn' : 'Tiền cọc giữ chỗ'}
                       {p.bookingId && (
-                        <Link to={`/user/bookings/${p.bookingId}`} className="ml-2 text-xs text-primary underline">
+                        <Link to={`/tenant/bookings/${p.bookingId}`} className="ml-2 text-xs text-primary underline">
                           Xem
                         </Link>
                       )}

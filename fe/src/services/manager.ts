@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnDateKey } from '@/lib/activity'
 import { request, write } from './http'
 import { provider } from './config'
 import { databaseIdSchema, pageSchema, type Page } from '@/interfaces/domain'
@@ -42,7 +43,7 @@ const backendContractDto = z.object({
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
   termMonths: z.number().nullable().optional(), signedDate: z.string().nullable().optional(), firstBillingStartDate: z.string().nullable().optional(),
-  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), templateDownloadUrl: z.string().nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
   electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
@@ -53,7 +54,8 @@ const backendContractDto = z.object({
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomId,
-    startDate: value.startDate || new Date().toISOString().slice(0, 10), endDate: value.endDate || new Date().toISOString().slice(0, 10), terms: value.terms || '',
+    // Nháp chưa duyệt evidence không có ngày hiệu lực; giữ null để trang tự lấy ngày bắt đầu thuê từ booking gốc.
+    startDate: value.startDate || null, endDate: value.endDate || null, terms: value.terms || '',
     landlordName: value.landlordName, landlordIdNumber: value.landlordIdNumber, landlordAddress: value.landlordAddress,
     tenantName: value.tenantName, tenantIdNumber: value.tenantIdNumber, tenantAddress: value.tenantAddress,
     roomAddress: value.roomAddress, paymentDueDay: value.paymentDueDay, rentPrice: value.rentPrice,
@@ -64,7 +66,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     signedEvidenceUrl: value.signedEvidenceUrl, termMonths: value.termMonths, signedDate: value.signedDate,
     firstBillingStartDate: value.firstBillingStartDate, evidenceSubmittedAt: value.evidenceSubmittedAt,
     evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
-    evidenceNote: value.evidenceNote, templateDownloadUrl: value.templateDownloadUrl,
+    evidenceNote: value.evidenceNote, contractUrl: value.contractUrl,
     rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
@@ -203,10 +205,11 @@ export const managerApi = {
   branches: async () => {
     if (provider('manager') === 'mock') return request('manager', '/api/manager/branches', z.array(branchAssignmentSchema))
     const branches = await request('manager', '/api/v1/branches/managed', z.array(z.object({
-      id: z.string(), ownerAccountId: z.string(), name: z.string(), address: z.string().nullable(), status: z.enum(['ACTIVE','INACTIVE']),
+      id: z.string(), ownerAccountId: z.string().nullable().optional(), name: z.string(), address: z.string().nullable(), status: z.string(),
     })))
     return branches.map(branch => branchAssignmentSchema.parse({
-      id: branch.id, ownerId: branch.ownerAccountId, name: branch.name, address: branch.address ?? '', status: branch.status,
+      id: branch.id, ownerId: branch.ownerAccountId || branch.id, name: branch.name || 'Chi nhánh', address: branch.address ?? '',
+      status: (['DRAFT', 'ACTIVE', 'INACTIVE'].includes(branch.status) ? branch.status : 'ACTIVE') as any,
       managerId: null, managerName: '', zaloUrl: null, zaloEnabled: false,
     }))
   },
@@ -215,6 +218,55 @@ export const managerApi = {
     resource: K,
     filters: Record<string, string> = {},
   ): Promise<Page<ManagerRecord<K>>> => {
+    if (resource === 'invoices' && filters.debtOnly === 'true' && provider('manager') === 'real') {
+      const query = new URLSearchParams({
+        branchId,
+        page: String(Number(filters.page || 0) + 1),
+        size: filters.size || '8',
+      })
+      if (filters.q) query.set('keyword', filters.q)
+      if (filters.roomId) query.set('roomId', filters.roomId)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.financialStatus === 'OVERDUE') query.set('overdueOnly', 'true')
+      const page = await request(
+        'manager',
+        `/api/v1/dashboard/debts?${query}`,
+        pageSchema(
+          z.object({
+            invoiceId: z.string(),
+            contractTenantId: z.string(),
+            tenantName: z.string(),
+            roomId: z.string(),
+            roomNumber: z.string().nullable(),
+            invoiceNumber: z.string().nullable(),
+            period: z.string().nullable(),
+            dueDate: z.string().nullable(),
+            totalAmount: z.number(),
+            remainingAmount: z.number(),
+            status: z.enum(['UNPAID', 'PARTIAL', 'OVERDUE']),
+            overdueDays: z.number().int().nonnegative(),
+          }),
+        ),
+      )
+      return {
+        ...page,
+        number: Math.max(0, page.number - 1),
+        content: page.content.map((d) => ({
+          id: d.invoiceId,
+          contractTenantId: d.contractTenantId,
+          tenantName: d.tenantName,
+          roomId: d.roomId,
+          roomName: d.roomNumber ? `Phòng ${d.roomNumber}` : '',
+          code: d.invoiceNumber ?? '',
+          billingMonth: d.period ?? '',
+          dueDate: d.dueDate ?? '',
+          totalAmount: d.totalAmount,
+          outstanding: d.remainingAmount,
+          financialStatus: d.status,
+          overdueDays: d.overdueDays,
+        })),
+      } as unknown as Page<ManagerRecord<K>>
+    }
     if (resource === 'bookings' && provider('manager') === 'real') {
       const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1, filters)
       return result as unknown as Page<ManagerRecord<K>>
@@ -356,33 +408,99 @@ export const managerApi = {
         z.array(slotDto),
       ).then(slotListPage) as Promise<Page<ManagerRecord<K>>>
     }
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const query = new URLSearchParams({ page: String(Number(filters.page || 0) + 1), size: filters.size || '8' })
+      if (filters.status) {
+        const backendStatus =
+          filters.status === 'VERIFIED'
+            ? 'SUCCESS'
+            : filters.status === 'REVIEW'
+              ? 'LATE_PAID'
+              : filters.status
+        query.set('status', backendStatus)
+      }
+      if (filters.keyword || filters.q) query.set('keyword', filters.keyword || filters.q)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.invoiceId) query.set('invoiceId', filters.invoiceId)
+      if (filters.method) query.set('method', filters.method)
+      if (filters.date) query.set('date', filters.date)
+      const paymentPageSchema = z.object({
+        content: z.array(z.object({
+          id: z.string(),
+          invoiceId: z.string().nullable(),
+          contractTenantId: z.string().nullable(),
+          amount: z.number(),
+          method: z.string().nullable(),
+          transactionCode: z.string().nullable(),
+          paidAt: z.string().nullable(),
+          status: z.string(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+        number: z.number(),
+        size: z.number(),
+        totalElements: z.number(),
+        totalPages: z.number(),
+      })
+      const page = await request('manager', `/api/v1/payments?${query}`, paymentPageSchema)
+      let content = page.content.map((p) => ({
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      }))
+      if (filters.date) {
+        content = content.filter((p) => vnDateKey(p.createdAt) === filters.date || vnDateKey(p.verifiedAt) === filters.date)
+      }
+      return {
+        content,
+        number: Math.max(0, page.number - 1),
+        size: page.size,
+        totalElements: page.totalElements,
+        totalPages: page.totalPages,
+      } as unknown as Page<ManagerRecord<K>>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const pageIndex = Number(filters.page || 0)
-          const p = await reportRequestService.search(
-            {
-              branchId,
-              status: (filters.status || undefined) as any,
-              keyword: filters.q || undefined,
-              page: pageIndex,
-              size: 8,
-            },
-            'manager',
-          )
-          if (p && Array.isArray(p.content)) {
-            const seen = new Set<string>()
-            const deduped = p.content.filter((item) => {
-              if (!item.id || seen.has(item.id)) return false
-              seen.add(item.id)
-              return true
-            })
-            const content = deduped.map((item) => ({
-              id: item.id,
-              contractTenantId: item.tenantId,
-              roomId: item.roomId,
-              roomName: 'Phòng ' + (item.roomId?.slice(0, 6) || ''),
-              tenantName: 'Khách thuê',
+        const pageIndex = Number(filters.page || 0)
+        const p = await reportRequestService.search(
+          {
+            branchId,
+            status: (filters.status || undefined) as any,
+            keyword: filters.q || undefined,
+            page: pageIndex,
+            size: 8,
+          },
+          'manager',
+        )
+        const seen = new Set<string>()
+        const deduped = (p.content || []).filter((item) => {
+          if (!item.id || seen.has(item.id)) return false
+          seen.add(item.id)
+          return true
+        })
+        const content = deduped.map((item) => ({
+          id: item.id,
+          contractTenantId: item.tenantId,
+          roomId: item.roomId,
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
               assetId: item.roomId,
               category: item.type as any,
               title: item.title,
@@ -411,12 +529,16 @@ export const managerApi = {
                             : 'Yêu cầu hỗ trợ',
               status: item.status as any,
               createdAt: item.createdAt,
-              assignedTo: item.managerId ? 'Quản lý' : null,
+              assignedTo: item.assigneeName
+                ? item.assigneePhone
+                  ? `${item.assigneeName} (${item.assigneePhone})`
+                  : item.assigneeName
+                : item.managerId
+                  ? 'Quản lý phụ trách'
+                  : null,
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -429,17 +551,13 @@ export const managerApi = {
                 approvalStatus: null,
               })),
             }))
-            return {
-              content,
-              number: p.number,
-              size: p.size,
-              totalElements: p.totalElements,
-              totalPages: p.totalPages,
-            } as unknown as Page<ManagerRecord<K>>
-          }
-        } catch (err) {
-          console.warn('Real report-requests list failed, falling back to mock:', err)
-        }
+        return {
+          content,
+          number: p.number,
+          size: p.size,
+          totalElements: p.totalElements,
+          totalPages: p.totalPages,
+        } as unknown as Page<ManagerRecord<K>>
       }
       // Mock fallback: read directly from tenantDb to avoid scope/permission
       // checks in managerDb.list() which fail when actor is a real backend user
@@ -494,8 +612,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -555,22 +671,55 @@ export const managerApi = {
     resource: K,
     id: string,
   ): Promise<ManagerRecord<K>> => {
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const paymentDetailSchema = z.object({
+        id: z.string(),
+        invoiceId: z.string().nullable(),
+        contractTenantId: z.string().nullable(),
+        bookingId: z.string().nullable().optional(),
+        amount: z.number(),
+        method: z.string().nullable(),
+        transactionCode: z.string().nullable(),
+        gatewayTransactionNo: z.string().nullable().optional(),
+        paidAt: z.string().nullable(),
+        status: z.string(),
+        createdAt: z.string().nullable(),
+        updatedAt: z.string().nullable(),
+      })
+      const p = await request('manager', `/api/v1/payments/${encodeURIComponent(id)}`, paymentDetailSchema)
+      return {
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: p.bookingId || null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.gatewayTransactionNo || p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      } as unknown as ManagerRecord<K>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const item = await reportRequestService.getById(id, 'manager')
-          if (item) {
-            const { tenantDb } = await import('@/mocks/tenant-engine')
-            const t =
-              tenantDb.state.tenancies.find((x) => x.roomId === item.roomId || x.id === item.tenantId) ||
-              tenantDb.state.tenancies[0]
-            return {
-              id: item.id,
-              contractTenantId: item.tenantId || t?.id || '',
-              roomId: item.roomId || t?.roomId || '',
-              roomName: t?.roomName || 'Phòng ' + (item.roomId?.slice(0, 6) || 'trọ'),
-              tenantName: 'Khách thuê',
-              assetId: item.roomId || t?.roomId || '',
+        const item = await reportRequestService.getById(id, 'manager')
+        return {
+          id: item.id,
+          contractTenantId: item.tenantId || '',
+          roomId: item.roomId || '',
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
+          assetId: item.roomId || '',
               category: item.type as any,
               title: item.title,
               description: item.content,
@@ -598,12 +747,16 @@ export const managerApi = {
                             : 'Yêu cầu hỗ trợ',
               status: item.status as any,
               createdAt: item.createdAt,
-              assignedTo: item.managerId ? 'Quản lý' : null,
+              assignedTo: item.assigneeName
+                ? item.assigneePhone
+                  ? `${item.assigneeName} (${item.assigneePhone})`
+                  : item.assigneeName
+                : item.managerId
+                  ? 'Quản lý phụ trách'
+                  : null,
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -615,11 +768,7 @@ export const managerApi = {
                 responsibleParty: null,
                 approvalStatus: null,
               })),
-            } as unknown as ManagerRecord<K>
-          }
-        } catch (err) {
-          console.warn('Real report-request getById failed, falling back to mock:', err)
-        }
+        } as unknown as ManagerRecord<K>
       }
       const { tenantDb } = await import('@/mocks/tenant-engine')
       const r: any = tenantDb.state.reports.find((x) => x.id === id)
@@ -665,8 +814,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -738,8 +885,7 @@ export const managerApi = {
       return request('manager', path, contractTenantSchema, write(method, value))
     }
     if (resource === 'maintenance' && provider('manager') === 'real' && id) {
-      try {
-        const v = (value || {}) as Record<string, any>
+      const v = (value || {}) as Record<string, any>
         const extractAttachments = (val: any): string[] => {
           if (!val) return []
           if (Array.isArray(val.attachments))
@@ -761,8 +907,20 @@ export const managerApi = {
           return { id: item.id }
         }
         if (action === 'start' || action === 'accept') {
-          // Tiếp nhận yêu cầu và bắt đầu xử lý
-          const item = await reportRequestService.startProcessing(id)
+          // Tiếp nhận yêu cầu và bắt đầu xử lý kèm gán người phụ trách
+          const item = await reportRequestService.startProcessing(id, {
+            assigneeName: v.assigneeName || undefined,
+            assigneePhone: v.assigneePhone || undefined,
+            managerId: v.managerId || undefined,
+          })
+          return { id: item.id }
+        }
+        if (action === 'assign') {
+          const item = await reportRequestService.assign(id, {
+            assigneeName: v.assigneeName || 'Quản lý phụ trách',
+            assigneePhone: v.assigneePhone || undefined,
+            managerId: v.managerId || undefined,
+          })
           return { id: item.id }
         }
         if (action === 'progress' || action === 'record') {
@@ -780,30 +938,16 @@ export const managerApi = {
           const item = await reportRequestService.resolve(id, solutionResult, atts)
           return { id: item.id }
         }
-        if (action === 'reopen') {
-          const item = await reportRequestService.reopen(
-            id,
-            v.reason || 'Mở lại yêu cầu để xử lý thêm',
-          )
-          return { id: item.id }
-        }
-        if (action === 'escalate-admin') {
-          const item = await reportRequestService.escalateAdmin(
-            id,
-            v.disputeReason || v.reason || 'Chuyển Admin phân xử tranh chấp',
-          )
-          return { id: item.id }
-        }
-        if (action === 'admin-resolve') {
-          const item = await reportRequestService.adminResolve(
-            id,
-            v.adminConclusion || v.resolutionNote || 'Admin đã giải quyết tranh chấp',
-          )
-          return { id: item.id }
-        }
-      } catch (err) {
-        console.warn('Real report-request manager action failed, falling back to mock:', err)
+      if (action === 'reopen') {
+        const item = await reportRequestService.reopen(
+          id,
+          v.reason || 'Mở lại yêu cầu để xử lý thêm',
+          [],
+          'manager',
+        )
+        return { id: item.id }
       }
+      throw new Error('Thao tác yêu cầu hỗ trợ không được hỗ trợ.')
     }
     if (resource === 'maintenance' && id) {
       // Mock fallback for all maintenance actions (when real API is unavailable)

@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.contract.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -125,6 +127,13 @@ public class ContractServiceImpl implements ContractService {
 
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(booking.getTenantId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người thuê"));
+        if (tenant.isInactiveInBranch(room.getBranchId())) {
+            throw new ConflictException("Tài khoản người thuê hiện đang tạm ngưng hoạt động tại cơ sở này");
+        }
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(room.getBranchId())) {
+            tenant.addBranch(room.getBranchId());
+            tenantRepository.save(tenant);
+        }
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy chi nhánh"));
         Contract contract = new Contract();
@@ -300,7 +309,10 @@ public class ContractServiceImpl implements ContractService {
             return response(contractRepository.save(contract));
         }
 
-        LocalDate effectiveDate = LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
+        // Ngày bắt đầu hợp đồng theo ngày bắt đầu thuê đã chốt lúc đặt cọc; booking cũ chưa có thì giữ quy tắc cũ.
+        LocalDate effectiveDate = booking.getExpectedMoveInDate() != null
+                ? booking.getExpectedMoveInDate()
+                : LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
         LocalDate firstBillingStartDate = request.firstBillingStartDate();
         if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate) || firstBillingStartDate.getDayOfMonth() != 1)
             throw new BadRequestException("Ngày bắt đầu tính tiền kỳ đầu phải là mùng 1 của tháng, không trước ngày hiệu lực hợp đồng");
@@ -436,8 +448,10 @@ public class ContractServiceImpl implements ContractService {
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addKeyword(criteria, filter.keyword(), "contractNumber", "tenantName", "landlordName");
         if ("TENANT".equals(principal.role())) {
-            Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email())
-                    .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));
+            Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+            if (tenant == null) {
+                return PagedResponse.from(org.springframework.data.domain.Page.empty(pageable), this::response);
+            }
             List<Criteria> ownership = new ArrayList<>();
             ownership.add(new Criteria().orOperator(
                     Criteria.where("tenantId").is(MongoQueryHelper.toObjectId(tenant.getId())),
@@ -594,10 +608,22 @@ public class ContractServiceImpl implements ContractService {
                 c.getElectricityRate(), c.getWaterRate(), c.getParkingRate(), c.getMaxOccupants(),
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
-                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getTemplateDownloadUrl(),
+                c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getContractUrl(),
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(),
                 c.getActiveSlotServices() == null ? List.of() : List.copyOf(c.getActiveSlotServices()),
                 c.getCreatedAt(), c.getUpdatedAt());
+    }
+
+    @Override
+    public List<ReportContract> readForReports(List<String> roomIds) {
+        if (roomIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", roomIds);
+        query.fields().include("roomId", "roomSlotId", "roomSlotIds", "status", "startDate", "endDate", "terminatedAt");
+        return mongoTemplate.find(query, Contract.class).stream()
+                .map(item -> new ReportContract(item.getId(), item.getRoomId(), item.getStatus(), item.getStartDate(),
+                        item.getEndDate(), item.getTerminatedAt(),
+                        item.getRoomSlotIds() != null && !item.getRoomSlotIds().isEmpty() ? List.copyOf(item.getRoomSlotIds())
+                                : item.getRoomSlotId() == null ? List.of() : List.of(item.getRoomSlotId()))).toList();
     }
 
     private void addEvidenceHistory(Contract contract, String action, Instant at, String note) {
@@ -605,5 +631,38 @@ public class ContractServiceImpl implements ContractService {
         if (contract.getEvidenceHistory().isEmpty() && contract.getEvidenceSubmittedAt() != null && !"SUBMITTED".equals(action))
             contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry("SUBMITTED", contract.getEvidenceSubmittedAt(), null));
         contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry(action, at, note));
+    }
+    @Override
+    public List<OverviewContract> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "roomSlotId", "roomSlotIds", "tenantId", "bookingId", "contractNumber", "status", "startDate", "endDate", "evidenceSubmittedAt");
+        return mongoTemplate.find(query, Contract.class).stream()
+                .map(item -> new OverviewContract(item.getId(), item.getRoomId(), item.getTenantId(), item.getBookingId(), item.getContractNumber(), item.getStatus(), item.getStartDate(), item.getEndDate(), item.getEvidenceSubmittedAt(),
+                        item.getRoomSlotIds() != null && !item.getRoomSlotIds().isEmpty() ? List.copyOf(item.getRoomSlotIds())
+                                : item.getRoomSlotId() == null ? List.of() : List.of(item.getRoomSlotId()))).toList();
+    }
+
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("_id", ids);
+        query.addCriteria(new org.springframework.data.mongodb.core.query.Criteria().orOperator(
+                org.springframework.data.mongodb.core.query.Criteria.where("evidenceHistory.at").gte(from).lt(to),
+                org.springframework.data.mongodb.core.query.Criteria.where("createdAt").gte(from).lt(to),
+                org.springframework.data.mongodb.core.query.Criteria.where("terminatedAt").gte(from).lt(to)));
+        query.fields().include("evidenceHistory", "createdAt", "terminatedAt", "terminationReason");
+        var result = new java.util.ArrayList<ActivitySnapshot>();
+        for (var item : mongoTemplate.find(query, Contract.class)) {
+            result.add(new ActivitySnapshot(item.getId() + ":created", item.getId(), "CREATED", item.getCreatedAt(), null, null, null));
+            if (item.getTerminatedAt() != null)
+                result.add(new ActivitySnapshot(item.getId() + ":terminated", item.getId(), "TERMINATED", item.getTerminatedAt(), null, null, item.getTerminationReason()));
+            if (item.getEvidenceHistory() == null) continue;
+            for (int i = 0; i < item.getEvidenceHistory().size(); i++) {
+                var event = item.getEvidenceHistory().get(i);
+                result.add(new ActivitySnapshot(item.getId() + ":" + i, item.getId(), event.action(), event.at(), null, null, event.note()));
+            }
+        }
+        return result.stream().filter(e -> e.within(from, to)).toList();
     }
 }
