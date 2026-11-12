@@ -52,7 +52,7 @@ const groups = [
       ['room-services', 'Dịch vụ theo phòng', Plug],
       ['slot-services', 'Dịch vụ tự chọn', Plug],
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
-      ['utility-charges', 'Điện nước', Droplets],
+      ['meter-readings', 'Chỉ số điện', Droplets],
       ['cost-allocations', 'Phân bổ phí', Scale],
       ['maintenance', 'Yêu cầu hỗ trợ', Wrench],
     ],

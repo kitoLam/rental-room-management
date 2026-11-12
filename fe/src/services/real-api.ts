@@ -125,6 +125,14 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  // Chỉ số điện từng phòng theo tháng.
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/meter-readings/board' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings' && verb === 'PUT') ||
+      (matches(`/api/v1/meter-readings/${id}/(confirm|reopen)`) && verb === 'POST'))
+  )
+    return null
   // Danh mục dịch vụ theo phòng / tự chọn + yêu cầu dịch vụ tự chọn.
   if (
     feature === 'manager' &&

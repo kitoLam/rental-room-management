@@ -418,6 +418,13 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'meter-readings',
+                lazy: async () => ({
+                  Component: (await import('@/features/manager/manager-meter-readings-page'))
+                    .ManagerMeterReadings,
+                }),
+              },
+              {
                 path: 'room-services',
                 lazy: async () => ({
                   Component: (await import('@/features/manager/manager-service-catalog-page'))

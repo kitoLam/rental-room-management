@@ -144,17 +144,9 @@ export default function UtilityRatesPage() {
               <RatesForm
                 key={`branch-${JSON.stringify(config.data.branchRates)}`}
                 title="Đơn giá chi nhánh"
-                description="Áp dụng cho các phòng chưa có đơn giá riêng. Để trống nghĩa là chưa cấu hình; nhập 0 nếu miễn phí."
+                description="Áp dụng cho mọi phòng của chi nhánh. Để trống nghĩa là chưa cấu hình; nhập 0 nếu miễn phí."
                 rates={config.data.branchRates}
                 save={(rates) => utilityRatesService.updateBranch(config.data.branchId, rates)}
-                saved={saved}
-              />
-              <RatesForm
-                key={`room-${JSON.stringify(config.data.configuredRates)}`}
-                title="Đơn giá riêng của phòng"
-                description="Để trống từng ô để dùng đơn giá của chi nhánh. Nhập 0 để miễn phí riêng cho phòng này."
-                rates={config.data.configuredRates}
-                save={(rates) => utilityRatesService.updateRoom(roomId, rates)}
                 saved={saved}
               />
               <Panel>
