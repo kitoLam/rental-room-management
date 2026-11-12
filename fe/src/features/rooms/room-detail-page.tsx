@@ -163,9 +163,9 @@ export default function RoomDetailPage() {
                 <dl className="grid grid-cols-2 gap-5 rounded-2xl border border-border/70 bg-surface p-6 sm:grid-cols-4 sm:p-8">
                   {[
                     [Ruler, 'Diện tích', r.sizeM2 === null ? 'Chưa cập nhật' : `${r.sizeM2} m²`],
-                    [Users, 'Số slot', String(r.capacity)],
+                    [Users, 'Sức chứa', `${r.capacity} người`],
                     [Building2, 'Tầng', r.floor === null ? 'Chưa cập nhật' : String(r.floor)],
-                    [KeyRound, 'Loại phòng', r.roomTypeName],
+                    [KeyRound, 'Tiền cọc', r.deposit == null ? 'Liên hệ' : formatVnd(r.deposit)],
                   ].map(([Icon, label, value]) => {
                     const I = Icon as typeof Ruler
                     return (

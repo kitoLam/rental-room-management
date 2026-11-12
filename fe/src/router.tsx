@@ -418,13 +418,6 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'room-types',
-                lazy: async () => ({
-                  Component: (await import('@/features/manager/manager-room-types-page'))
-                    .ManagerRoomTypes,
-                }),
-              },
-              {
                 path: 'services',
                 lazy: async () => ({
                   Component: (await import('@/features/manager/manager-services-page'))
@@ -606,6 +599,12 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'billing',
+                lazy: async () => ({
+                  Component: (await import('@/features/manager/manager-billing-page')).ManagerBilling,
+                }),
+              },
+              {
                 path: 'settings/zalo',
                 lazy: async () => ({
                   Component: (await import('@/features/manager/manager-zalo-settings-page'))
@@ -630,6 +629,13 @@ export const router = createBrowserRouter([
                 path: 'my-room',
                 lazy: async () => ({
                   Component: (await import('@/features/tenant/my-room-page')).MyRoomPage,
+                }),
+              },
+              {
+                path: 'my-room/invoices/:invoiceId',
+                lazy: async () => ({
+                  Component: (await import('@/features/tenant/monthly-invoice-detail-page'))
+                    .MonthlyInvoiceDetailPage,
                 }),
               },
               {

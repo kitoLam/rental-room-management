@@ -31,7 +31,9 @@ export function ManagerRoomDetail() {
                   <h2 className="text-xl font-bold">
                     {query.data.code} · {query.data.title}
                   </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">{query.data.roomTypeName}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Sức chứa {query.data.capacity} người · {query.data.capacity} chỗ ở
+                  </p>
                 </div>
                 {provider('manager') === 'mock' && (
                   <ManagerStatus value={query.data.availability || 'UNKNOWN'} />

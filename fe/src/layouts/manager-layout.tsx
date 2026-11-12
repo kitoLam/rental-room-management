@@ -12,6 +12,7 @@ import {
   Droplets,
   Scale,
   ReceiptText,
+  CalendarRange,
   Wallet,
   CircleDollarSign,
   Armchair,
@@ -34,7 +35,6 @@ const groups = [
     label: 'Phòng & người thuê',
     items: [
       ['rooms', 'Phòng', House],
-      ['room-types', 'Loại phòng', House],
       ['tenants', 'Người thuê', Users],
     ],
   },
@@ -60,6 +60,7 @@ const groups = [
   {
     label: 'Tài chính',
     items: [
+      ['billing', 'Billing theo tháng', CalendarRange],
       ['invoices', 'Hóa đơn', ReceiptText],
       ['payments', 'Thanh toán', Wallet],
       ['debts', 'Công nợ', CircleDollarSign],

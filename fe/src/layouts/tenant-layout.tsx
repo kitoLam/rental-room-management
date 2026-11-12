@@ -22,7 +22,7 @@ import { InlineError, Notice, QueryState } from '@/components/common/page'
 import { Container } from '@/components/common/container'
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
-  ['/tenant/my-room', 'Chỗ ở của tôi', House],
+  ['/tenant/my-room', 'Phòng của tôi', House],
   ['/tenant/contracts', 'Hợp đồng', FileText],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
   ['/tenant/payments', 'Thanh toán', Wallet],

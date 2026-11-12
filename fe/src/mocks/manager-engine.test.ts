@@ -143,10 +143,6 @@ describe('Manager authorization and coherent read models', () => {
           ).toBe(true)
   })
   it('binds all room types and slots to their actual room branch', () => {
-    for (const r of e.inventory.state.rooms)
-      expect(
-        e.inventory.state.types.some((t) => t.id === r.roomTypeId && t.branchId === r.branchId),
-      ).toBe(true)
     for (const s of e.inventory.state.slots)
       expect(e.room(s.branchId, s.roomId).rentalMode).toBe('SLOT')
   })
@@ -228,7 +224,6 @@ describe('Room and slot integrity', () => {
       e.db.listRooms({
         q: 'TD-NEW',
         area: '',
-        roomTypeId: '',
         mode: 'ALL',
         availableOnly: false,
         sort: 'recommended',

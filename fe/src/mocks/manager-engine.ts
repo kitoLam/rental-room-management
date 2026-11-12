@@ -749,11 +749,7 @@ export class ManagerEngine {
         this.state.roomServices = this.state.roomServices.filter((s) => s.roomId !== id)
         return null
       }
-      const data = roomInputSchema.parse(input),
-        type = this.inventory.state.types.find(
-          (t) => t.id === data.roomTypeId && t.branchId === branchId && t.active,
-        )
-      if (!type) throw new MockError('Loại phòng không thuộc chi nhánh hoặc đã ngừng sử dụng.', 422)
+      const data = roomInputSchema.parse(input)
       if (
         this.inventory.state.rooms.some(
           (r) =>
@@ -806,7 +802,6 @@ export class ManagerEngine {
             availability: 'AVAILABLE' as const,
           }),
           ...data,
-          roomTypeName: type.name,
           imageUrl: data.images[0] || '/demo/room-1.webp',
           imageAlt: data.title,
         }
@@ -839,8 +834,6 @@ export class ManagerEngine {
         : null
       if (id && !current) throw new MockError('Không tìm thấy loại phòng.', 404)
       if (method === 'DELETE') {
-        if (this.inventory.state.rooms.some((r) => r.roomTypeId === id))
-          throw new MockError('Loại phòng đang được sử dụng.', 409)
         this.inventory.state.types = this.inventory.state.types.filter((t) => t.id !== id)
         return null
       }

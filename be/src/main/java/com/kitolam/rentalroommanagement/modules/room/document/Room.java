@@ -15,6 +15,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A room of a branch. The manager is the branch's manager and utility rates are the branch's rates,
+ * so neither is stored here. maxOccupants is also the number of bookable slots (room_slots).
+ */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,13 +30,7 @@ public class Room extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String branchId;
 
-    @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
-    private String roomTypeId;
-
-    @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
-    private String managerId;
+    private String title;
 
     private String roomNumber;
 
@@ -40,6 +38,8 @@ public class Room extends BaseDocument {
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal area;
+
+    private Integer maxOccupants;
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal listedRentPrice;
@@ -54,11 +54,4 @@ public class Room extends BaseDocument {
     private String rules;
 
     private RoomStatus status = RoomStatus.AVAILABLE;
-
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal electricityRate;
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal waterRate;
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal parkingRate;
 }

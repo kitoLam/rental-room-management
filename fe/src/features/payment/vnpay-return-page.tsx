@@ -153,12 +153,21 @@ export function VnPayReturnPage() {
                   Về trang chủ
                 </Button>
               </Link>
-              <Link to="/rooms" className="flex-1">
-                <Button className="w-full">
-                  Xem phòng
-                  <ArrowRight size={18} />
-                </Button>
-              </Link>
+              {data.orderInfo?.startsWith('Thanh toan hoa don') ? (
+                <Link to="/tenant/my-room" className="flex-1">
+                  <Button className="w-full">
+                    Về hoá đơn của tôi
+                    <ArrowRight size={18} />
+                  </Button>
+                </Link>
+              ) : (
+                <Link to="/rooms" className="flex-1">
+                  <Button className="w-full">
+                    Xem phòng
+                    <ArrowRight size={18} />
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         )}

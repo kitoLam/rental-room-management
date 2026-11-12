@@ -125,6 +125,25 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  // Hoá đơn hàng tháng theo hợp đồng (BE module invoice) + thanh toán VNPay.
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/invoices/my' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && verb === 'GET') ||
+      (pathname === '/api/v1/contracts' && verb === 'GET') ||
+      (pathname === '/api/v1/vnpay/create-payment' && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/invoices' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/invoices/${id}/issue`) && verb === 'PATCH') ||
+      (matches(`/api/v1/invoices/contracts/${id}`) && verb === 'POST') ||
+      (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
+  )
+    return null
+
   if (feature === 'adminUsers') {
     if (pathname === '/api/users' && ['GET', 'POST'].includes(verb)) return null
     if (matches(`/api/users/${id}`) && verb === 'GET') return null

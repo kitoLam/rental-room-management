@@ -15,7 +15,8 @@ import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.mapper.RoomMapper;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.room.service.impl.RoomServiceImpl;
-import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.UtilityRatesRequest;
+import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
+import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -31,7 +32,8 @@ class UtilityRatesTest {
     final MongoTemplate mongo = mock(MongoTemplate.class);
     final Room room = new Room();
     final BranchResponse branch = mock(BranchResponse.class);
-    final RoomServiceImpl service = new RoomServiceImpl(rooms, Mappers.getMapper(RoomMapper.class), branches, mongo, Clock.systemUTC());
+    final RoomServiceImpl service = new RoomServiceImpl(rooms, Mappers.getMapper(RoomMapper.class), branches, mongo, Clock.systemUTC(),
+            mock(RoomSlotRepository.class), mock(RoomSlotOccupancyRepository.class));
 
     UtilityRatesTest() {
         room.setId("room"); room.setBranchId("branch");
@@ -42,20 +44,11 @@ class UtilityRatesTest {
         when(branch.parkingRate()).thenReturn(new BigDecimal("100000"));
     }
 
-    @Test void missingRoomRatesInheritEachBranchRate() {
+    @Test void roomAlwaysUsesItsBranchRates() {
         var rates = service.publicUtilityRates("room");
         assertEquals(new BigDecimal("3500"), rates.electricityRate());
         assertEquals(new BigDecimal("15000"), rates.waterRate());
         assertEquals(new BigDecimal("100000"), rates.parkingRate());
-    }
-
-    @Test void zeroAndExplicitRoomRatesOverrideBranchDefaults() {
-        room.setParkingRate(BigDecimal.ZERO);
-        room.setElectricityRate(new BigDecimal("4000"));
-        var rates = service.publicUtilityRates("room");
-        assertEquals(BigDecimal.ZERO, rates.parkingRate());
-        assertEquals(new BigDecimal("4000"), rates.electricityRate());
-        assertEquals(new BigDecimal("15000"), rates.waterRate());
     }
 
     @Test void unconfiguredRateStaysUnknownInsteadOfBecomingFree() {
@@ -66,7 +59,8 @@ class UtilityRatesTest {
     @Test void unauthorizedRoomWriteNeverReachesDatabase() {
         var tenant = new AuthPrincipal("tenant", "tenant@example.test", "TENANT");
         doThrow(new ForbiddenException("Denied")).when(branches).requireManagementAccess("branch", tenant);
-        assertThrows(ForbiddenException.class, () -> service.updateUtilityRates("room", new UtilityRatesRequest(null, null, null), tenant));
+        assertThrows(ForbiddenException.class, () -> service.delete("room", tenant));
+        verify(rooms, never()).save(any());
         verifyNoInteractions(mongo);
     }
 

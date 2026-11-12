@@ -99,7 +99,6 @@ class ReportRequestServiceTest {
         room = new Room();
         room.setId(roomId);
         room.setBranchId(branchId);
-        room.setManagerId(managerId);
 
         contract = new Contract();
         contract.setId(contractId);

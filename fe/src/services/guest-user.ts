@@ -102,7 +102,7 @@ const publicRoomSchema = z.object({
   room: z.object({
     id: databaseIdSchema,
     branchId: databaseIdSchema,
-    roomTypeId: databaseIdSchema,
+    title: z.string().nullish(),
     code: z.string(),
     capacity: z.number(),
     areaSqm: z.number().nullable(),
@@ -116,7 +116,6 @@ const publicRoomSchema = z.object({
   branchId: databaseIdSchema,
   branchName: z.string(),
   address: z.string(),
-  roomTypeName: z.string(),
   ownerName: z.string().nullish(),
 })
 type RealRoom = z.infer<typeof publicRoomSchema>
@@ -126,10 +125,11 @@ function adaptRoom(data: RealRoom) {
   const images = refs.flatMap((value: unknown) =>
     typeof value === 'string' && /^https?:\/\//.test(value) ? [value] : [],
   )
+  const title = r.title?.trim() || `Phòng ${r.code}`
   return roomSchema.parse({
     id: r.id,
     code: r.code,
-    title: `${data.roomTypeName} ${r.code}`,
+    title,
     branchId: data.branchId,
     branchName: data.branchName,
     address: data.address,
@@ -139,8 +139,6 @@ function adaptRoom(data: RealRoom) {
     sizeM2: r.areaSqm,
     floor: r.floorNumber,
     rentalMode: 'SLOT',
-    roomTypeId: r.roomTypeId,
-    roomTypeName: data.roomTypeName,
     operationalStatus:
       r.operationalStatus === 'MAINTENANCE'
         ? 'MAINTENANCE'
@@ -155,7 +153,7 @@ function adaptRoom(data: RealRoom) {
           : 'AVAILABLE',
     availableSlots: null,
     imageUrl: images[0] || '',
-    imageAlt: `${data.roomTypeName} ${r.code}`,
+    imageAlt: title,
     images,
     description: r.description || '',
     amenities: r.amenities || [],
@@ -168,7 +166,6 @@ export const defaultFilters: RoomFilters = {
   q: '',
   area: '',
   mode: 'ALL',
-  roomTypeId: '',
   availableOnly: false,
   sort: 'recommended',
   page: 1,
@@ -178,7 +175,7 @@ function query(filters: RoomFilters) {
   const keyword = filters.q.trim()
   if (keyword) params.set(provider('catalog') === 'mock' ? 'q' : 'keyword', keyword)
   if (filters.branchId) params.set('branchId', filters.branchId)
-  if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
+  if (filters.minCapacity) params.set('minCapacity', String(filters.minCapacity))
   for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea'] as const)
     if (filters[key] !== undefined) params.set(key, String(filters[key]))
   if (provider('catalog') === 'mock') {
@@ -212,12 +209,6 @@ export const catalogService = {
     provider('catalog') === 'mock'
       ? request('catalog', `/api/v1/public/rooms/${id}`, roomSchema)
       : adaptRoom(await request('catalog', `/api/v1/public/rooms/${id}`, publicRoomSchema)),
-  types: () =>
-    request(
-      'catalog',
-      '/api/v1/public/room-types',
-      z.array(z.object({ id: databaseIdSchema, name: z.string() })),
-    ),
   branches: () =>
     request(
       'catalog',

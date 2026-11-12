@@ -7,23 +7,22 @@ import com.kitolam.rentalroommanagement.modules.room.dto.request.RoomUpdateReque
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomResponse;
 import org.springframework.data.domain.Pageable;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
-import com.kitolam.rentalroommanagement.modules.roomservice.dto.request.UtilityRatesRequest;
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomUtilityRatesResponse;
 import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.UtilityRatesResponse;
 
 public interface RoomService {
     UtilityRatesResponse publicUtilityRates(String roomId);
     RoomUtilityRatesResponse utilityRateConfiguration(String roomId, AuthPrincipal principal);
-    RoomUtilityRatesResponse updateUtilityRates(String roomId, UtilityRatesRequest request, AuthPrincipal principal);
     PagedResponse<RoomResponse> listByBranch(String branchId, Pageable pageable);
 
-    RoomResponse create(RoomCreateRequest request);
+    /** Also creates maxOccupants slots. */
+    RoomResponse create(RoomCreateRequest request, AuthPrincipal principal);
 
     RoomResponse getById(String id);
 
     PagedResponse<RoomResponse> search(RoomFilterRequest filter, Pageable pageable);
 
-    RoomResponse update(String id, RoomUpdateRequest request);
+    RoomResponse update(String id, RoomUpdateRequest request, AuthPrincipal principal);
 
-    void delete(String id);
+    void delete(String id, AuthPrincipal principal);
 }

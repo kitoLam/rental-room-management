@@ -314,7 +314,7 @@ export class MockDatabase {
             (filters.area === 'thu-duc' && r.address.includes('Thủ Đức'))) &&
           (!filters.branchId || r.branchId === filters.branchId) &&
           (filters.mode === 'ALL' || r.rentalMode === filters.mode) &&
-          (!filters.roomTypeId || r.roomTypeId === filters.roomTypeId) &&
+          (filters.minCapacity === undefined || r.capacity >= filters.minCapacity) &&
           (filters.minPrice === undefined || r.price >= filters.minPrice) &&
           (filters.maxPrice === undefined || r.price <= filters.maxPrice) &&
           (filters.minArea === undefined || (r.sizeM2 !== null && r.sizeM2 >= filters.minArea)) &&

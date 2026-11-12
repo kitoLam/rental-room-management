@@ -9,11 +9,11 @@ import java.util.List;
 public record RoomResponse(
         String id,
         String branchId,
-        String roomTypeId,
-        String managerId,
+        String title,
         String roomNumber,
         Integer floor,
         BigDecimal area,
+        Integer maxOccupants,
         BigDecimal listedRentPrice,
         BigDecimal listedDepositAmount,
         List<String> amenities,

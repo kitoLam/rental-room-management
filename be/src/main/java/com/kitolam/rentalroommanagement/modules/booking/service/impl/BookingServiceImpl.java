@@ -97,6 +97,7 @@ public class BookingServiceImpl implements BookingService {
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final BranchService branchAccess;
+    private final com.kitolam.rentalroommanagement.modules.branch.support.BranchManagerResolver branchManagers;
 
     @Value("${contract.template.download-url:https://www.youtube.com/}")
     private String contractTemplateDownloadUrl;
@@ -709,7 +710,7 @@ public class BookingServiceImpl implements BookingService {
         contract.setRoomSlotIds(bookingSlotIds(booking));
         contract.setBookingId(booking.getId());
         contract.setTenantId(booking.getTenantId());
-        contract.setManagerId(room.getManagerId());
+        contract.setManagerId(branchManagers.managerAccountId(room.getBranchId()).orElse(null));
         contract.setContractNumber(contractService.nextContractNumber());
         contract.setTenantName(tenant == null ? null : tenant.getFullName());
         contract.setTenantIdNumber(tenant == null ? null : tenant.getIdCardNumber());

@@ -12,7 +12,6 @@ import {
   managerLink,
   useManager,
   useManagerAction,
-  useManagerList,
   useManagerQuery,
 } from './context'
 
@@ -20,7 +19,6 @@ export function ManagerRoomEditor() {
   const { roomId } = useParams(),
     { branch } = useManager(),
     navigate = useNavigate(),
-    types = useManagerList('room-types', { size: '100' }),
     query = useManagerQuery(
       'room-editor',
       (b) => (roomId ? managerApi.get(b, 'rooms', roomId) : Promise.resolve(null)),
@@ -33,15 +31,14 @@ export function ManagerRoomEditor() {
       navigate(managerLink(`/manager/rooms/${result?.id || roomId}`, branch.id))
     })
   const fields: FieldSpec[] = [
-    { name: 'code', label: 'Mã phòng' },
-    ...(provider('manager') === 'mock' ? [{ name: 'title', label: 'Tên phòng' }] : []),
+    { name: 'code', label: 'Số phòng', hint: 'Ví dụ A101. Không trùng trong chi nhánh.' },
+    { name: 'title', label: 'Tiêu đề phòng', hint: 'Hiển thị trên trang tìm phòng.' },
     {
-      name: 'roomTypeId',
-      label: 'Loại phòng',
-      kind: 'select',
-      options: types.data?.content
-        .filter((t) => t.active)
-        .map((t) => ({ value: t.id, label: t.name })),
+      name: 'capacity',
+      label: 'Sức chứa (số người)',
+      kind: 'number',
+      min: 1,
+      hint: 'Hệ thống tạo đúng số chỗ ở (slot) tương ứng để khách đặt.',
     },
     ...(provider('manager') === 'mock' ? [{
       name: 'rentalMode',
@@ -51,10 +48,13 @@ export function ManagerRoomEditor() {
         { value: 'ROOM', label: 'Nguyên phòng' },
         { value: 'SLOT', label: 'Thuê chỗ' },
       ],
-    } as FieldSpec, { name: 'capacity', label: 'Số slot', kind: 'number', min: 1 } as FieldSpec] : []),
+    } as FieldSpec] : []),
     { name: 'sizeM2', label: 'Diện tích (m²)', kind: 'number', min: 1, step: 0.1, nullable: true },
     { name: 'floor', label: 'Tầng', kind: 'number', min: 0, nullable: true },
-    { name: 'price', label: 'Giá tham khảo (VND)', kind: 'number', min: 0 },
+    { name: 'price', label: 'Giá thuê tham khảo / tháng (VND)', kind: 'number', min: 0 },
+    ...(provider('manager') === 'real'
+      ? [{ name: 'deposit', label: 'Tiền cọc (VND)', kind: 'number', min: 0, nullable: true } as FieldSpec]
+      : []),
     { name: 'description', label: 'Mô tả', kind: 'textarea' },
     { name: 'amenities', label: 'Tiện nghi', kind: 'list', hint: 'Mỗi dòng một tiện nghi.' },
     {
@@ -79,18 +79,15 @@ export function ManagerRoomEditor() {
       }
     >
       <QueryState
-        pending={query.isPending || types.isPending}
-        error={query.error || types.error}
-        retry={() => {
-          void query.refetch()
-          void types.refetch()
-        }}
+        pending={query.isPending}
+        error={query.error}
+        retry={() => void query.refetch()}
       >
         <Panel>
           <ManagerForm
             schema={
               provider('manager') === 'real'
-                ? roomInputSchema.omit({ images: true, title: true, rentalMode: true, capacity: true })
+                ? roomInputSchema.omit({ images: true, rentalMode: true, isPublic: true })
                 : roomInputSchema.omit({ images: true })
             }
             defaults={
@@ -99,12 +96,12 @@ export function ManagerRoomEditor() {
                 : {
                     code: '',
                     title: '',
-                    roomTypeId: '',
-                    rentalMode: 'ROOM',
+                    rentalMode: 'SLOT',
                     capacity: 2,
                     sizeM2: 25,
                     floor: 1,
                     price: 3000000,
+                    deposit: 3000000,
                     description: '',
                     amenities: [],
                     operationalStatus: 'ACTIVE',
@@ -115,9 +112,7 @@ export function ManagerRoomEditor() {
             onSubmit={(value) =>
               setPreview({
                 ...value,
-                title:
-                  value.title ||
-                  `${types.data?.content.find((t) => t.id === value.roomTypeId)?.name || 'Phòng'} ${value.code}`,
+                title: value.title || `Phòng ${value.code}`,
                 images: images || query.data?.images || [],
               })
             }
@@ -146,7 +141,8 @@ export function ManagerRoomEditor() {
             <Facts
               items={[
                 ['Chi nhánh', branch.name],
-                ['Mã phòng', String(preview.code)],
+                ['Số phòng', String(preview.code)],
+                ['Sức chứa', `${Number(preview.capacity)} người`],
                 ...(provider('manager') === 'mock' ? [['Hình thức', preview.rentalMode === 'SLOT' ? 'Thuê chỗ' : 'Nguyên phòng'] as [string, string]] : []),
                 ['Giá tham khảo', formatVnd(Number(preview.price))],
               ]}

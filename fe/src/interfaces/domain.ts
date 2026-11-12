@@ -42,8 +42,8 @@ export const roomSchema = z.object({
   capacity: z.number(),
   availableSlots: z.number().nullable(),
   rentalMode: modeSchema,
-  roomTypeId: databaseIdSchema,
-  roomTypeName: z.string(),
+  /** Listed deposit; present for rooms coming from the real API. */
+  deposit: z.number().nullish(),
   status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
   operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
   imageUrl: z.string(),
@@ -251,7 +251,6 @@ export type RoomFilters = {
   minArea?: number
   maxArea?: number
   mode: 'ALL' | RentalMode
-  roomTypeId: string
   minCapacity?: number
   availableOnly: boolean
   sort: string

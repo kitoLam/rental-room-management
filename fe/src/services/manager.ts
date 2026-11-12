@@ -22,11 +22,11 @@ const result = z.object({ id: z.string().uuid().optional() }).passthrough().null
 const roomDto = z.object({
   id: databaseIdSchema,
   branchId: databaseIdSchema,
-  roomTypeId: databaseIdSchema,
-  managerId: databaseIdSchema.nullable().optional(),
+  title: z.string().nullable().optional(),
   roomNumber: z.string(),
   floor: z.number().nullable(),
   area: z.number().nullable(),
+  maxOccupants: z.number().nullable().optional(),
   listedRentPrice: z.number(),
   listedDepositAmount: z.number().nullable(),
   amenities: z.array(z.string()).nullable(),
@@ -68,15 +68,6 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
 }
-const roomTypeDto = z.object({
-  id: databaseIdSchema,
-  branchId: databaseIdSchema,
-  code: z.string(),
-  name: z.string(),
-  defaultCapacity: z.number(),
-  description: z.string().nullable(),
-  active: z.boolean(),
-})
 const slotDto = z.object({
   id: databaseIdSchema,
   roomId: databaseIdSchema,
@@ -100,26 +91,26 @@ const normalizePage = <T>(page: {
   totalPages: number
 }) => ({ ...page, number: page.number - 1 })
 const roomImageRefs = (images: unknown) => (Array.isArray(images) ? images : [])
-function roomView(r: z.infer<typeof roomDto>, typeName: string) {
+function roomView(r: z.infer<typeof roomDto>) {
   const images = roomImageRefs(r.images).filter(
     (x): x is string => typeof x === 'string' && /^https?:\/\//.test(x),
   )
+  const title = r.title?.trim() || `Phòng ${r.roomNumber}`
   return {
     id: r.id,
     code: r.roomNumber,
-    title: `${typeName} ${r.roomNumber}`,
+    title,
     branchId: r.branchId,
     branchName: '',
     address: '',
     areaKey: '',
     price: r.listedRentPrice,
-    capacity: 0,
+    deposit: r.listedDepositAmount,
+    capacity: r.maxOccupants ?? 0,
     sizeM2: r.area,
     availableSlots: null,
     floor: r.floor,
     rentalMode: 'SLOT',
-    roomTypeId: r.roomTypeId,
-    roomTypeName: typeName,
     operationalStatus: r.status === 'MAINTENANCE' ? 'MAINTENANCE' : r.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
     status:
       r.status === 'MAINTENANCE'
@@ -132,15 +123,12 @@ function roomView(r: z.infer<typeof roomDto>, typeName: string) {
     occupiedResources: null,
     heldResources: null,
     imageUrl: images[0] || '',
-    imageAlt: `${typeName} ${r.roomNumber}`,
+    imageAlt: title,
     images,
     description: r.rules || '',
     amenities: r.amenities || [],
     services: [],
   }
-}
-function typeView(t: z.infer<typeof roomTypeDto>) {
-  return { ...t, name: t.name, description: t.description || '' }
 }
 function slotView(s: z.infer<typeof slotDto>) {
   return {
@@ -157,14 +145,16 @@ function slotView(s: z.infer<typeof slotDto>) {
 function roomPayload(value: Record<string, unknown>, branchId: string) {
   return {
     branchId,
-    roomTypeId: value.roomTypeId,
+    title: value.title,
     roomNumber: value.code,
     area: value.sizeM2,
     floor: value.floor,
+    maxOccupants: value.capacity,
     listedRentPrice: value.price,
+    listedDepositAmount: value.deposit ?? value.price,
     rules: value.description,
     amenities: value.amenities,
-    imageRefs: value.images,
+    images: value.images,
     status: value.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : value.operationalStatus,
   }
 }
@@ -337,51 +327,22 @@ export const managerApi = {
         totalPages: Math.ceil(filtered.length / size) || (filtered.length ? 1 : 0),
       }
     }
-    if (provider('manager') === 'real' && ['rooms', 'room-types', 'slots'].includes(resource)) {
+    if (provider('manager') === 'real' && ['rooms', 'slots'].includes(resource)) {
       const page = Number(filters.page || 0),
         size = Number(filters.size || 8)
       if (resource === 'rooms') {
         const params = new URLSearchParams({ branchId, page: String(page), size: String(size) })
-        if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
         if (filters.minPrice) params.set('minPrice', filters.minPrice)
         if (filters.maxPrice) params.set('maxPrice', filters.maxPrice)
         if (filters.capacity) params.set('minCapacity', filters.capacity)
+        if (filters.q) params.set('keyword', filters.q)
         if (filters.operationalStatus)
           params.set(
             'status',
             filters.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : filters.operationalStatus,
           )
-        return request('manager', `/api/v1/rooms?${params}`, apiPage(roomDto)).then(async (p) => {
-          const types = await request(
-            'manager',
-            `/api/v1/room-types?${new URLSearchParams({ page: '0', size: '100' })}`,
-            apiPage(roomTypeDto),
-          )
-          const names = new Map(types.content.map((t) => [t.id, t.name]))
-          return normalizePage({
-            ...p,
-            content: p.content.map((r) => roomView(r, names.get(r.roomTypeId) || 'Phòng')),
-          })
-        }) as Promise<Page<ManagerRecord<K>>>
-      }
-      if (resource === 'room-types') {
-        const params = new URLSearchParams({ page: '0', size: '1000' })
-        return request('manager', `/api/v1/room-types?${params}`, apiPage(roomTypeDto)).then(
-          (p) => {
-            const filtered = p.content.filter(
-              (t) =>
-                t.branchId === branchId &&
-                (!filters.q ||
-                  `${t.code} ${t.name}`.toLowerCase().includes(filters.q.toLowerCase())),
-            )
-            return {
-              content: filtered.slice(page * size, (page + 1) * size).map(typeView),
-              number: page,
-              size,
-              totalElements: filtered.length,
-              totalPages: Math.ceil(filtered.length / size),
-            }
-          },
+        return request('manager', `/api/v1/rooms?${params}`, apiPage(roomDto)).then((p) =>
+          normalizePage({ ...p, content: p.content.map(roomView) }),
         ) as Promise<Page<ManagerRecord<K>>>
       }
       const roomId = filters.roomId
@@ -747,18 +708,7 @@ export const managerApi = {
     }
     if (provider('manager') === 'real' && resource === 'rooms')
       return request('manager', `/api/v1/rooms/${encodeURIComponent(id)}`, roomDto).then(
-        async (r) => {
-          const type = await request(
-            'manager',
-            `/api/v1/room-types/${encodeURIComponent(r.roomTypeId)}`,
-            roomTypeDto,
-          )
-          return roomView(r, type.name)
-        },
-      ) as Promise<ManagerRecord<K>>
-    if (provider('manager') === 'real' && resource === 'room-types')
-      return request('manager', `/api/v1/room-types/${encodeURIComponent(id)}`, roomTypeDto).then(
-        typeView,
+        roomView,
       ) as Promise<ManagerRecord<K>>
     if (provider('manager') === 'real' && resource === 'slots')
       return request('manager', `/api/v1/room-slots/${encodeURIComponent(id)}`, slotDto).then(
@@ -1013,51 +963,23 @@ export const managerApi = {
       const updated = await utilitiesService.costAllocation.process(id, v)
       return { id: updated.id }
     }
-    if (provider('manager') === 'real' && ['rooms', 'room-types', 'slots'].includes(resource)) {
-      const isRoom = resource === 'rooms',
-        isType = resource === 'room-types'
+    if (provider('manager') === 'real' && ['rooms', 'slots'].includes(resource)) {
+      const isRoom = resource === 'rooms'
       const path = isRoom
         ? `/api/v1/rooms${id ? `/${encodeURIComponent(id)}` : ''}`
-        : isType
-          ? `/api/v1/room-types${id ? `/${encodeURIComponent(id)}` : ''}`
-          : `/api/v1/room-slots${id ? `/${encodeURIComponent(id)}` : ''}`
+        : `/api/v1/room-slots${id ? `/${encodeURIComponent(id)}` : ''}`
       if (method === 'DELETE') return request('manager', path, z.null(), write('DELETE'))
       const input = value as Record<string, unknown>
       const payload = isRoom
         ? roomPayload(input, branchId)
-        : isType
-          ? {
-              branchId,
-              code: input.code,
-              typeName: input.name,
-              defaultCapacity: input.defaultCapacity,
-              description: input.description,
-              active: input.active,
-            }
-          : {
+        : {
               roomId: input.roomId,
               slotCode: input.code,
               slotName: input.name,
               status: input.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : input.operationalStatus,
             }
       if (isRoom)
-        return request('manager', path, roomDto, write(id ? 'PUT' : 'POST', payload)).then(
-          async (r) =>
-            roomView(
-              r,
-              (
-                await request(
-                  'manager',
-                  `/api/v1/room-types/${encodeURIComponent(r.roomTypeId)}`,
-                  roomTypeDto,
-                )
-              ).name,
-            ),
-        )
-      if (isType)
-        return request('manager', path, roomTypeDto, write(id ? 'PUT' : 'POST', payload)).then(
-          typeView,
-        )
+        return request('manager', path, roomDto, write(id ? 'PATCH' : 'POST', payload)).then(roomView)
       return request('manager', path, slotDto, write(id ? 'PUT' : 'POST', payload)).then(slotView)
     }
     return request(

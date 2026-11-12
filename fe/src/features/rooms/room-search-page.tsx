@@ -33,11 +33,6 @@ function Filters({
   const [minArea, setMinArea] = useState<number>(filters.minArea ?? 10)
   const [maxArea, setMaxArea] = useState<number>(filters.maxArea ?? 100)
 
-  const types = useQuery({
-    queryKey: ['room-types'],
-    queryFn: catalogService.types,
-  })
-
   const branches = useQuery({
     queryKey: ['public-branches'],
     queryFn: catalogService.branches,
@@ -121,21 +116,20 @@ function Filters({
         </select>
       </Field>
 
-      <Field label="Loại phòng" id={`${id}-type`}>
+      <Field label="Sức chứa tối thiểu" id={`${id}-capacity`}>
         <select
-          id={`${id}-type`}
+          id={`${id}-capacity`}
           className="input"
-          name="roomTypeId"
-          defaultValue={filters.roomTypeId}
+          name="minCapacity"
+          defaultValue={filters.minCapacity ? String(filters.minCapacity) : ''}
         >
-          <option value="">Tất cả loại phòng</option>
-          {types.data?.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
+          <option value="">Bất kỳ</option>
+          {[1, 2, 3, 4, 6].map((n) => (
+            <option key={n} value={n}>
+              Từ {n} người
             </option>
           ))}
         </select>
-        {types.error && <InlineError error={types.error} />}
       </Field>
 
       {/* Kéo giá tiền từ 500.000 - 20.000.000 VNĐ */}
@@ -424,7 +418,7 @@ export default function RoomSearchPage() {
             {/* Chips lọc đang áp dụng */}
             {(filters.area ||
               filters.branchId ||
-              filters.roomTypeId ||
+              filters.minCapacity !== undefined ||
               filters.minPrice !== undefined ||
               filters.maxPrice !== undefined ||
               filters.minArea !== undefined ||
