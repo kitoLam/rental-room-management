@@ -41,8 +41,6 @@ function toReportItem(r: any): ReportRequestItem {
     solutionResult: r.solutionResult || null,
     rejectReason: r.rejectReason || null,
     requestedInfoNote: r.requestedInfoNote || null,
-    disputeReason: r.disputeReason || null,
-    adminConclusion: r.adminConclusion || null,
     createdAt: r.createdAt || new Date().toISOString(),
     timeline: (r.records || []).map((rec: any, idx: number): ReportRecordItem => ({
       id: rec.id || `rec-${idx}`,
@@ -137,7 +135,7 @@ export async function handleReportRequests(request: Request, user: User) {
 
   // 4. Action sub-routes on /api/v1/report-requests/:id/...
   const actionMatch = path.match(
-    /^\/api\/v1\/report-requests\/([^/]+)\/(request-info|supplement|reject|progress|resolve|confirm-close|reopen|escalate-admin|admin-resolve|cancel)$/,
+    /^\/api\/v1\/report-requests\/([^/]+)\/(request-info|supplement|reject|progress|resolve|confirm-close|reopen|cancel)$/,
   )
   if (actionMatch && method === 'POST') {
     const [, reportId, action] = actionMatch
@@ -255,37 +253,6 @@ export async function handleReportRequests(request: Request, user: User) {
         })
         break
 
-      case 'escalate-admin':
-        r.status = 'ESCALATED_ADMIN' as any
-        r.disputeReason = body.disputeReason || 'Chuyển tranh chấp lên Quản trị viên'
-        r.records.push({
-          id: crypto.randomUUID(),
-          at: new Date().toISOString(),
-          status: 'ESCALATED_ADMIN',
-          description: `Chuyển lên Admin giải quyết: ${r.disputeReason}`,
-          performedBy: user.fullName || 'Khách thuê',
-          evidence: [],
-          cost: 0,
-          responsibleParty: null,
-          approvalStatus: null,
-        })
-        break
-
-      case 'admin-resolve':
-        r.status = 'CLOSED' as any
-        r.adminConclusion = body.adminConclusion || 'Admin đã giải quyết khiếu nại'
-        r.records.push({
-          id: crypto.randomUUID(),
-          at: new Date().toISOString(),
-          status: 'CLOSED',
-          description: `Admin phân xử: ${r.adminConclusion}`,
-          performedBy: user.fullName || 'Admin',
-          evidence: [],
-          cost: 0,
-          responsibleParty: null,
-          approvalStatus: null,
-        })
-        break
 
       case 'cancel':
         r.status = 'CANCELLED' as any

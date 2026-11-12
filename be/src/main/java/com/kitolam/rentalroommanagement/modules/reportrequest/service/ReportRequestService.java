@@ -4,10 +4,8 @@ import java.util.List;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestInfoRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestProgressRequest;
@@ -69,11 +67,6 @@ public interface ReportRequestService {
     /** Tenant không hài lòng, mở lại để tiếp tục xử lý (chuyển lại IN_PROGRESS) */
     ReportRequestResponse reopen(String id, ReportRequestReopenRequest request, AuthPrincipal principal);
 
-    /** Không giải quyết được -> Chuyển tranh chấp lên Admin xác minh (chuyển sang ESCALATED_ADMIN) */
-    ReportRequestResponse escalateAdmin(String id, ReportRequestEscalateAdminRequest request, AuthPrincipal principal);
-
-    /** Admin tiếp nhận tranh chấp, xác minh và ghi nhận kết luận giải quyết (chuyển sang CLOSED) */
-    ReportRequestResponse adminResolve(String id, ReportRequestAdminResolveRequest request, AuthPrincipal principal);
 
     /** Tenant tự hủy yêu cầu khi chưa xử lý (từ PENDING hoặc WAITING_INFO sang CANCELLED) */
     ReportRequestResponse cancel(String id, AuthPrincipal principal);

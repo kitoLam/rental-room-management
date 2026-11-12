@@ -21,7 +21,6 @@ export const reportRequestStatusEnum = z.enum([
   'RESOLVED',
   'REJECTED',
   'CLOSED',
-  'ESCALATED_ADMIN',
   'CANCELLED',
 ])
 export type ReportRequestStatus = z.infer<typeof reportRequestStatusEnum>
@@ -38,8 +37,6 @@ export const reportRecordActionEnum = z.enum([
   'REJECTED',
   'CLOSED',
   'REOPENED',
-  'ESCALATED_ADMIN',
-  'ADMIN_RESOLVED',
   'CANCELLED',
 ])
 export type ReportRecordAction = z.infer<typeof reportRecordActionEnum>
@@ -51,7 +48,7 @@ export const reportRecordResponseSchema = z.object({
   actorRole: z.string().nullable().optional(),
   actorName: z.string().nullable().optional(),
   managerId: z.string().nullable().optional(),
-  action: z.string(),
+  action: z.string().nullish().transform((v) => v || 'STATUS_CHANGED'),
   statusFrom: z.string().nullable().optional(),
   statusTo: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
@@ -64,6 +61,7 @@ export type ReportRecordItem = z.infer<typeof reportRecordResponseSchema>
 export const reportRequestResponseSchema = z.object({
   id: z.string(),
   tenantId: z.string().nullish().transform((v) => v || ''),
+  tenantName: z.string().nullable().optional(),
   roomId: z.string().nullish().transform((v) => v || ''),
   roomName: z.string().nullable().optional(),
   slotName: z.string().nullable().optional(),
@@ -80,12 +78,10 @@ export const reportRequestResponseSchema = z.object({
   rejectReason: z.string().nullable().optional(),
   requestedInfoNote: z.string().nullable().optional(),
   solutionResult: z.string().nullable().optional(),
-  disputeReason: z.string().nullable().optional(),
-  adminConclusion: z.string().nullable().optional(),
   status: z.string().nullish().transform((v) => {
     if (v === 'OPEN') return 'PENDING'
     if (v === 'ACCEPTED') return 'IN_PROGRESS'
-    if (v === 'COMPLETED') return 'RESOLVED'
+    if (v === 'COMPLETED' || v === 'ESCALATED_ADMIN') return 'RESOLVED'
     return (v || 'PENDING') as ReportRequestStatus
   }),
   resolvedAt: z.string().nullable().optional(),

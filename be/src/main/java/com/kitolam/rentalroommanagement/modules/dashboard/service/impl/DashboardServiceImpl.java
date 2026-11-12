@@ -329,10 +329,9 @@ public class DashboardServiceImpl implements DashboardService {
             case "support:ASSIGNED" -> "Đã phân công xử lý hỗ trợ";
             case "support:REQUESTED_INFO" -> "Đã yêu cầu bổ sung thông tin hỗ trợ";
             case "support:PROGRESS_UPDATED", "support:STATUS_CHANGED", "support:REOPENED" -> "Đã cập nhật xử lý hỗ trợ";
-            case "support:RESOLVED", "support:CLOSED", "support:ADMIN_RESOLVED" -> "Đã giải quyết / đóng yêu cầu hỗ trợ";
+            case "support:RESOLVED", "support:CLOSED" -> "Đã giải quyết / đóng yêu cầu hỗ trợ";
             case "support:REJECTED" -> "Đã từ chối yêu cầu hỗ trợ";
             case "support:CANCELLED" -> "Đã hủy yêu cầu hỗ trợ";
-            case "support:ESCALATED_ADMIN" -> "Đã chuyển yêu cầu hỗ trợ lên Admin";
             default -> null;
         };
     }

@@ -465,31 +465,29 @@ export const managerApi = {
     }
         if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const pageIndex = Number(filters.page || 0)
-          const p = await reportRequestService.search(
-            {
-              branchId,
-              status: (filters.status || undefined) as any,
-              keyword: filters.q || undefined,
-              page: pageIndex,
-              size: 8,
-            },
-            'manager',
-          )
-          if (p && Array.isArray(p.content)) {
-            const seen = new Set<string>()
-            const deduped = p.content.filter((item) => {
-              if (!item.id || seen.has(item.id)) return false
-              seen.add(item.id)
-              return true
-            })
-            const content = deduped.map((item) => ({
-              id: item.id,
-              contractTenantId: item.tenantId,
-              roomId: item.roomId,
-              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
-              tenantName: 'Khách thuê',
+        const pageIndex = Number(filters.page || 0)
+        const p = await reportRequestService.search(
+          {
+            branchId,
+            status: (filters.status || undefined) as any,
+            keyword: filters.q || undefined,
+            page: pageIndex,
+            size: 8,
+          },
+          'manager',
+        )
+        const seen = new Set<string>()
+        const deduped = (p.content || []).filter((item) => {
+          if (!item.id || seen.has(item.id)) return false
+          seen.add(item.id)
+          return true
+        })
+        const content = deduped.map((item) => ({
+          id: item.id,
+          contractTenantId: item.tenantId,
+          roomId: item.roomId,
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
               assetId: item.roomId,
               category: item.type as any,
               title: item.title,
@@ -528,8 +526,6 @@ export const managerApi = {
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -542,17 +538,13 @@ export const managerApi = {
                 approvalStatus: null,
               })),
             }))
-            return {
-              content,
-              number: p.number,
-              size: p.size,
-              totalElements: p.totalElements,
-              totalPages: p.totalPages,
-            } as unknown as Page<ManagerRecord<K>>
-          }
-        } catch (err) {
-          console.warn('Real report-requests list failed, falling back to mock:', err)
-        }
+        return {
+          content,
+          number: p.number,
+          size: p.size,
+          totalElements: p.totalElements,
+          totalPages: p.totalPages,
+        } as unknown as Page<ManagerRecord<K>>
       }
       // Mock fallback: read directly from tenantDb to avoid scope/permission
       // checks in managerDb.list() which fail when actor is a real backend user
@@ -607,8 +599,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -709,20 +699,14 @@ export const managerApi = {
     }
         if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const item = await reportRequestService.getById(id, 'manager')
-          if (item) {
-            const { tenantDb } = await import('@/mocks/tenant-engine')
-            const t =
-              tenantDb.state.tenancies.find((x) => x.roomId === item.roomId || x.id === item.tenantId) ||
-              tenantDb.state.tenancies[0]
-            return {
-              id: item.id,
-              contractTenantId: item.tenantId || t?.id || '',
-              roomId: item.roomId || t?.roomId || '',
-              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : (t?.roomName || `P.${(item.roomId || '').slice(-4).toUpperCase()}`),
-              tenantName: 'Khách thuê',
-              assetId: item.roomId || t?.roomId || '',
+        const item = await reportRequestService.getById(id, 'manager')
+        return {
+          id: item.id,
+          contractTenantId: item.tenantId || '',
+          roomId: item.roomId || '',
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
+          assetId: item.roomId || '',
               category: item.type as any,
               title: item.title,
               description: item.content,
@@ -760,8 +744,6 @@ export const managerApi = {
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -773,11 +755,7 @@ export const managerApi = {
                 responsibleParty: null,
                 approvalStatus: null,
               })),
-            } as unknown as ManagerRecord<K>
-          }
-        } catch (err) {
-          console.warn('Real report-request getById failed, falling back to mock:', err)
-        }
+        } as unknown as ManagerRecord<K>
       }
       const { tenantDb } = await import('@/mocks/tenant-engine')
       const r: any = tenantDb.state.reports.find((x) => x.id === id)
@@ -823,8 +801,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -907,8 +883,7 @@ export const managerApi = {
       return request('manager', path, contractTenantSchema, write(method, value))
     }
     if (resource === 'maintenance' && provider('manager') === 'real' && id) {
-      try {
-        const v = (value || {}) as Record<string, any>
+      const v = (value || {}) as Record<string, any>
         const extractAttachments = (val: any): string[] => {
           if (!val) return []
           if (Array.isArray(val.attachments))
@@ -961,30 +936,16 @@ export const managerApi = {
           const item = await reportRequestService.resolve(id, solutionResult, atts)
           return { id: item.id }
         }
-        if (action === 'reopen') {
-          const item = await reportRequestService.reopen(
-            id,
-            v.reason || 'Mở lại yêu cầu để xử lý thêm',
-          )
-          return { id: item.id }
-        }
-        if (action === 'escalate-admin') {
-          const item = await reportRequestService.escalateAdmin(
-            id,
-            v.disputeReason || v.reason || 'Chuyển Admin phân xử tranh chấp',
-          )
-          return { id: item.id }
-        }
-        if (action === 'admin-resolve') {
-          const item = await reportRequestService.adminResolve(
-            id,
-            v.adminConclusion || v.resolutionNote || 'Admin đã giải quyết tranh chấp',
-          )
-          return { id: item.id }
-        }
-      } catch (err) {
-        console.warn('Real report-request manager action failed, falling back to mock:', err)
+      if (action === 'reopen') {
+        const item = await reportRequestService.reopen(
+          id,
+          v.reason || 'Mở lại yêu cầu để xử lý thêm',
+          [],
+          'manager',
+        )
+        return { id: item.id }
       }
+      throw new Error('Thao tác yêu cầu hỗ trợ không được hỗ trợ.')
     }
     if (resource === 'maintenance' && id) {
       // Mock fallback for all maintenance actions (when real API is unavailable)

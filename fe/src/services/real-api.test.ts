@@ -93,4 +93,48 @@ describe('verified real API contracts', () => {
     await expect(request(feature, path, z.unknown(), { method })).rejects.toMatchObject({ status: 501 })
     expect(fetcher).not.toHaveBeenCalled()
   })
+
+  it('allows owner access and assign endpoint on report-requests', async () => {
+    const { realApiIssue } = await import('./real-api')
+    const reqId = '60c72b2f9b1d8b2bad000001'
+    expect(realApiIssue('owner', '/api/v1/report-requests?page=1&size=8', 'GET')).toBeNull()
+    expect(realApiIssue('owner', `/api/v1/report-requests/${reqId}/assign`, 'POST')).toBeNull()
+    expect(realApiIssue('manager', `/api/v1/report-requests/${reqId}/assign`, 'POST')).toBeNull()
+    expect(realApiIssue('manager', `/api/v1/report-requests/${reqId}/escalate-admin`, 'POST')).not.toBeNull()
+  })
+
+  it('throws on real reportRequestService.search error instead of falling back to mock and maps page/tenantName', async () => {
+    const okFetcher = vi.fn().mockResolvedValue(json({
+      content: [{
+        id: '60c72b2f9b1d8b2bad000001',
+        tenantId: id,
+        tenantName: 'Nguyễn Văn A',
+        roomId: id,
+        roomName: 'P101',
+        type: 'REPAIR',
+        title: 'Hỏng đèn',
+        content: 'Đèn nhấp nháy',
+        priority: 'HIGH',
+        status: 'ESCALATED_ADMIN',
+        timeline: [{ id: 'rec-1', reportRequestId: '60c72b2f9b1d8b2bad000001', actorId: 'u1', actorRole: 'TENANT', action: null, createdAt: '2026-11-12T00:00:00Z' }],
+        createdAt: '2026-11-12T00:00:00Z',
+        updatedAt: '2026-11-12T00:00:00Z',
+      }],
+      number: 1,
+      size: 8,
+      totalElements: 1,
+      totalPages: 1,
+    }))
+    vi.stubGlobal('fetch', okFetcher)
+    const { reportRequestService } = await import('./report-request')
+    const page = await reportRequestService.search({ page: 0, size: 8 }, 'manager')
+    expect(okFetcher.mock.calls[0][0]).toContain('/api/v1/report-requests?page=1&size=8')
+    expect(page.number).toBe(0)
+    expect(page.content[0].tenantName).toBe('Nguyễn Văn A')
+    expect(page.content[0].status).toBe('RESOLVED')
+
+    const errFetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Server error' }), { status: 500 }))
+    vi.stubGlobal('fetch', errFetcher)
+    await expect(reportRequestService.search({ page: 0, size: 8 }, 'tenant')).rejects.toMatchObject({ status: 500 })
+  })
 })

@@ -12,6 +12,7 @@ import java.util.List;
 public record ReportRequestResponse(
         String id,
         String tenantId,
+        String tenantName,
         String roomId,
         String roomName,
         String slotName,
@@ -28,8 +29,6 @@ public record ReportRequestResponse(
         String rejectReason,
         String requestedInfoNote,
         String solutionResult,
-        String disputeReason,
-        String adminConclusion,
         ReportRequestStatus status,
         Instant resolvedAt,
         Instant closedAt,
@@ -38,11 +37,11 @@ public record ReportRequestResponse(
         List<ReportRecordResponse> timeline
 ) {
     public static ReportRequestResponse from(ReportRequest r) {
-        return from(r, null, null, null, null, null);
+        return from(r, null, null, null, null, null, null);
     }
 
     public static ReportRequestResponse from(ReportRequest r, List<ReportRecordResponse> timeline) {
-        return from(r, timeline, null, null, null, null);
+        return from(r, timeline, null, null, null, null, null);
     }
 
     public static ReportRequestResponse from(
@@ -51,7 +50,7 @@ public record ReportRequestResponse(
             String roomName,
             String slotName
     ) {
-        return from(r, timeline, roomName, slotName, r != null ? r.getAssigneeName() : null, r != null ? r.getAssigneePhone() : null);
+        return from(r, timeline, roomName, slotName, r != null ? r.getAssigneeName() : null, r != null ? r.getAssigneePhone() : null, null);
     }
 
     public static ReportRequestResponse from(
@@ -62,12 +61,25 @@ public record ReportRequestResponse(
             String assigneeName,
             String assigneePhone
     ) {
+        return from(r, timeline, roomName, slotName, assigneeName, assigneePhone, null);
+    }
+
+    public static ReportRequestResponse from(
+            ReportRequest r,
+            List<ReportRecordResponse> timeline,
+            String roomName,
+            String slotName,
+            String assigneeName,
+            String assigneePhone,
+            String tenantName
+    ) {
         if (r == null) {
             return null;
         }
         return new ReportRequestResponse(
                 r.getId(),
                 r.getTenantId(),
+                tenantName,
                 r.getRoomId(),
                 roomName,
                 slotName,
@@ -84,8 +96,6 @@ public record ReportRequestResponse(
                 r.getRejectReason(),
                 r.getRequestedInfoNote(),
                 r.getSolutionResult(),
-                r.getDisputeReason(),
-                r.getAdminConclusion(),
                 r.getStatus(),
                 r.getResolvedAt(),
                 r.getClosedAt(),

@@ -184,11 +184,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   }
 
   if (
-    (feature === 'tenant' || feature === 'manager' || feature === 'admin') &&
+    (feature === 'tenant' || feature === 'manager' || feature === 'owner' || feature === 'admin') &&
     ((matches('/api/v1/report-requests') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/report-requests/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
       (matches(
-        `/api/v1/report-requests/${id}/(start|request-info|supplement|reject|progress|resolve|confirm-close|reopen|escalate-admin|admin-resolve|cancel)`,
+        `/api/v1/report-requests/${id}/(start|assign|request-info|supplement|reject|progress|resolve|confirm-close|reopen|cancel)`,
       ) &&
         verb === 'POST') ||
       (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||

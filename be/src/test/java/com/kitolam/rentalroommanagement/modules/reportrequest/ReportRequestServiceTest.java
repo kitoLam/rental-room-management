@@ -15,9 +15,7 @@ import com.kitolam.rentalroommanagement.modules.reportrecord.document.ReportReco
 import com.kitolam.rentalroommanagement.modules.reportrecord.enums.ReportRecordAction;
 import com.kitolam.rentalroommanagement.modules.reportrecord.repository.ReportRecordRepository;
 import com.kitolam.rentalroommanagement.modules.reportrequest.document.ReportRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestInfoRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestProgressRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestRejectRequest;
@@ -295,40 +293,25 @@ class ReportRequestServiceTest {
     }
 
     @Test
-    void escalateAdmin_shouldChangeStatusToEscalatedAdmin() {
+    void getById_shouldPopulateTenantNameAndAllowCaseInsensitiveEmail() {
+        AuthPrincipal mixedEmailTenant = new AuthPrincipal(tenantId, "TENANT@Example.com", "TENANT");
         ReportRequest report = new ReportRequest();
         report.setId(reportId);
         report.setTenantId(tenantId);
-        report.setStatus(ReportRequestStatus.IN_PROGRESS);
+        report.setRoomId(roomId);
+        report.setStatus(ReportRequestStatus.PENDING);
 
         when(reportRequestRepository.findByIdAndIsDeletedFalse(reportId)).thenReturn(Optional.of(report));
-        when(tenantRepository.findByEmailAndIsDeletedFalse(tenantPrincipal.email())).thenReturn(Optional.of(tenant));
-        when(reportRequestRepository.save(any(ReportRequest.class))).thenAnswer(i -> i.getArgument(0));
+        when(tenantRepository.findByEmailAndIsDeletedFalse("TENANT@Example.com")).thenReturn(Optional.empty());
+        when(mongoTemplate.find(any(Query.class), eq(Tenant.class))).thenReturn(List.of(tenant));
+        when(tenantRepository.findByIdAndIsDeletedFalse(tenantId)).thenReturn(Optional.of(tenant));
+        when(roomRepository.findByIdAndIsDeletedFalse(roomId)).thenReturn(Optional.of(room));
         when(reportRecordRepository.findByReportRequestIdAndIsDeletedFalseOrderByCreatedAtAsc(reportId)).thenReturn(List.of());
 
-        ReportRequestEscalateAdminRequest req = new ReportRequestEscalateAdminRequest("Hai ben bat dong quan diem boi thuong");
-        ReportRequestResponse res = service.escalateAdmin(reportId, req, tenantPrincipal);
+        ReportRequestResponse res = service.getById(reportId, mixedEmailTenant);
 
-        assertEquals(ReportRequestStatus.ESCALATED_ADMIN, res.status());
-        assertEquals("Hai ben bat dong quan diem boi thuong", res.disputeReason());
-        verify(reportRecordRepository).save(argThat(r -> r.getAction() == ReportRecordAction.ESCALATED_ADMIN));
+        assertEquals(reportId, res.id());
+        assertEquals("Nguyen Van A", res.tenantName());
     }
 
-    @Test
-    void adminResolve_shouldCloseDispute_withConclusion() {
-        ReportRequest report = new ReportRequest();
-        report.setId(reportId);
-        report.setStatus(ReportRequestStatus.ESCALATED_ADMIN);
-
-        when(reportRequestRepository.findByIdAndIsDeletedFalse(reportId)).thenReturn(Optional.of(report));
-        when(reportRequestRepository.save(any(ReportRequest.class))).thenAnswer(i -> i.getArgument(0));
-        when(reportRecordRepository.findByReportRequestIdAndIsDeletedFalseOrderByCreatedAtAsc(reportId)).thenReturn(List.of());
-
-        ReportRequestAdminResolveRequest req = new ReportRequestAdminResolveRequest("Admin yeu cau chu tro chiu 70% chi phi sua chua");
-        ReportRequestResponse res = service.adminResolve(reportId, req, adminPrincipal);
-
-        assertEquals(ReportRequestStatus.CLOSED, res.status());
-        assertEquals("Admin yeu cau chu tro chiu 70% chi phi sua chua", res.adminConclusion());
-        verify(reportRecordRepository).save(argThat(r -> r.getAction() == ReportRecordAction.ADMIN_RESOLVED));
-    }
 }

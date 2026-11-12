@@ -130,8 +130,7 @@ class DashboardServiceTest {
         when(reports.readForOverview(anyList())).thenReturn(List.of(
                 new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.PENDING),
                 new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.WAITING_INFO),
-                new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.RESOLVED),
-                new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.ESCALATED_ADMIN)));
+                new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.RESOLVED)));
         var result = service.management(OWNER, BRANCH, null, 0);
         assertEquals(1, result.slots().held());
         assertEquals(1, result.pending().stream().filter(w -> w.key().equals("bookings")).findFirst().orElseThrow().count());
