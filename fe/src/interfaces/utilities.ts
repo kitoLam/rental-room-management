@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const uuid = z.guid()
+const uuid = z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, 'Invalid UUID')
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const vnd = z.number().nonnegative()
 
@@ -48,18 +48,20 @@ export const updateServiceInputSchema = z.object({
 })
 export type UpdateServiceInput = z.infer<typeof updateServiceInputSchema>
 
-export const serviceCatalogResponseSchema = z.object({
-  id: uuid,
-  branchId: uuid,
-  code: z.string(),
-  name: z.string(),
-  unit: z.string(),
-  serviceType: serviceTypeEnum,
-  billingMethod: billingMethodEnum,
-  referencePrice: z.number(),
-  mandatory: z.boolean(),
-  active: z.boolean(),
-})
+export const serviceCatalogResponseSchema = z
+  .object({
+    id: z.string(),
+    branchId: z.string().optional(),
+    code: z.string(),
+    name: z.string(),
+    unit: z.string().optional().default('tháng'),
+    serviceType: serviceTypeEnum.optional().default('OTHER'),
+    billingMethod: billingMethodEnum.optional().default('FIXED'),
+    referencePrice: z.coerce.number().optional().default(0),
+    mandatory: z.coerce.boolean().optional().default(false),
+    active: z.coerce.boolean().optional().default(true),
+  })
+  .passthrough()
 export type ServiceCatalogItem = z.infer<typeof serviceCatalogResponseSchema>
 
 // ==========================================
@@ -87,67 +89,149 @@ export const updateRoomServiceInputSchema = z.object({
 })
 export type UpdateRoomServiceInput = z.infer<typeof updateRoomServiceInputSchema>
 
-export const roomServiceResponseSchema = z.object({
-  id: uuid,
-  roomId: uuid,
-  branchId: uuid.optional(),
-  serviceId: uuid,
-  serviceName: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  unitPrice: z.number(),
-  billingConfig: z.unknown().nullable().optional(),
-  status: roomServiceStatusEnum,
-})
+export const roomServiceResponseSchema = z
+  .object({
+    id: uuid,
+    roomId: uuid.optional(),
+    branchId: uuid.optional(),
+    serviceId: uuid.optional(),
+    serviceName: z.string().optional().default(''),
+    mandatory: z.coerce.boolean().optional().default(false),
+    unit: z.string().optional().default(''),
+    startDate: z.string().optional().default(''),
+    endDate: z.string().optional().default(''),
+    unitPrice: z.coerce.number().optional().default(0),
+    billingConfig: z.unknown().nullable().optional(),
+    status: roomServiceStatusEnum.optional().default('ACTIVE'),
+  })
+  .passthrough()
 export type RoomServiceItem = z.infer<typeof roomServiceResponseSchema>
 
 // ==========================================
-// 3. CONTRACT SERVICES (OPTIONAL SERVICES) [P1-71][P1-72][P1-73]
+// 3. SERVICE REQUESTS: đăng ký / ngừng dịch vụ (BE: /api/v1/service-requests)
 // ==========================================
 
-export const contractServiceStatusEnum = z.enum([
-  'PENDING',
-  'APPROVED',
-  'REJECTED',
-  'CANCEL_REQUESTED',
-  'CANCELLED',
+// Backend dùng MongoDB nên id là ObjectId 24 ký tự hex, không phải UUID.
+const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid ObjectId')
+
+export const serviceScopeEnum = z.enum(['ROOM', 'SLOT'])
+export const serviceRequestActionEnum = z.enum(['REGISTER', 'STOP'])
+export const serviceRequestStatusEnum = z.enum(['PENDING', 'APPROVED', 'COMPLETED', 'REJECTED', 'CANCELLED'])
+export type ServiceRequestStatus = z.infer<typeof serviceRequestStatusEnum>
+export const serviceDisplayStatusEnum = z.enum(['AVAILABLE', 'PENDING', 'APPROVED', 'ACTIVE', 'STOP_PENDING'])
+export const serviceRequestOperationEnum = z.enum([
+  'REGISTER',
+  'STOP',
+  'CANCEL',
+  'APPROVE',
+  'REJECT',
+  'CONFIRM_INSTALLATION',
+  'CONFIRM_TERMINATION',
 ])
-export type ContractServiceStatus = z.infer<typeof contractServiceStatusEnum>
+export type ServiceRequestOperation = z.infer<typeof serviceRequestOperationEnum>
 
-export const contractServiceRegistrationInputSchema = z.object({
-  contractId: uuid,
-  contractTenantId: uuid.optional(),
-  roomServiceId: uuid,
-  startDate: date,
-  endDate: date,
-  agreedUnitPrice: vnd.optional(),
-  reason: z.string().optional(),
+export const serviceRegistrationInputSchema = z.object({
+  serviceId: objectId,
+  proposedDate: date,
+  quantity: z.number().int().min(1).max(20).optional(),
+  note: z.string().max(500).optional(),
 })
-export type ContractServiceRegistrationInput = z.infer<typeof contractServiceRegistrationInputSchema>
+export type ServiceRegistrationInput = z.infer<typeof serviceRegistrationInputSchema>
 
-export const processContractServiceInputSchema = z.object({
-  decision: contractServiceStatusEnum,
-  reason: z.string().optional(),
+export const serviceTerminationInputSchema = z.object({
+  subscriptionId: objectId,
+  proposedDate: date,
+  note: z.string().max(500).optional(),
 })
-export type ProcessContractServiceInput = z.infer<typeof processContractServiceInputSchema>
+export type ServiceTerminationInput = z.infer<typeof serviceTerminationInputSchema>
 
-export const contractServiceResponseSchema = z.object({
-  id: uuid,
-  contractId: uuid,
-  contractTenantId: uuid.nullable().optional(),
-  roomId: uuid,
-  roomServiceId: uuid,
-  serviceName: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  agreedUnitPrice: z.number(),
-  status: contractServiceStatusEnum,
-  requestedBy: uuid.nullable().optional(),
-  processedBy: uuid.nullable().optional(),
-  processedAt: z.string().nullable().optional(),
-  reason: z.string().nullable().optional(),
+export const serviceDateConfirmationInputSchema = z.object({
+  effectiveDate: date,
+  note: z.string().max(500).optional(),
 })
-export type ContractServiceItem = z.infer<typeof contractServiceResponseSchema>
+export type ServiceDateConfirmationInput = z.infer<typeof serviceDateConfirmationInputSchema>
+
+export const serviceRequestResponseSchema = z.object({
+  id: objectId,
+  action: serviceRequestActionEnum,
+  status: serviceRequestStatusEnum,
+  serviceId: objectId,
+  serviceName: z.string().nullish(),
+  scope: serviceScopeEnum,
+  unitPrice: z.coerce.number().nullish(),
+  quantity: z.number().nullish(),
+  tenantId: objectId.nullish(),
+  tenantName: z.string().nullish(),
+  contractTenantId: objectId.nullish(),
+  branchId: objectId,
+  roomId: objectId,
+  roomNumber: z.string().nullish(),
+  roomSlotId: objectId.nullish(),
+  slotCode: z.string().nullish(),
+  subscriptionId: objectId.nullish(),
+  proposedDate: date,
+  confirmedDate: date.nullish(),
+  note: z.string().nullish(),
+  rejectReason: z.string().nullish(),
+  processedAt: z.string().nullish(),
+  createdAt: z.string(),
+  history: z.array(
+    z.object({
+      statusFrom: serviceRequestStatusEnum.nullish(),
+      statusTo: serviceRequestStatusEnum,
+      note: z.string().nullish(),
+      at: z.string(),
+    }),
+  ),
+  allowedActions: z.array(serviceRequestOperationEnum),
+})
+export type ServiceRequestItem = z.infer<typeof serviceRequestResponseSchema>
+
+export const tenantServiceOverviewSchema = z.object({
+  serviceId: objectId,
+  code: z.string(),
+  name: z.string(),
+  unit: z.string(),
+  unitPrice: z.coerce.number(),
+  calculationType: z.string(),
+  scope: serviceScopeEnum,
+  subscription: z
+    .object({
+      id: objectId,
+      status: z.string(),
+      startDate: date,
+      endDate: date.nullish(),
+      unitPrice: z.coerce.number(),
+      quantity: z.number().nullish(),
+    })
+    .nullish(),
+  openRequest: z
+    .object({
+      id: objectId,
+      action: serviceRequestActionEnum,
+      status: serviceRequestStatusEnum,
+      proposedDate: date,
+    })
+    .nullish(),
+  displayStatus: serviceDisplayStatusEnum,
+  allowedActions: z.array(serviceRequestOperationEnum),
+})
+export type TenantServiceOverview = z.infer<typeof tenantServiceOverviewSchema>
+
+export const serviceTenancySchema = z.object({
+  contractId: objectId.nullish(),
+  contractTenantId: objectId.nullish(),
+  representative: z.boolean(),
+  branchId: objectId,
+  branchName: z.string().nullish(),
+  roomId: objectId,
+  roomNumber: z.string().nullish(),
+  roomSlotId: objectId.nullish(),
+  slotCode: z.string().nullish(),
+  contractStartDate: date,
+  contractEndDate: date,
+})
+export type ServiceTenancy = z.infer<typeof serviceTenancySchema>
 
 // ==========================================
 // 4. METER CHARGES & SERVICE CHARGES [P1-74][P1-75][P1-78]

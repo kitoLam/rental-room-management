@@ -4,6 +4,8 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/features/auth/session-store'
 import { queryClient } from '@/services/query-client'
 import type { Tenancy } from '@/interfaces/tenant'
+import { provider } from '@/services/config'
+import { utilitiesService } from '@/services/utilities'
 
 function stored(): Record<string, string> {
   try {
@@ -26,11 +28,12 @@ export const useTenancySelection = create<{
 }))
 export type TenantContext = { tenancy: Tenancy; tenancies: Tenancy[] }
 export const useTenant = () => useOutletContext<TenantContext>()
+export const useTenantWorkspace = () =>
+  useOutletContext<{ tenancy?: Tenancy; tenancies: Tenancy[] }>()
 export const isActive = (t: Tenancy) =>
   t.status === 'ACTIVE' &&
-  t.contractStatus === 'ACTIVE' &&
-  t.startDate <= new Date().toISOString().slice(0, 10) &&
-  t.endDate > new Date().toISOString().slice(0, 10)
+  (t.contractStatus === 'ACTIVE' || !t.contractStatus) &&
+  (!t.endDate || t.endDate >= new Date().toISOString().slice(0, 10))
 export function tenantLink(path: string, t: Tenancy) {
   return `${path}?tenancyId=${encodeURIComponent(t.id)}`
 }
@@ -63,4 +66,20 @@ export function useTenantMutation<T, V>(
       onSuccess?.(data)
     },
   })
+}
+
+// Thời hạn hợp đồng cho ô ngày và nút đăng ký / ngừng. API thật: BE lấy từ hợp đồng ACTIVE của người thuê
+// (quan hệ thuê ở layout vẫn có thể là mock); mock: lấy từ quan hệ thuê đang chọn.
+export function useServiceContract() {
+  const { tenancy: t } = useTenant(),
+    real = provider('utilities') === 'real',
+    query = useQuery({
+      queryKey: ['service-requests', 'tenancy'],
+      queryFn: () => utilitiesService.serviceRequests.tenancy(),
+      enabled: real,
+      retry: false,
+    })
+  if (!real) return { endDate: t.endDate, active: isActive(t) }
+  const endDate = query.data?.contractEndDate
+  return { endDate, active: !!endDate && endDate >= new Date().toISOString().slice(0, 10) }
 }

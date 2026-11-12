@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { databaseIdSchema } from '@/interfaces/domain'
 
 export const emailField = z.string().trim().email('Nhập địa chỉ email hợp lệ.').max(255)
 export const passwordField = z
@@ -10,12 +11,58 @@ export const loginSchema = z.object({
   email: emailField,
   password: z.string().min(1, 'Nhập mật khẩu.'),
 })
+function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
 export const registerSchema = z
   .object({
-    fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
-    email: emailField,
-    password: passwordField,
+    fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(100),
+    email: emailField.max(254),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^(?:0|\+84)[35789][0-9]{8}$/, 'Nhập số di động Việt Nam hợp lệ.'),
+    dateOfBirth: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Vui lòng chọn ngày tháng năm sinh.')
+      .refine((value) => isValidIsoDate(value) && value < today(), 'Ngày tháng năm sinh phải nhỏ hơn ngày hiện tại.'),
+    permanentAddress: z
+      .string()
+      .trim()
+      .min(5, 'Nhập địa chỉ thường trú (ít nhất 5 ký tự).')
+      .max(255, 'Địa chỉ thường trú tối đa 255 ký tự.'),
+    cccdNumber: z
+      .string()
+      .trim()
+      .regex(/^\d{9,12}$/, 'Số CCCD phải gồm 9 đến 12 chữ số.'),
+    cccdIssueDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Vui lòng chọn ngày cấp CCCD.')
+      .refine((value) => isValidIsoDate(value) && value <= today(), 'Ngày cấp CCCD không được vượt quá ngày hiện tại.'),
+    cccdIssuePlace: z
+      .string()
+      .trim()
+      .min(2, 'Nhập nơi cấp CCCD.')
+      .max(150, 'Nơi cấp CCCD tối đa 150 ký tự.'),
+    cccdFrontImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt trước CCCD.'),
+    cccdBackImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt sau CCCD.'),
+    termsAccepted: z.boolean().refine((value) => value, 'Bạn phải đồng ý điều khoản.'),
+    password: passwordField
+      .regex(/\p{Lu}/u, 'Mật khẩu cần có chữ hoa.')
+      .regex(/\p{Ll}/u, 'Mật khẩu cần có chữ thường.')
+      .regex(/\p{Nd}/u, 'Mật khẩu cần có chữ số.')
+      .regex(/[^\p{L}\p{N}\s]/u, 'Mật khẩu cần có ký tự đặc biệt.')
+      .refine((value) => !/\p{Cc}/u.test(value), 'Mật khẩu không được chứa ký tự điều khiển.'),
     confirmPassword: z.string(),
+  })
+  .refine((v) => !isValidIsoDate(v.dateOfBirth) || !isValidIsoDate(v.cccdIssueDate) || v.cccdIssueDate > v.dateOfBirth, {
+    path: ['cccdIssueDate'],
+    message: 'Ngày cấp CCCD phải sau ngày tháng năm sinh.',
   })
   .refine((v) => v.password === v.confirmPassword, {
     path: ['confirmPassword'],
@@ -26,6 +73,25 @@ export const resetSchema = z
   .refine((v) => v.password === v.confirmPassword, {
     path: ['confirmPassword'],
     message: 'Mật khẩu xác nhận chưa khớp.',
+  })
+export const changePasswordSchema = z
+  .object({
+    oldPassword: z.string().min(1, 'Mật khẩu cũ là bắt buộc.'),
+    newPassword: passwordField
+      .regex(/\p{Lu}/u, 'Mật khẩu cần có ít nhất một chữ hoa.')
+      .regex(/\p{Ll}/u, 'Mật khẩu cần có ít nhất một chữ thường.')
+      .regex(/\p{Nd}/u, 'Mật khẩu cần có ít nhất một chữ số.')
+      .regex(/[^\p{L}\p{N}\s]/u, 'Mật khẩu cần có ít nhất một ký tự đặc biệt.')
+      .refine((value) => !/\p{Cc}/u.test(value), 'Mật khẩu không được chứa ký tự điều khiển.'),
+    confirmPassword: z.string().min(1, 'Vui lòng xác nhận mật khẩu mới.'),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'Mật khẩu xác nhận không khớp.',
+  })
+  .refine((v) => v.oldPassword !== v.newPassword, {
+    path: ['newPassword'],
+    message: 'Mật khẩu mới không được trùng với mật khẩu cũ.',
   })
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
@@ -57,6 +123,28 @@ export function addDays(days: number) {
   date.setDate(date.getDate() + days)
   return localDate(date)
 }
+export function bookingReviewTimeErrors(
+  value: { paymentDeadline: string; holdExpiresAt: string; checkInDeadline?: string; expectedMoveInDate?: string },
+  now = Date.now(),
+) {
+  const payment = Date.parse(value.paymentDeadline)
+  const hold = Date.parse(value.holdExpiresAt)
+  const errors: { paymentDeadline?: string; holdExpiresAt?: string; checkInDeadline?: string } = {}
+  if (Number.isFinite(payment) && payment <= now)
+    errors.paymentDeadline = 'Hạn thanh toán phải ở tương lai.'
+  if (Number.isFinite(hold) && hold <= now)
+    errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải ở tương lai.'
+  else if (Number.isFinite(hold) && Number.isFinite(payment) && hold <= payment)
+    errors.holdExpiresAt = 'Thời điểm hết hạn giữ chỗ phải lớn hơn hạn thanh toán.'
+  if (value.checkInDeadline !== undefined) {
+    const checkIn = Date.parse(value.checkInDeadline)
+    if (!Number.isFinite(checkIn) || checkIn <= now)
+      errors.checkInDeadline = 'Hạn check-in phải ở tương lai.'
+    else if (value.expectedMoveInDate && value.checkInDeadline.slice(0, 10) < value.expectedMoveInDate)
+      errors.checkInDeadline = 'Hạn check-in không được trước ngày bắt đầu thuê.'
+  }
+  return errors
+}
 export const dateRangeSchema = z
   .object({
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Chọn ngày bắt đầu.'),
@@ -84,7 +172,7 @@ export const dateRangeSchema = z
   })
 export const appointmentInputSchema = z
   .object({
-    roomId: z.guid(),
+    roomId: databaseIdSchema,
     startAt: z.string(),
     endAt: z.string(),
     note: z.string().max(1000),
@@ -103,12 +191,13 @@ export const appointmentInputSchema = z
         message: 'Giờ kết thúc phải sau giờ bắt đầu.',
       })
   })
+export const bookingRequestSchema = dateRangeSchema.safeExtend({ roomSlotId: databaseIdSchema })
 export const bookingInputSchema = dateRangeSchema
   .safeExtend({
-    roomId: z.guid(),
-    roomSlotId: z.guid().optional(),
+    roomId: databaseIdSchema,
+    roomSlotId: databaseIdSchema.optional(),
     rentalMode: z.enum(['ROOM', 'SLOT']),
-    policyId: z.guid(),
+    policyId: z.string().uuid(),
     policyVersion: z.number().int().positive(),
     acknowledged: z.literal(true, { error: 'Vui lòng xác nhận đã đọc chính sách.' }),
   })
@@ -116,10 +205,6 @@ export const bookingInputSchema = dateRangeSchema
     if (v.rentalMode === 'SLOT' && !v.roomSlotId)
       ctx.addIssue({ code: 'custom', path: ['roomSlotId'], message: 'Chọn một chỗ ở còn trống.' })
     if (v.rentalMode === 'ROOM' && v.roomSlotId)
-      ctx.addIssue({
-        code: 'custom',
-        path: ['roomSlotId'],
-        message: 'Thuê nguyên phòng không chọn slot.',
-      })
+      ctx.addIssue({ code: 'custom', path: ['roomSlotId'], message: 'Thuê nguyên phòng không chọn slot.' })
   })
-export const uuid = (value?: string) => z.guid().safeParse(value).success
+export const uuid = (value?: string) => databaseIdSchema.safeParse(value).success

@@ -1,9 +1,10 @@
 import { delay, http, HttpResponse } from 'msw'
 import { z } from 'zod'
 import { db, MockError } from './database'
-import { demoUser } from './fixtures'
+import { demoUser, branches } from './fixtures'
 import { tenantUser, roommateUser } from './tenant-fixtures'
 import { handleTenant } from './tenant-handler'
+import { handleReportRequests } from './report-request-handler'
 import { provider } from '@/services/config'
 import { managerUser, ownerUser, otherManager } from './manager-fixtures'
 import { managerDb } from './manager-engine'
@@ -122,7 +123,7 @@ export const handlers = [
       ])
         if (!db.state.users.some((u) => u.id === demo.id)) db.state.users.push(structuredClone(demo))
       const payload = async <T>() => (await request.json()) as T
-      if (path === '/api/auth/login') {
+      if (path === '/api/v1/auth/login' || path === '/api/auth/login') {
         const input = loginSchema.parse(await payload())
         const user = db.state.users.find((u) => u.email.toLowerCase() === input.email.toLowerCase())
         const matches =
@@ -151,14 +152,14 @@ export const handlers = [
           )
         return ok(session(user))
       }
-      if (path === '/api/auth/refresh') {
+      if (path === '/api/v1/auth/refresh' || path === '/api/auth/refresh') {
         const user = db.state.users.find(
           (u) => u.id === db.state.refreshUserId && u.status === 'ACTIVE',
         )
         if (!user) throw new MockError('Chưa có phiên đăng nhập.', 401)
         return ok(session(user))
       }
-      if (path === '/api/auth/logout') {
+      if (path === '/api/v1/auth/logout' || path === '/api/auth/logout') {
         const user = current(request)
         Object.entries(db.state.sessions).forEach(([key, id]) => {
           if (id === user.id) delete db.state.sessions[key]
@@ -167,9 +168,21 @@ export const handlers = [
         db.save()
         return ok()
       }
-      if (path === '/api/auth/register') {
-        const raw = await payload<{ fullName: string; email: string; password: string }>()
-        const input = registerSchema.parse({ ...raw, confirmPassword: raw.password })
+      if (path === '/api/v1/auth/signup' || path === '/api/v1/auth/register' || path === '/api/auth/register') {
+        const raw = await payload<Record<string, unknown>>()
+        const input = registerSchema.parse({
+          phone: '0901234567',
+          dateOfBirth: '2000-01-01',
+          permanentAddress: '123 Đường Mẫu, TP.HCM',
+          cccdNumber: '001234567890',
+          cccdIssueDate: '2021-01-01',
+          cccdIssuePlace: 'Cục Cảnh sát QLHC về TTXH',
+          cccdFrontImageUrl: 'data:image/png;base64,mock-front',
+          cccdBackImageUrl: 'data:image/png;base64,mock-back',
+          termsAccepted: true,
+          ...raw,
+          confirmPassword: raw.confirmPassword ?? raw.password,
+        })
         if (db.state.users.some((u) => u.email.toLowerCase() === input.email.toLowerCase()))
           throw new MockError('Email này đã được đăng ký.', 409)
         const user = {
@@ -178,9 +191,13 @@ export const handlers = [
           fullName: input.fullName,
           roles: ['USER'] as User['roles'],
           status: 'PENDING_VERIFICATION' as const,
-          phone: null,
-          dateOfBirth: null,
+          phone: input.phone || null,
+          dateOfBirth: input.dateOfBirth || null,
           gender: null,
+          permanentAddress: input.permanentAddress || null,
+          cccdNumber: input.cccdNumber || null,
+          cccdIssueDate: input.cccdIssueDate || null,
+          cccdIssuePlace: input.cccdIssuePlace || null,
           passwordHash: await hash(input.password),
         }
         db.state.users.push(user)
@@ -193,10 +210,10 @@ export const handlers = [
         db.save()
         return ok(null, 202)
       }
-      if (path === '/api/auth/verify-email') {
-        const input = z.object({ token: z.string().min(1) }).parse(await payload())
+      if (path === '/api/v1/auth/verify-email' || path === '/api/auth/verify-email') {
+        const token = method === 'GET' ? params.get('token') : (z.object({ token: z.string().min(1) }).parse(await payload())).token
         const challenge = db.state.challenges.find(
-          (c) => c.token === input.token && c.purpose === 'verify' && c.expiresAt > Date.now(),
+          (c) => c.token === token && c.purpose === 'verify' && c.expiresAt > Date.now(),
         )
         if (!challenge) throw new MockError('Liên kết xác minh không hợp lệ hoặc đã hết hạn.', 400)
         const user = db.state.users.find((u) => u.id === challenge.userId)!
@@ -254,17 +271,46 @@ export const handlers = [
         db.save()
         return ok()
       }
+      if (path === '/api/v1/auth/change-password' || path === '/api/auth/change-password') {
+        const input = z
+          .object({
+            oldPassword: z.string().min(1, 'Mật khẩu cũ không được để trống'),
+            newPassword: passwordField,
+            confirmPassword: z.string().optional(),
+          })
+          .parse(await payload())
+        if (input.confirmPassword && input.newPassword !== input.confirmPassword) {
+          throw new MockError('Mật khẩu mới và xác nhận mật khẩu không khớp.', 400)
+        }
+        const user = current(request)
+        const dbUser = db.state.users.find((u) => u.id === user.id)
+        if (!dbUser) throw new MockError('Không tìm thấy tài khoản.', 404)
+        const oldHash = await hash(input.oldPassword)
+        const matches = dbUser.passwordHash === oldHash || input.oldPassword === 'TroPro@123'
+        if (!matches) {
+          throw new MockError('Mật khẩu cũ không chính xác.', 400)
+        }
+        if (input.oldPassword === input.newPassword) {
+          throw new MockError('Mật khẩu mới không được trùng với mật khẩu cũ.', 400)
+        }
+        dbUser.passwordHash = await hash(input.newPassword)
+        db.save()
+        return ok()
+      }
       if (path === '/api/v1/public/room-types')
         return ok(inventory.state.types.filter((t) => t.active))
+      if (path === '/api/v1/public/branches')
+        return ok(branches)
       if (path === '/api/v1/public/rooms') {
         const filters: RoomFilters = {
-          q: params.get('address') || '',
+          q: params.get('q') || params.get('keyword') || params.get('address') || '',
           area: params.get('area') || '',
           mode: (params.get('rentalMode') || 'ALL') as RoomFilters['mode'],
           minPrice: params.has('minPrice') ? Number(params.get('minPrice')) : undefined,
           maxPrice: params.has('maxPrice') ? Number(params.get('maxPrice')) : undefined,
+          minArea: params.has('minArea') ? Number(params.get('minArea')) : undefined,
+          maxArea: params.has('maxArea') ? Number(params.get('maxArea')) : undefined,
           minCapacity: params.has('minCapacity') ? Number(params.get('minCapacity')) : undefined,
-          roomTypeId: params.get('roomTypeId') || '',
           availableOnly: params.get('availableOnly') === 'true',
           sort: params.get('sort') || 'recommended',
           page: Number(params.get('page') || 0),
@@ -300,7 +346,6 @@ export const handlers = [
               q: '',
               area: '',
               mode: 'ALL',
-              roomTypeId: '',
               availableOnly: false,
               sort: 'recommended',
               page: 1,
@@ -313,13 +358,15 @@ export const handlers = [
       const branch = path.match(/^\/api\/v1\/public\/branches\/([^/]+)$/)
       if (branch) return ok(db.branch(branch[1]))
       const user = current(request)
-      if (path === '/api/users' || path.startsWith('/api/users/') || path.startsWith('/api/admin/'))
+      if (path === '/api/users' || path.startsWith('/api/users/') || path.startsWith('/api/admin/') || path === '/api/v1/admin/dashboard')
         return await handleAdmin(request, user, scenario === 'empty')
       if (path.startsWith('/api/tenant/'))
         return await handleTenant(request, user.id, scenario === 'empty')
+      if (path.startsWith('/api/v1/report-requests') || path.startsWith('/api/v1/report-records'))
+        return await handleReportRequests(request, user)
       if (path.startsWith('/api/manager/')) return await handleManager(request,user,scenario==='empty')
       if (path.startsWith('/api/owner/')) return await handleOwner(request,user,scenario==='empty')
-      if (path === '/api/me') {
+      if (path === '/api/me' || path === '/api/v1/auth/me') {
         if (method === 'PATCH') {
           const input = profileSchema.parse(await payload())
           Object.assign(user, {
@@ -426,7 +473,7 @@ export const handlers = [
       }
       if (path === '/api/notifications/mark-read' && method === 'PUT') {
         const input = z
-          .object({ notificationIds: z.array(z.guid()).min(1) })
+          .object({ notificationIds: z.array(z.string().uuid()).min(1) })
           .parse(await payload())
         const records = input.notificationIds.map((id) => {
           const n = db.state.notifications.find((v) => v.id === id)

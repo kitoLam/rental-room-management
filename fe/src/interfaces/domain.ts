@@ -2,14 +2,20 @@ import { z } from 'zod'
 
 export const roleSchema = z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN'])
 export type Role = z.infer<typeof roleSchema>
+// Backend Mongo ids are ObjectIds; the frontend also accepts UUID ids used by mock data.
+export const databaseIdSchema = z.union([z.guid(), z.string().regex(/^[0-9a-f]{24}$/i)])
 export const userSchema = z.object({
-  id: z.guid(),
+  id: databaseIdSchema,
   email: z.string().email(),
   fullName: z.string(),
   roles: z.array(roleSchema),
   phone: z.string().nullable(),
   dateOfBirth: z.string().nullable(),
   gender: z.string().nullable(),
+  permanentAddress: z.string().nullable().optional(),
+  cccdNumber: z.string().nullable().optional(),
+  cccdIssueDate: z.string().nullable().optional(),
+  cccdIssuePlace: z.string().nullable().optional(),
   status: z.enum(['INVITED', 'PENDING_VERIFICATION', 'ACTIVE', 'LOCKED', 'DISABLED']),
 })
 export type User = z.infer<typeof userSchema>
@@ -21,11 +27,17 @@ export const sessionSchema = z.object({
 export type Session = z.infer<typeof sessionSchema>
 export const modeSchema = z.enum(['ROOM', 'SLOT'])
 export type RentalMode = z.infer<typeof modeSchema>
+export const utilityRatesSchema = z.object({
+  electricityRate: z.number().nonnegative().nullable(),
+  waterRate: z.number().nonnegative().nullable(),
+  parkingRate: z.number().nonnegative().nullable(),
+})
+export type UtilityRates = z.infer<typeof utilityRatesSchema>
 export const roomSchema = z.object({
-  id: z.guid(),
+  id: databaseIdSchema,
   code: z.string(),
   title: z.string(),
-  branchId: z.guid(),
+  branchId: databaseIdSchema,
   branchName: z.string(),
   address: z.string(),
   areaKey: z.string(),
@@ -34,8 +46,22 @@ export const roomSchema = z.object({
   capacity: z.number(),
   availableSlots: z.number().nullable(),
   rentalMode: modeSchema,
-  roomTypeId: z.guid(),
-  roomTypeName: z.string(),
+  /** Listed deposit; present for rooms coming from the real API. */
+  deposit: z.number().nullish(),
+  /** Ids of the room services (from the branch catalog) that come with the room. */
+  roomServiceIds: z.array(z.string()).optional(),
+  /** Room services with prices; public room detail only. */
+  roomServices: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        unit: z.string(),
+        unitPrice: z.number(),
+        calculationType: z.string().nullish(),
+      }),
+    )
+    .optional(),
   status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
   operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
   imageUrl: z.string(),
@@ -44,12 +70,32 @@ export const roomSchema = z.object({
   floor: z.number().nullable(),
   description: z.string(),
   amenities: z.array(z.string()),
-  services: z.array(z.object({ name: z.string(), price: z.number(), unit: z.string() })),
+  services: z.array(
+    z.object({
+      name: z.string(),
+      price: z.number(),
+      unit: z.string(),
+      mandatory: z.boolean().optional(),
+      calculationType: z.string().optional(),
+    }),
+  ),
+  utilityRates: utilityRatesSchema.nullish(),
+  ownerName: z.string().optional(),
 })
 export type Room = z.infer<typeof roomSchema>
+// Mục "Dịch vụ tham khảo": bắt buộc luôn tích sẵn; tùy chọn tự tích và chỉnh số lượng. Đơn giá chỉ xem.
+export type RoomServiceOption = {
+  id: string
+  name: string
+  unit: string
+  price: number
+  mandatory: boolean
+  calculationType: string
+  quantityRule: 'FIXED_ONE' | 'PER_SLOT' | 'USER_INPUT' | 'METERED'
+}
 export const policySchema = z.object({
-  id: z.guid(),
-  branchId: z.guid(),
+  id: z.string().uuid(),
+  branchId: z.string().uuid(),
   version: z.number(),
   effectiveFrom: z.string(),
   bookingHoldAmount: z.number(),
@@ -66,7 +112,7 @@ export const policySchema = z.object({
 })
 export type BranchPolicy = z.infer<typeof policySchema>
 export const branchSchema = z.object({
-  id: z.guid(),
+  id: z.string().uuid(),
   name: z.string(),
   address: z.string(),
   description: z.string(),
@@ -79,12 +125,17 @@ export const branchSchema = z.object({
 })
 export type Branch = z.infer<typeof branchSchema>
 export const availabilitySchema = z.object({
-  roomId: z.guid(),
+  roomId: databaseIdSchema.optional(),
   startDate: z.string(),
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
-  slots: z.array(z.object({ id: z.guid(), label: z.string(), available: z.boolean() })),
+  slots: z.array(z.object({
+    id: databaseIdSchema,
+    label: z.string(),
+    available: z.boolean(),
+    availableFrom: z.string().nullable().optional(),
+  })),
 })
 export type Availability = z.infer<typeof availabilitySchema>
 export const appointmentStatuses = [
@@ -107,9 +158,9 @@ export const timelineSchema = z.array(
   z.object({ status: z.string(), at: z.string(), note: z.string() }),
 )
 export const appointmentSchema = z.object({
-  id: z.guid(),
-  requesterUserId: z.guid(),
-  roomId: z.guid(),
+  id: z.string().uuid(),
+  requesterUserId: z.string().uuid(),
+  roomId: z.string().uuid(),
   roomTitle: z.string(),
   branchName: z.string(),
   startAt: z.string(),
@@ -123,32 +174,54 @@ export const appointmentSchema = z.object({
 })
 export type Appointment = z.infer<typeof appointmentSchema>
 export const bookingSchema = z.object({
-  id: z.guid(),
-  requesterUserId: z.guid(),
-  roomId: z.guid(),
+  id: databaseIdSchema,
+  requesterUserId: databaseIdSchema,
+  requesterName: z.string().optional(),
+  requesterEmail: z.string().optional(),
+  requesterPhone: z.string().nullable().optional(),
   roomTitle: z.string(),
-  branchId: z.guid(),
+  branchId: databaseIdSchema,
   branchName: z.string(),
-  roomSlotId: z.guid().nullable(),
+  roomSlotId: databaseIdSchema.nullable(),
+  roomSlotIds: z.array(databaseIdSchema).default([]),
   slotLabel: z.string().nullable(),
+  slotLabels: z.array(z.string()).default([]),
+  hasRentalDates: z.boolean().default(true),
+  /** Ngày dọn vào chốt từ slot khi đặt cọc; null với booking cũ, backend khi đó lùi 1 ngày sau evidence. */
+  expectedMoveInDate: z.string().nullable().optional(),
   rentalMode: modeSchema,
   startDate: z.string(),
   endDate: z.string(),
   holdAmount: z.number(),
   paymentDueAt: z.string(),
   temporaryHoldUntil: z.string(),
+  checkInDeadline: z.string().nullable().optional(),
   confirmedHoldUntil: z.string().nullable(),
   status: z.enum(bookingStatuses),
   policySnapshot: policySchema,
+  cancellationPolicy: z.string().nullable().optional(),
+  termsAcceptedAt: z.string().nullable().optional(),
+  depositStatus: z.enum(['UNPAID', 'PROCESSING', 'PAID', 'REFUNDED', 'FORFEITED']).optional(),
   paymentEnvironment: z.enum(['SANDBOX', 'PRODUCTION']),
   createdAt: z.string(),
   timeline: timelineSchema,
-  contractId: z.guid().nullable(),
+  contractId: databaseIdSchema.nullable(),
+  /** One contract per booked slot (real API). */
+  contractIds: z.array(databaseIdSchema).optional(),
+  selectedServices: z.array(z.object({
+    serviceId: databaseIdSchema,
+    name: z.string(),
+    unit: z.string(),
+    unitPrice: z.number(),
+    quantity: z.number().nullable(),
+  })).default([]),
 })
 export type Booking = z.infer<typeof bookingSchema>
+export const mockBookingSchema = bookingSchema.extend({ roomId: databaseIdSchema })
+export type MockBooking = z.infer<typeof mockBookingSchema>
 export const paymentSchema = z.object({
-  id: z.guid(),
-  bookingId: z.guid(),
+  id: databaseIdSchema,
+  bookingId: databaseIdSchema,
   amount: z.number(),
   reference: z.string(),
   status: z.enum(['PENDING', 'VERIFIED', 'FAILED', 'REVIEW']),
@@ -156,30 +229,40 @@ export const paymentSchema = z.object({
   createdAt: z.string(),
   verifiedAt: z.string().nullable(),
   qrUrl: z.string().nullable(),
+  paymentUrl: z.string().url().nullable().optional(),
   instructions: z.string(),
 })
 export type Payment = z.infer<typeof paymentSchema>
 export const notificationSchema = z.object({
-  id: z.guid(),
+  id: z.string().uuid(),
   title: z.string(),
   message: z.string(),
   type: z.string(),
   createdAt: z.string(),
   read: z.boolean(),
   referenceType: z.string().nullable(),
-  referenceId: z.guid().nullable(),
-  contractTenantId: z.guid().optional(),
-  branchId: z.guid().optional(),
+  referenceId: z.string().uuid().nullable(),
+  contractTenantId: z.string().uuid().optional(),
+  branchId: z.string().uuid().optional(),
 })
 export type Notification = z.infer<typeof notificationSchema>
 export const pageSchema = <T extends z.ZodType>(item: T) =>
-  z.object({
-    content: z.array(item),
-    number: z.number(),
-    size: z.number(),
-    totalElements: z.number(),
-    totalPages: z.number(),
-  })
+  z
+    .object({
+      content: z.array(item),
+      number: z.number().optional(),
+      page: z.number().optional(),
+      size: z.number().optional().default(20),
+      totalElements: z.number().optional().default(0),
+      totalPages: z.number().optional().default(1),
+    })
+    .transform((p) => ({
+      content: p.content,
+      number: p.number ?? p.page ?? 0,
+      size: p.size,
+      totalElements: p.totalElements ?? p.content.length,
+      totalPages: p.totalPages ?? 1,
+    }))
 export type Page<T> = {
   content: T[]
   number: number
@@ -192,8 +275,9 @@ export type RoomFilters = {
   area: string
   minPrice?: number
   maxPrice?: number
+  minArea?: number
+  maxArea?: number
   mode: 'ALL' | RentalMode
-  roomTypeId: string
   minCapacity?: number
   availableOnly: boolean
   sort: string
@@ -204,11 +288,20 @@ export type AppointmentInput = { roomId: string; startAt: string; endAt: string;
 export type BookingInput = {
   roomId: string
   roomSlotId?: string
-  rentalMode: RentalMode
+  rentalMode?: RentalMode
   startDate: string
   endDate: string
-  policyId: string
-  policyVersion: number
-  acknowledged: boolean
+  policyId?: string
+  policyVersion?: number
+  acknowledged?: boolean
+}
+export type BookingHoldInput = {
+  roomSlotIds: string[]
+  selectedServices: { serviceId: string; quantity?: number }[]
+  roomId: string
+  rentalMode?: RentalMode
+}
+export type RoomSlotBookingInput = Omit<BookingInput, 'roomId' | 'rentalMode'> & {
+  roomSlotId: string
 }
 export type PaymentScenario = 'success' | 'failure' | 'pending' | 'late'

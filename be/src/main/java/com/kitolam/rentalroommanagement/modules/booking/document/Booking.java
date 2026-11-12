@@ -14,6 +14,8 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -27,16 +29,34 @@ public class Booking extends BaseDocument {
 
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
-    private String roomId;
+    private String roomSlotId;
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> roomSlotIds = new ArrayList<>();
+
+    @Indexed
+    @Field(targetType = FieldType.OBJECT_ID)
+    private String contractId;
+
+    /** One contract per booked slot, created once the deposit is paid. contractId = the first one. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> contractIds = new ArrayList<>();
 
     private LocalDate expectedMoveInDate;
+
+    private LocalDate expectedMoveOutDate;
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal holdingDepositAmount;
 
     private Instant paymentDeadline;
 
+    private List<SelectedServiceSnapshot> selectedServices = new ArrayList<>();
+
     private Instant holdExpiresAt;
+
+    private Instant checkInDeadline;
 
     private String cancellationPolicy;
 
@@ -44,5 +64,9 @@ public class Booking extends BaseDocument {
 
     private String rejectReason;
 
-    private BookingStatus status = BookingStatus.PENDING;
+    private Instant termsAcceptedAt;
+
+    private List<BookingTimelineEntry> timeline = new ArrayList<>();
+
+    private BookingStatus status = BookingStatus.REQUESTED;
 }

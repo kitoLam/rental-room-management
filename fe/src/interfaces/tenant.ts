@@ -1,15 +1,71 @@
 import { z } from 'zod'
 
-const id = z.guid()
+const id = z.string().uuid()
+const databaseId = z.union([z.guid(), z.string().regex(/^[0-9a-fA-F]{24}$/)])
 const money = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const date = z.iso.date()
+export const tenantContractSchema = z.object({
+  id: databaseId,
+  roomId: databaseId,
+  roomSlotId: databaseId.nullable().optional(),
+  bookingId: databaseId.nullable().optional(),
+  tenantId: databaseId.nullable().optional(),
+  managerId: databaseId.nullable(),
+  contractNumber: z.string(),
+  startDate: date.nullable(),
+  endDate: date.nullable(),
+  rentPrice: z.number().nullable().optional(),
+  contractDepositAmount: z.number().nullable().optional(),
+  landlordName: z.string().nullable().optional(),
+  landlordIdNumber: z.string().nullable().optional(),
+  landlordAddress: z.string().nullable().optional(),
+  tenantName: z.string().nullable().optional(),
+  tenantIdNumber: z.string().nullable().optional(),
+  tenantAddress: z.string().nullable().optional(),
+  roomAddress: z.string().nullable().optional(),
+  roomSlotIds: z.array(databaseId).optional(),
+  electricityInitialReading: z.number().nullable().optional(),
+  waterInitialReading: z.number().nullable().optional(),
+  electricityRate: z.number().nullable().optional(),
+  waterRate: z.number().nullable().optional(),
+  parkingRate: z.number().nullable().optional(),
+  maxOccupants: z.number().nullable().optional(),
+  services: z.array(z.object({
+    serviceId: z.string(),
+    name: z.string(),
+    unit: z.string(),
+    unitPrice: z.number(),
+    quantity: z.number().nullable().optional(),
+    mandatory: z.boolean(),
+    selected: z.boolean(),
+  })).optional(),
+  paymentDueDay: z.number().nullable().optional(),
+  terms: z.string().nullable(),
+  signedFileUrl: z.string().nullable(),
+  signedEvidenceUrl: z.string().nullable().optional(),
+  termMonths: z.number().nullable().optional(),
+  signedDate: date.nullable().optional(),
+  firstBillingStartDate: date.nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(),
+  evidenceHistory: z.array(z.object({
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    at: z.string().nullable(),
+    note: z.string().nullable(),
+  })).optional(),
+  evidenceDeadline: z.string().nullable().optional(),
+  evidenceResubmissionCount: z.number().nullable().optional(),
+  evidenceNote: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
+})
+export type TenantContract = z.infer<typeof tenantContractSchema>
 export const tenancySchema = z.object({
-  id,
-  userId: id,
-  contractId: id,
-  branchId: id,
-  roomId: id,
-  roomSlotId: id.nullable(),
+  id: databaseId,
+  userId: databaseId,
+  contractId: databaseId,
+  branchId: databaseId,
+  roomId: databaseId,
+  roomSlotId: databaseId.nullable(),
   branchName: z.string(),
   roomName: z.string(),
   slotName: z.string().nullable(),
@@ -28,11 +84,11 @@ export const tenancySchema = z.object({
   prepaidLastRequired: money,
   terms: z.string(),
   sharedTerms: z.string(),
-  document: z.object({ name: z.string(), url: z.string().url(), issuedAt: z.string() }).nullable(),
+  document: z.object({ name: z.string(), url: z.string(), issuedAt: z.string() }).nullable(),
 })
 export type Tenancy = z.infer<typeof tenancySchema>
 export const assetSchema = z.object({
-  id,
+  id: databaseId,
   name: z.string(),
   category: z.enum(['FURNITURE', 'SERVICE']),
   condition: z.string(),
@@ -83,9 +139,9 @@ export const invoiceSchema = z.object({
 })
 export type Invoice = z.infer<typeof invoiceSchema>
 export const tenantPaymentSchema = z.object({
-  id,
-  contractTenantId: id,
-  invoiceId: id.nullable(),
+  id: databaseId,
+  contractTenantId: databaseId,
+  invoiceId: databaseId.nullable(),
   reference: z.string(),
   amountReceived: money,
   allocatedAmount: money,
@@ -109,11 +165,17 @@ export const serviceSchema = z.object({
   unit: z.string(),
   unitPrice: money,
   subscriptionId: id.nullable(),
-  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELLED']).nullable(),
+  // AVAILABLE / ACTIVE / STOP_PENDING đến từ API thật (/api/v1/service-requests/catalog); các giá trị cũ dùng cho mock.
+  status: z
+    .enum(['AVAILABLE', 'PENDING', 'APPROVED', 'ACTIVE', 'STOP_PENDING', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELLED'])
+    .nullable(),
   startDate: date.nullable(),
   endDate: date.nullable(),
   note: z.string(),
   history: z.array(z.object({ status: z.string(), at: z.string(), note: z.string() })),
+  // Chỉ có ở API thật: yêu cầu đang mở và thao tác người thuê được phép làm.
+  requestId: z.string().nullish(),
+  allowedActions: z.array(z.string()).optional(),
 })
 export type TenantService = z.infer<typeof serviceSchema>
 export const participantSchema = z.object({
@@ -169,32 +231,55 @@ export const proposalSchema = z.object({
 })
 export type AllocationProposal = z.infer<typeof proposalSchema>
 export const attachmentSchema = z.object({
-  id,
+  id: z.string(),
   name: z.string().min(1).max(120),
-  mime: z.enum(['image/png', 'image/jpeg', 'image/webp']),
-  size: z.number().int().positive().max(1048576),
-  url: z.string().max(1400000),
+  mime: z.string(),
+  size: z.number().int().positive().max(10485760),
+  url: z.string(),
 })
 export type Attachment = z.infer<typeof attachmentSchema>
 export const reportInputSchema = z.object({
-  assetId: id,
-  category: z.enum(['FURNITURE', 'SERVICE']),
-  title: z.string().trim().min(5, 'Tiêu đề cần ít nhất 5 ký tự.').max(120),
-  description: z.string().trim().min(15, 'Mô tả cần ít nhất 15 ký tự.').max(2000),
-  priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']),
-  attachments: z.array(attachmentSchema).max(3),
+  assetId: z.string(),
+  category: z.enum([
+    'FURNITURE',
+    'SERVICE',
+    'REPAIR',
+    'MAINTENANCE',
+    'COMPLAINT',
+    'CONTRACT',
+    'OTHER',
+  ]),
+  title: z.string().trim().min(3, 'Tiêu đề cần ít nhất 3 ký tự.').max(120),
+  description: z.string().trim().min(5, 'Mô tả cần ít nhất 5 ký tự.').max(2000),
+  priority: z.enum(['LOW', 'MEDIUM', 'NORMAL', 'HIGH', 'URGENT']),
+  attachments: z.array(attachmentSchema).max(5),
 })
 export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
-  id,
-  contractTenantId: id,
+  id: z.string(),
+  contractTenantId: z.string(),
+  roomName: z.string().nullable().optional(),
   assetName: z.string(),
-  status: z.enum(['OPEN', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']),
+  status: z.enum([
+    'OPEN',
+    'ACCEPTED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'REJECTED',
+    'CANCELLED',
+    'PENDING',
+    'WAITING_INFO',
+    'RESOLVED',
+    'CLOSED',
+  ]),
   createdAt: z.string(),
   assignedTo: z.string().nullable(),
+  solutionResult: z.string().nullable().optional(),
+  rejectReason: z.string().nullable().optional(),
+  requestedInfoNote: z.string().nullable().optional(),
   records: z.array(
     z.object({
-      id,
+      id: z.string(),
       at: z.string(),
       status: z.string(),
       description: z.string(),
@@ -220,6 +305,16 @@ export const serviceInputSchema = z.object({
   serviceId: id,
   startDate: date,
   endDate: date,
+  note: z.string().trim().max(500),
+})
+// Form đăng ký / ngừng dịch vụ: người thuê chỉ đề nghị ngày, quản lý xác nhận ngày chính thức.
+export const serviceRegistrationFormSchema = z.object({
+  serviceId: z.string().min(1),
+  proposedDate: date,
+  note: z.string().trim().max(500),
+})
+export const serviceStopFormSchema = z.object({
+  proposedDate: date,
   note: z.string().trim().max(500),
 })
 export const proposalInputSchema = z.object({

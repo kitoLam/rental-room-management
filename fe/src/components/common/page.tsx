@@ -25,6 +25,7 @@ export function Page({
   actions,
   children,
   narrow = false,
+  wide = false,
 }: {
   title: string
   description?: string
@@ -33,9 +34,10 @@ export function Page({
   actions?: ReactNode
   children: ReactNode
   narrow?: boolean
+  wide?: boolean
 }) {
   return (
-    <Container className={cn('py-8 sm:py-12', narrow && 'max-w-3xl')}>
+    <Container wide={wide} className={cn('py-8 sm:py-12', narrow && 'max-w-3xl')}>
       {back && (
         <Link
           to={back}
@@ -268,19 +270,27 @@ export function Modal({
   description,
   open,
   onOpenChange,
+  onClose,
+  hideClose = false,
   children,
   drawer = false,
 }: {
   title: string
   description?: string
   open: boolean
-  onOpenChange: (value: boolean) => void
+  onOpenChange?: (value: boolean) => void
+  onClose?: () => void
+  hideClose?: boolean
   children: ReactNode
   drawer?: boolean
 }) {
   const returnFocus = useRef<HTMLElement | null>(null)
+  const handleOpenChange = (value: boolean) => {
+    onOpenChange?.(value)
+    if (!value) onClose?.()
+  }
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-foreground/50" />
         <Dialog.Content
@@ -301,16 +311,20 @@ export function Modal({
               : 'top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-xl',
           )}
         >
-          <Dialog.Title className="pr-10 text-xl font-bold">{title}</Dialog.Title>
+          <Dialog.Title className={cn('text-xl font-bold', !hideClose && 'pr-10')}>
+            {title}
+          </Dialog.Title>
           <Dialog.Description className="mt-2 text-sm text-muted-foreground">
             {description || 'Thông tin chi tiết và lựa chọn của bạn.'}
           </Dialog.Description>
-          <Dialog.Close
-            className="absolute top-4 right-4 flex size-11 items-center justify-center rounded-lg hover:bg-background"
-            aria-label="Đóng"
-          >
-            <X size={20} />
-          </Dialog.Close>
+          {!hideClose && (
+            <Dialog.Close
+              className="absolute top-4 right-4 flex size-11 items-center justify-center rounded-lg hover:bg-background"
+              aria-label="Đóng"
+            >
+              <X size={20} />
+            </Dialog.Close>
+          )}
           <div className="mt-6">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>

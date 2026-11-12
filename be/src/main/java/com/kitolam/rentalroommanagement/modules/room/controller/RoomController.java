@@ -25,6 +25,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
+import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomUtilityRatesResponse;
 
 @RestController
 @RequestMapping("/api/v1/rooms")
@@ -34,11 +39,20 @@ public class RoomController {
 
     private final RoomService roomService;
 
+    @GetMapping("/{id}/utility-rates")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
+    public StandardResponse<RoomUtilityRatesResponse> utilityRates(@PathVariable @ValidObjectId String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(roomService.utilityRateConfiguration(id, principal));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Tạo phòng")
-    public StandardResponse<RoomResponse> create(@Valid @RequestBody RoomCreateRequest request) {
-        return StandardResponse.success("Tạo phòng thành công", roomService.create(request));
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','ADMIN')")
+    @Operation(summary = "Tạo phòng (kèm maxOccupants chỗ ở)")
+    public StandardResponse<RoomResponse> create(@Valid @RequestBody RoomCreateRequest request,
+                                                 @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Tạo phòng thành công", roomService.create(request, principal));
     }
 
     @GetMapping("/{id}")
@@ -56,15 +70,18 @@ public class RoomController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','ADMIN')")
     @Operation(summary = "Cập nhật phòng")
-    public StandardResponse<RoomResponse> update(@PathVariable String id, @Valid @RequestBody RoomUpdateRequest request) {
-        return StandardResponse.success("Cập nhật phòng thành công", roomService.update(id, request));
+    public StandardResponse<RoomResponse> update(@PathVariable String id, @Valid @RequestBody RoomUpdateRequest request,
+                                                 @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Cập nhật phòng thành công", roomService.update(id, request, principal));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','ADMIN')")
     @Operation(summary = "Xoá mềm phòng")
-    public StandardResponse<Void> delete(@PathVariable String id) {
-        roomService.delete(id);
+    public StandardResponse<Void> delete(@PathVariable String id, @AuthenticationPrincipal AuthPrincipal principal) {
+        roomService.delete(id, principal);
         return StandardResponse.success("Xoá phòng thành công", null);
     }
 }

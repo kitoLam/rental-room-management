@@ -48,7 +48,7 @@ function validateTenancy(e: ManagerEngine, c: ManagerContract, input: unknown, i
     (data.lastMonthRent !== 0 || data.prepaidLastRequired !== 0)
   )
     throw new MockError('Thuê đúng một tháng chỉ trả trước kỳ đầu; kỳ cuối phải bằng 0.', 422)
-  if (data.startDate < c.startDate || data.endDate > c.endDate)
+  if (c.startDate && c.endDate && (data.startDate < c.startDate || data.endDate > c.endDate))
     throw new MockError('Thời hạn cá nhân phải nằm trong hợp đồng.', 422)
   if (!eligibleUsers(e, c.branchId).some((u) => u.id === data.userId))
     throw new MockError('Tài khoản chưa được cấp quyền tiếp nhận tại chi nhánh.', 422)
@@ -359,7 +359,7 @@ export function leasingAction(
     return b
   }
   if (resource === 'tenants') {
-    const data = z.object({ contractId: z.guid() }).parse(input),
+    const data = z.object({ contractId: z.string().uuid() }).parse(input),
       c = e.contract(branchId, data.contractId)
     if (action === 'representative') {
       const t = e.tenancy(branchId, id || '')
@@ -533,7 +533,7 @@ export function leasingAction(
       t.contractStatus = 'CANCELLED'
     }
   } else if (action === 'end') {
-    if (c.status !== 'ACTIVE' || c.endDate > new Date().toISOString().slice(0, 10))
+    if (c.status !== 'ACTIVE' || !c.endDate || c.endDate > new Date().toISOString().slice(0, 10))
       throw new MockError(
         'Chỉ kết thúc hợp đồng đã hết thời hạn; chuyển/rời phòng sớm thuộc giai đoạn sau.',
         409,

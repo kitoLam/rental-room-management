@@ -34,9 +34,21 @@ export const useManagerSelection = create<{
   deny: (id) => set((s) => ({ denied: [...s.denied, id] })),
 }))
 export const useManager = () =>
-  useOutletContext<{ branch: ManagerBranch; branches: ManagerBranch[] }>()
+  useOutletContext<{
+    branch: ManagerBranch
+    branches: ManagerBranch[]
+    overviewBranchId?: string
+  }>()
 export function managerLink(path: string, branchId: string, params: Record<string, string> = {}) {
-  const workspace: Record<string,string> = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('workspace') === 'owner' ? {workspace:'owner'} : {}
+  const owner = useSession.getState().user?.roles.includes('OWNER')
+  if (owner && path.startsWith('/manager/')) {
+    path = path.replace('/manager/', '/owner/')
+  }
+  const workspace: Record<string, string> =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('workspace') === 'owner'
+      ? { workspace: 'owner' }
+      : {}
   return `${path}?${new URLSearchParams({ branchId, ...workspace, ...params })}`
 }
 export function useManagerQuery<T>(
@@ -44,13 +56,23 @@ export function useManagerQuery<T>(
   fn: (branchId: string) => Promise<T>,
   extra: unknown[] = [],
   poll = false,
+  enabled = true,
 ) {
   const { branch } = useManager(),
     userId = useSession((s) => s.user!.id),
     [params] = useSearchParams()
   return useQuery({
-    queryKey: ['manager', userId, branch.id, params.get('workspace') || 'manager', key, ...extra, params.get('demo')],
+    queryKey: [
+      'manager',
+      userId,
+      branch.id,
+      params.get('workspace') || 'manager',
+      key,
+      ...extra,
+      params.get('demo'),
+    ],
     queryFn: () => fn(branch.id),
+    enabled,
     refetchInterval: poll ? 4000 : false,
   })
 }
@@ -58,8 +80,15 @@ export function useManagerList<K extends ManagerResource>(
   resource: K,
   filters: Record<string, string> = {},
   poll = false,
+  enabled = true,
 ) {
-  return useManagerQuery(resource, (b) => managerApi.list(b, resource, filters), [filters], poll)
+  return useManagerQuery(
+    resource,
+    (b) => managerApi.list(b, resource, filters),
+    [filters],
+    poll,
+    enabled,
+  )
 }
 export function useManagerAction(onSuccess?: (result: { id?: string } | null) => void) {
   const { branch } = useManager()

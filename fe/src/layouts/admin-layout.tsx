@@ -5,11 +5,11 @@ import { ShieldCheck } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { Notice, QueryState } from '@/components/common/page'
 import { useSession } from '@/features/auth/session-store'
+import { dashboardPath } from '@/features/auth/navigation'
 import { adminApi } from '@/services/admin'
 import { queryClient } from '@/services/query-client'
 import type { Role } from '@/interfaces/domain'
 const workspaceRoles: Record<string, Role> = {
-  '/user/dashboard': 'USER',
   '/owner/dashboard': 'OWNER',
   '/manager/dashboard': 'MANAGER',
   '/tenant/dashboard': 'TENANT',
@@ -21,18 +21,10 @@ const groups: [string, [string, string][]][] = [
     'Tài khoản',
     [
       ['users', 'Người dùng'],
-      ['owner-verifications', 'Xác minh chủ trọ'],
       ['roles', 'Vai trò & quyền'],
     ],
   ],
-  [
-    'Nền tảng',
-    [
-      ['owners', 'Danh bạ chủ trọ'],
-      ['branches', 'Danh bạ chi nhánh'],
-      ['activity', 'Nhật ký hoạt động'],
-    ],
-  ],
+  ['Nền tảng', [['branches', 'Danh bạ chi nhánh']]],
 ]
 export function AdminLayout() {
   const user = useSession((s) => s.user!),
@@ -61,11 +53,11 @@ export function AdminLayout() {
       .flatMap(([, items]) => items)
       .find(([p]) => location.pathname.startsWith(`/admin/${p}`))?.[0] || 'dashboard'
   return (
-    <Container className="py-7 sm:py-10">
+    <Container wide className="py-7 sm:py-10">
       {!allowed ? (
         <Notice tone="warning">
           Bạn không có quyền quản trị hệ thống.{' '}
-          <Link className="font-bold underline" to="/user/dashboard">
+          <Link className="font-bold underline" to={dashboardPath(user.roles)}>
             Về tài khoản
           </Link>
         </Notice>
@@ -118,8 +110,7 @@ export function AdminLayout() {
                 ))}
               </select>
               <div className="mt-3 flex gap-5 text-sm font-bold text-primary lg:mt-5 lg:grid lg:gap-3">
-                <Link to="/notifications">Thông báo</Link>
-                <Link to="/profile">Hồ sơ cá nhân</Link>
+                <Link to="/admin/profile">Hồ sơ cá nhân</Link>
               </div>
               <label
                 className="sr-only text-xs font-bold text-muted-foreground lg:not-sr-only lg:mt-6 lg:block"
@@ -138,7 +129,6 @@ export function AdminLayout() {
                 }}
               >
                 <option value="/admin/dashboard">Quản trị hệ thống</option>
-                <option value="/user/dashboard">Tài khoản của tôi</option>
                 {user.roles.includes('OWNER') && <option value="/owner/dashboard">Chủ trọ</option>}
                 {user.roles.includes('MANAGER') && (
                   <option value="/manager/dashboard">Quản lý</option>

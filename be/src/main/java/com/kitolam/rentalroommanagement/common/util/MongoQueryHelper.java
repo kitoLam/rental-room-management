@@ -45,7 +45,14 @@ public final class MongoQueryHelper {
 
     public static void addObjectIdEquals(List<Criteria> criteria, String field, String id) {
         if (StringUtils.hasText(id)) {
-            criteria.add(Criteria.where(field).is(toObjectId(id)));
+            if (ObjectId.isValid(id)) {
+                criteria.add(new Criteria().orOperator(
+                        Criteria.where(field).is(new ObjectId(id)),
+                        Criteria.where(field).is(id)
+                ));
+            } else {
+                criteria.add(Criteria.where(field).is(id));
+            }
         }
     }
 
@@ -85,5 +92,15 @@ public final class MongoQueryHelper {
             criteria.add(Criteria.where("id").ne(toObjectId(excludeId)));
         }
         return mongoTemplate.exists(new Query(new Criteria().andOperator(criteria)), type);
+    }
+    /** Read-only scope query supporting both ObjectId references and legacy string references. */
+    public static Query byReferenceIds(String field, java.util.Collection<String> ids) {
+        java.util.List<Object> values = new java.util.ArrayList<>();
+        for (String id : ids) {
+            if (id == null) continue;
+            values.add(id);
+            if (ObjectId.isValid(id)) values.add(new ObjectId(id));
+        }
+        return Query.query(notDeleted()).addCriteria(Criteria.where(field).in(values));
     }
 }

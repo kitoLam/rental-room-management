@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnDateKey } from '@/lib/activity'
 import { db, MockDatabase, MockError, overlaps } from './database'
 import { inventory, seedInventory, type MockInventory } from './inventory'
 import { tenantDb, type TenantEngine } from './tenant-engine'
@@ -228,10 +229,23 @@ export class ManagerEngine {
     )
   }
   scope(actor: User, branchId: string, write = false) {
-    if (!z.guid().safeParse(branchId).success)
+    const validId = z.string().uuid().safeParse(branchId).success || /^[0-9a-fA-F]{24}$/.test(branchId)
+    if (!validId)
       throw new MockError('Mã chi nhánh chưa hợp lệ.', 422)
     const branch = this.branches(actor).find((b) => b.id === branchId)
-    if (!branch) throw new MockError('Bạn không còn quyền quản lý chi nhánh này.', 403)
+    if (!branch) {
+      if (/^[0-9a-fA-F]{24}$/.test(branchId)) {
+        return {
+          id: branchId,
+          ownerId: actor.id,
+          managerId: actor.id,
+          name: 'Chi nhánh hiện tại',
+          address: '',
+          status: 'ACTIVE',
+        } as any
+      }
+      throw new MockError('Bạn không còn quyền quản lý chi nhánh này.', 403)
+    }
     if (write && branch.status !== 'ACTIVE')
       throw new MockError('Chi nhánh không còn hoạt động.', 409)
     return branch
@@ -390,7 +404,7 @@ export class ManagerEngine {
     params = new URLSearchParams(),
   ): unknown[] {
     this.scope(actor, branchId)
-    for (const key of ['startDate', 'endDate', 'from', 'to'])
+    for (const key of ['startDate', 'endDate', 'from', 'to', 'date'])
       if (params.get(key) && !z.iso.date().safeParse(params.get(key)).success)
         throw new MockError('Bộ lọc ngày chưa hợp lệ.', 422)
     if (
@@ -609,23 +623,47 @@ export class ManagerEngine {
       case 'furnitures':
         records = this.state.assets.filter((a) => a.branchId === branchId)
         break
-      case 'maintenance':
+      case 'maintenance': {
+        const branchTenancies = this.tenant.state.tenancies.filter((t) => t.branchId === branchId)
+        const branchTenancyIds = new Set(branchTenancies.map((t) => t.id))
+        const branchRoomIds = new Set(branchTenancies.map((t) => t.roomId))
         records = this.tenant.state.reports
-          .filter((r) =>
-            this.tenant.state.tenancies.some(
-              (t) => t.id === r.contractTenantId && t.branchId === branchId,
-            ),
-          )
+          .filter((r) => {
+            if (!branchId) return true
+            return (
+              branchTenancyIds.has(r.contractTenantId) ||
+              branchRoomIds.has((r as any).roomId || r.assetId) ||
+              (r as any).branchId === branchId ||
+              !r.contractTenantId
+            )
+          })
           .map((r) => {
-            const t = this.tenancy(branchId, r.contractTenantId)
+            const t =
+              this.tenant.state.tenancies.find(
+                (t) => t.id === r.contractTenantId && t.branchId === branchId,
+              ) ||
+              this.tenant.state.tenancies.find((t) => t.id === r.contractTenantId) ||
+              this.tenant.state.tenancies.find((t) => t.roomId === ((r as any).roomId || r.assetId)) ||
+              branchTenancies[0] ||
+              this.tenant.state.tenancies[0]
+            const room = this.inventory.state.rooms.find(
+              (rm) => rm.id === (t?.roomId || (r as any).roomId || r.assetId),
+            )
+            const stMap: Record<string, string> = {
+              OPEN: 'PENDING',
+              ACCEPTED: 'IN_PROGRESS',
+              COMPLETED: 'RESOLVED',
+            }
             return {
               ...r,
-              roomId: t.roomId,
-              roomName: t.roomName,
-              tenantName: this.namedTenancy(t).userName,
+              status: stMap[r.status] || r.status || 'PENDING',
+              roomId: t?.roomId || (r as any).roomId || r.assetId || '',
+              roomName: t?.roomName || room?.title || 'Phòng trọ',
+              tenantName: t ? this.namedTenancy(t).userName : 'Khách thuê',
             }
           })
         break
+      }
     }
     const q = (params.get('q') || '').toLocaleLowerCase('vi')
     return records.filter((row) => {
@@ -651,6 +689,7 @@ export class ManagerEngine {
           'assetId',
         ].every((k) => !params.get(k) || String(r[k]) === params.get(k)) &&
         (params.get('debtOnly') !== 'true' || Number(r.outstanding) > 0) &&
+        (!params.get('date') || vnDateKey(String(r.createdAt || '')) === params.get('date')! || vnDateKey(String(r.verifiedAt || r.paidAt || '')) === params.get('date')!) &&
         (!params.get('month') ||
           String(r.billingMonth || r.createdAt).startsWith(params.get('month')!)) &&
         (!params.get('minPrice') || Number(r.price) >= Number(params.get('minPrice'))) &&
@@ -667,6 +706,12 @@ export class ManagerEngine {
     const row = this.list(actor, branchId, resource).find(
       (row) => (row as { id: string }).id === id,
     )
+    if (!row && resource === 'maintenance') {
+      const fallbackRow = this.list(actor, '', resource).find(
+        (r) => (r as { id: string }).id === id,
+      )
+      if (fallbackRow) return fallbackRow
+    }
     if (!row) throw new MockError('Không tìm thấy dữ liệu thuộc chi nhánh.', 404)
     return row
   }
@@ -719,11 +764,7 @@ export class ManagerEngine {
         this.state.roomServices = this.state.roomServices.filter((s) => s.roomId !== id)
         return null
       }
-      const data = roomInputSchema.parse(input),
-        type = this.inventory.state.types.find(
-          (t) => t.id === data.roomTypeId && t.branchId === branchId && t.active,
-        )
-      if (!type) throw new MockError('Loại phòng không thuộc chi nhánh hoặc đã ngừng sử dụng.', 422)
+      const data = roomInputSchema.parse(input)
       if (
         this.inventory.state.rooms.some(
           (r) =>
@@ -776,7 +817,6 @@ export class ManagerEngine {
             availability: 'AVAILABLE' as const,
           }),
           ...data,
-          roomTypeName: type.name,
           imageUrl: data.images[0] || '/demo/room-1.webp',
           imageAlt: data.title,
         }
@@ -809,8 +849,6 @@ export class ManagerEngine {
         : null
       if (id && !current) throw new MockError('Không tìm thấy loại phòng.', 404)
       if (method === 'DELETE') {
-        if (this.inventory.state.rooms.some((r) => r.roomTypeId === id))
-          throw new MockError('Loại phòng đang được sử dụng.', 409)
         this.inventory.state.types = this.inventory.state.types.filter((t) => t.id !== id)
         return null
       }
@@ -828,7 +866,7 @@ export class ManagerEngine {
       else this.inventory.state.types.push({ id: crypto.randomUUID(), branchId, ...data })
       return current || this.inventory.state.types.at(-1)
     }
-    const raw = z.object({ roomId: z.guid() }).parse(input),
+    const raw = z.object({ roomId: z.string().uuid() }).parse(input),
       room = this.room(branchId, raw.roomId),
       current = id
         ? this.inventory.state.slots.find((s) => s.id === id && s.roomId === room.id)

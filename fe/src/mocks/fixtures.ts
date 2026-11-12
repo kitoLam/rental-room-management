@@ -1,6 +1,6 @@
 import type {
   Appointment,
-  Booking,
+  MockBooking,
   Branch,
   BranchPolicy,
   Notification,
@@ -144,9 +144,10 @@ export const rooms: Room[] = titles.map((title, index) => {
       ...(isSlot ? ['Tủ cá nhân'] : ['Bếp riêng']),
     ],
     services: [
-      { name: 'Điện', price: 3500, unit: 'kWh' },
-      { name: 'Nước', price: 18000, unit: 'm³' },
-      { name: 'Internet', price: 100000, unit: 'phòng/tháng' },
+      { name: 'Điện', price: 3500, unit: 'kWh', mandatory: true, calculationType: 'METERED' },
+      { name: 'Nước', price: 18000, unit: 'm³', mandatory: true, calculationType: 'METERED' },
+      { name: 'Vệ sinh / rác', price: 30000, unit: 'phòng/tháng', mandatory: true, calculationType: 'FIXED' },
+      { name: 'Internet', price: 100000, unit: 'phòng/tháng', mandatory: false, calculationType: 'FIXED' },
     ],
   }
 })
@@ -207,7 +208,7 @@ export function seedActivity() {
       },
     ],
   }
-  const booking = (index: number, status: Booking['status']): Booking => {
+  const booking = (index: number, status: MockBooking['status']): MockBooking => {
     const room = rooms[index]
     const selectedPolicy = policies[index % 3]
     const due = new Date(Date.now() + (status === 'EXPIRED' ? -60000 : 30 * 60000)).toISOString()
@@ -219,7 +220,11 @@ export function seedActivity() {
       branchId: room.branchId,
       branchName: room.branchName,
       roomSlotId: room.rentalMode === 'SLOT' ? fixtureId(1000 + index * 10 + 1) : null,
+      roomSlotIds: room.rentalMode === 'SLOT' ? [fixtureId(1000 + index * 10 + 1)] : [],
       slotLabel: room.rentalMode === 'SLOT' ? 'Chỗ 2' : null,
+      slotLabels: room.rentalMode === 'SLOT' ? ['Chỗ 2'] : [],
+      hasRentalDates: true,
+      selectedServices: [],
       rentalMode: room.rentalMode,
       startDate: index === 4 ? addDays(0) : addDays(7),
       endDate: addDays(67),
@@ -243,7 +248,7 @@ export function seedActivity() {
       contractId: null,
     }
   }
-  const bookings: Booking[] = [
+  const bookings: MockBooking[] = [
     booking(4, 'AWAITING_PAYMENT'),
     booking(5, 'CONFIRMED'),
     booking(7, 'EXPIRED'),

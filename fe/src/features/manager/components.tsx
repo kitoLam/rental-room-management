@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/common/status-badge'
 import { tenantStatusLabel } from '@/features/tenant/status'
 import { imageAttachment } from '@/features/tenant/attachments'
-import { useManager, managerLink, useManagerList } from './context'
+import { managerApi } from '@/services/manager'
+import { useManager, managerLink, useManagerList, useManagerQuery } from './context'
 import type { Page as PageData } from '@/interfaces/domain'
 export function ManagerPage({
   title,
@@ -91,20 +92,50 @@ export function ManagerStatus({ value }: { value: string }) {
   return (
     <StatusBadge
       tone={
-        ['ACTIVE', 'APPROVED', 'VERIFIED', 'CONFIRMED', 'FINALIZED', 'PAID', 'COMPLETED'].includes(
-          value,
-        )
+        [
+          'ACTIVE',
+          'APPROVED',
+          'VERIFIED',
+          'CONFIRMED',
+          'FINALIZED',
+          'PAID',
+          'COMPLETED',
+          'RESOLVED',
+          'CLOSED',
+        ].includes(value)
           ? 'success'
-          : ['PENDING', 'REVIEW', 'HELD', 'OPEN', 'AWAITING_PAYMENT', 'CANCEL_REQUESTED'].includes(
-                value,
-              )
-            ? 'warning'
-            : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
-              ? 'danger'
-              : 'neutral'
+          : ['IN_PROGRESS', 'ACCEPTED', 'PROGRESS_UPDATED'].includes(value)
+            ? 'info'
+            : [
+                'PENDING',
+                'REVIEW',
+                'HELD',
+                'OPEN',
+                'AWAITING_PAYMENT',
+                'CANCEL_REQUESTED',
+                'STOP_PENDING',
+                'WAITING_INFO',
+                'INFO_SUPPLEMENTED',
+                'REQUESTED_INFO',
+              ].includes(value)
+              ? 'warning'
+              : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
+                ? 'danger'
+                : 'neutral'
       }
     >
       {labels[value] || tenantStatusLabel(value)}
+    </StatusBadge>
+  )
+}
+/** Nhãn "Sắp hết hạn" nháy nhẹ; tôn trọng prefers-reduced-motion (không nháy khi người dùng yêu cầu giảm chuyển động). */
+export function ExpiringSoonBadge() {
+  return (
+    <StatusBadge
+      tone="warning"
+      className="motion-safe:animate-pulse"
+    >
+      Sắp hết hạn
     </StatusBadge>
   )
 }
@@ -215,7 +246,7 @@ export function SearchBox({
 export type FieldSpec = {
   name: string
   label: string
-  kind?: 'text' | 'number' | 'date' | 'month' | 'textarea' | 'select' | 'check' | 'list'
+  kind?: 'text' | 'number' | 'date' | 'datetime-local' | 'month' | 'textarea' | 'select' | 'check' | 'list'
   options?: { value: string; label: string }[]
   nullable?: boolean
   hint?: string
@@ -234,8 +265,8 @@ export function ScopeFilters({
   tenant?: boolean
   dates?: boolean
 }) {
-  const rooms = useManagerList('rooms', { size: '100' }),
-    tenants = useManagerList('tenants', { size: '100' })
+  const rooms = useManagerQuery('room-filter-options', managerApi.roomFilterOptions),
+    tenants = useManagerList('tenants', { size: '100' }, false, tenant)
   return (
     <div className="flex flex-wrap gap-3">
       <select
@@ -295,7 +326,7 @@ export function ScopeFilters({
           />
         </>
       )}
-      <InlineError error={rooms.error || tenants.error} />
+      <InlineError error={rooms.error || (tenant ? tenants.error : null)} />
     </div>
   )
 }
@@ -335,9 +366,15 @@ export function ManagerForm({
       onSubmit={form.handleSubmit((raw) => {
         const value = { ...raw }
         for (const f of fields) {
+          if (f.kind === 'datetime-local' && value[f.name])
+            value[f.name] = new Date(String(value[f.name])).toISOString()
           if (f.kind === 'number')
             value[f.name] =
-              value[f.name] === '' || value[f.name] == null ? (f.nullable ? null : NaN) : Number(value[f.name])
+              value[f.name] === '' || value[f.name] == null
+                ? f.nullable
+                  ? null
+                  : NaN
+                : Number(value[f.name])
           if (f.kind === 'list')
             value[f.name] = String(value[f.name] || '')
               .split(/\n|,/)
@@ -352,7 +389,9 @@ export function ManagerForm({
             const name = issue.path[0]
             if (typeof name === 'string')
               form.setError(name, {
-                message: 'Kiểm tra giá trị, định dạng hoặc độ dài của mục này.',
+                message: issue.code === 'custom'
+                  ? issue.message
+                  : 'Kiểm tra giá trị, định dạng hoặc độ dài của mục này.',
               })
           }
           return
@@ -416,6 +455,8 @@ export function ManagerForm({
                     ? 'number'
                     : f.kind === 'date'
                       ? 'date'
+                      : f.kind === 'datetime-local'
+                        ? 'datetime-local'
                       : f.kind === 'month'
                         ? 'month'
                         : 'text'
@@ -544,7 +585,7 @@ export function ActionDialog({
   fields?: FieldSpec[]
   defaults?: Record<string, unknown>
 }) {
-  const all = [...fields, { name: 'reason', label: 'Lý do / ghi chú', kind: 'textarea' as const }],
+  const all = fields,
     shape = Object.fromEntries(
       all.map((f) => [
         f.name,
@@ -553,7 +594,7 @@ export function ActionDialog({
           : z
               .string()
               .trim()
-              .min(f.name === 'reason' ? 10 : 1),
+              .min(1),
       ]),
     )
   return (
@@ -569,7 +610,7 @@ export function ActionDialog({
         schema={z.object(shape)}
         fields={all}
         defaults={{ reason: '', ...defaults }}
-        onSubmit={onConfirm}
+        onSubmit={(data) => onConfirm({ reason: 'Đã xác nhận thao tác', ...data })}
         pending={pending}
         error={error}
         submitLabel="Xác nhận"

@@ -1,5 +1,13 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import {
+  Link,
+  NavLink,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   House,
@@ -10,176 +18,185 @@ import {
   Droplets,
   Wrench,
   Bell,
+  CalendarDays,
+  KeyRound,
+  UserRound,
 } from 'lucide-react'
 import { useSession } from '@/features/auth/session-store'
 import { tenantApi } from '@/services/tenant'
-import { provider } from '@/services/config'
-import { queryClient } from '@/services/query-client'
 import { useTenancySelection, isActive, tenantLink } from '@/features/tenant/context'
-import { Button } from '@/components/ui/button'
-import { InlineError, Notice, QueryState } from '@/components/common/page'
+import { Notice, QueryState } from '@/components/common/page'
 import { Container } from '@/components/common/container'
+import { dashboardPath } from '@/features/auth/navigation'
+
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
-  ['/tenant/my-room', 'Chỗ ở của tôi', House],
-  ['/tenant/contracts', 'Hợp đồng', FileText],
+  ['/tenant/appointments', 'Lịch xem', CalendarDays],
+  ['/tenant/bookings', 'Giữ phòng', KeyRound],
+  ['/tenant/my-room', 'Phòng của tôi', House],
+  // Per-slot contracts: submit the signed copy of each one (account page, no tenancy needed).
+  ['/user/contracts', 'Hợp đồng', FileText],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
-  ['/tenant/payments', 'Thanh toán', Wallet],
-  ['/tenant/services', 'Dịch vụ', Plug],
+  ['/user/payments', 'Thanh toán', Wallet],
+  ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Điện & nước', Droplets],
-  ['/tenant/maintenance', 'Bảo trì', Wrench],
+  ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
+  ['/notifications', 'Thông báo', Bell],
+  ['/profile', 'Hồ sơ', UserRound],
 ] as const
+const accountPages = [
+  '/tenant/dashboard',
+  '/tenant/appointments',
+  '/tenant/bookings',
+  '/user/contracts',
+  '/user/payments',
+  '/profile',
+  '/notifications',
+]
+const needsTenancy = (path: string) =>
+  path.startsWith('/tenant/') &&
+  !['/tenant/appointments', '/tenant/bookings'].some(
+    (base) => path === base || path.startsWith(base + '/'),
+  )
+
 export function TenantLayout() {
-  const userId = useSession((s) => s.user!.id),
-    selected = useTenancySelection((s) => s.byUser[userId]),
-    select = useTenancySelection((s) => s.select)
-  const [params] = useSearchParams(),
-    location = useLocation(),
-    navigate = useNavigate()
+  const user = useSession((s) => s.user!)
+  const selected = useTenancySelection((s) => s.byUser[user.id])
+  const select = useTenancySelection((s) => s.select)
+  const [params] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
   const list = useQuery({
-    queryKey: ['tenant', userId, 'tenancies', params.get('demo')],
+    queryKey: ['tenant', user.id, 'tenancies'],
     queryFn: tenantApi.tenancies,
+    retry: false,
+    enabled: user.roles.includes('TENANT'),
   })
-  const requested = params.get('tenancyId'),
-    tenancies = list.data || []
+  const tenancies = list.data || []
+  const requested = params.get('tenancyId')
   const tenancy = requested
-    ? tenancies.find((t) => t.id === requested)
-    : tenancies.find((t) => t.id === selected) || tenancies.find(isActive) || tenancies[0]
-  const reset = useMutation({
-    mutationFn: tenantApi.reset,
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
+    ? tenancies.find((t) => t.id === requested || t.contractId === requested)
+    : tenancies.find((t) => t.id === selected || t.contractId === selected) ||
+      tenancies.find(isActive) ||
+      tenancies[0]
+  const unscoped = accountPages.some(
+    (path) => location.pathname === path || location.pathname.startsWith(path + '/'),
+  )
+  const route =
+    nav.find(
+      ([path]) => location.pathname === path || location.pathname.startsWith(path + '/'),
+    )?.[0] || '/tenant/dashboard'
+  const href = (path: string) => (needsTenancy(path) && tenancy ? tenantLink(path, tenancy) : path)
+  if (!user.roles.includes('TENANT')) return <Navigate replace to={dashboardPath(user.roles)} />
   return (
-    <Container className="py-7 sm:py-10">
-      <QueryState
-        pending={list.isPending}
-        error={list.error}
-        retry={list.refetch}
-        empty={list.data?.length === 0}
-        emptyMessage="Tài khoản chưa có quan hệ thuê được cấp quyền. Giữ chỗ đã xác nhận chưa phải hợp đồng thuê."
-        emptyAction={
-          <Button asChild>
-            <Link to="/user/dashboard">Về tài khoản</Link>
-          </Button>
-        }
-      >
-        {list.data && tenancies.length > 0 && !tenancy && (
-          <Notice tone="warning">
-            Không tìm thấy quan hệ thuê được phép truy cập.{' '}
-            <Link to="/tenant/dashboard" className="underline">
-              Về không gian thuê
-            </Link>
-          </Notice>
-        )}
-        {tenancy && (
-          <div className="grid min-w-0 gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
-            <aside className="min-w-0">
-              <div className="mb-5">
-                <label
-                  htmlFor="active-tenancy"
-                  className="mb-2 block text-xs font-bold text-muted-foreground"
-                >
-                  QUAN HỆ THUÊ
-                </label>
+    <Container wide className="py-7 sm:py-10">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <aside className="min-w-0">
+          <div className="mb-5">
+            <label
+              htmlFor="active-tenancy"
+              className="mb-2 block text-xs font-bold text-muted-foreground"
+            >
+              KHÔNG GIAN THUÊ
+            </label>
+            {tenancies.length > 0 ? (
+              <>
                 <select
                   id="active-tenancy"
                   className="input w-full"
-                  value={tenancy.id}
-                  onChange={(e) => {
-                    select(userId, e.target.value)
-                    const target = tenancies.find((t) => t.id === e.target.value)!
-                    const base =
-                      nav.find(([path]) => location.pathname.startsWith(path))?.[0] ||
-                      '/tenant/dashboard'
-                    navigate(tenantLink(base, target))
+                  value={tenancy?.id || ''}
+                  onChange={(event) => {
+                    const target = tenancies.find((t) => t.id === event.target.value)!
+                    select(user.id, target.id)
+                    navigate(needsTenancy(route) ? tenantLink(route, target) : route)
                   }}
                 >
+                  {!tenancy && <option value="">Chọn quan hệ thuê</option>}
                   {tenancies.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.roomName}
                       {t.slotName ? ` · ${t.slotName}` : ''}
-                      {!isActive(t) ? ' · Lịch sử' : ''} — {t.branchName}
+                      {!isActive(t) ? ' · Lịch sử / chưa hiệu lực' : ''}
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{tenancy.branchName}</p>
-              </div>
-              <nav aria-label="Không gian người thuê" className="hidden gap-1 lg:grid">
-                {nav.map(([to, label, Icon]) => (
-                  <NavLink
-                    key={to}
-                    to={tenantLink(to, tenancy)}
-                    className={({ isActive }) =>
-                      `flex min-h-11 items-center gap-2 rounded-lg px-3 py-3 text-xs sm:text-sm ${isActive ? 'bg-primary-soft font-bold text-primary' : 'text-muted-foreground hover:bg-surface hover:text-foreground'}`
-                    }
-                  >
-                    <Icon size={17} className="shrink-0" />
-                    {label}
-                  </NavLink>
-                ))}
-              </nav>
-              <nav aria-label="Điều hướng người thuê trên di động" className="lg:hidden">
-                <select
-                  aria-label="Điều hướng người thuê"
-                  className="input w-full"
-                  value={
-                    nav.find(([path]) => location.pathname.startsWith(path))?.[0] ||
-                    '/tenant/dashboard'
-                  }
-                  onChange={(event) => navigate(tenantLink(event.target.value, tenancy))}
-                >
-                  {nav.map(([path, label]) => (
-                    <option key={path} value={path}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </nav>
-              <div className="mt-4 hidden lg:grid lg:gap-1">
-                <Link
-                  to="/notifications"
-                  className="flex min-h-11 items-center gap-2 px-3 text-sm text-muted-foreground"
-                >
-                  <Bell size={17} />
-                  Thông báo
-                </Link>
-                <Link
-                  to="/user/dashboard"
-                  className="min-h-11 px-3 py-3 text-sm text-muted-foreground"
-                >
-                  Về tài khoản
-                </Link>
-              </div>
-              {import.meta.env.DEV && provider('tenant') === 'mock' && (
-                <details className="mt-5 px-3 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer py-3">Công cụ demo</summary>
-                  <p className="mb-3 leading-5">Dữ liệu mô phỏng, không phát sinh tiền thật.</p>
-                  <Button
-                    size="default"
-                    variant="outline"
-                    loading={reset.isPending}
-                    onClick={() => reset.mutate()}
-                  >
-                    Đặt lại dữ liệu Tenant
-                  </Button>
-                  <InlineError error={reset.error} />
-                </details>
-              )}
-            </aside>
-            <div className="min-w-0">
-              {!isActive(tenancy) && (
-                <div className="mb-6">
-                  <Notice>
-                    Quan hệ thuê đã kết thúc hoặc chưa hiệu lực. Bạn có thể xem hồ sơ; các thao tác
-                    yêu cầu thuê đang hiệu lực được khóa.
-                  </Notice>
-                </div>
-              )}
-              <Outlet key={`${userId}-${tenancy.id}`} context={{ tenancy, tenancies }} />
-            </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {tenancy?.branchName || 'Chọn một quan hệ thuê thuộc tài khoản.'}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs leading-6 text-muted-foreground">
+                {list.isPending
+                  ? 'Đang tải chỗ ở…'
+                  : list.error
+                    ? 'Chưa tải được chỗ ở.'
+                    : 'Chưa có quan hệ thuê. Bạn vẫn có thể xem lịch hẹn và yêu cầu giữ phòng.'}
+              </p>
+            )}
           </div>
-        )}
-      </QueryState>
+          <nav aria-label="Không gian người thuê" className="hidden gap-1 lg:grid">
+            {nav.map(([path, label, Icon]) => (
+              <NavLink
+                key={path}
+                to={href(path)}
+                className={({ isActive }) =>
+                  `flex min-h-11 items-center gap-2 rounded-lg px-3 py-3 text-sm ${isActive ? 'bg-primary-soft font-bold text-primary' : 'text-muted-foreground hover:bg-surface hover:text-foreground'}`
+                }
+              >
+                <Icon size={17} className="shrink-0" />
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+          <nav aria-label="Điều hướng người thuê trên di động" className="lg:hidden">
+            <select
+              className="input w-full"
+              aria-label="Điều hướng người thuê"
+              value={route}
+              onChange={(event) => navigate(href(event.target.value))}
+            >
+              {nav.map(([path, label]) => (
+                <option key={path} value={path}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </nav>
+        </aside>
+        <div className="min-w-0">
+          {unscoped ? (
+            <Outlet
+              key={`${user.id}-${tenancy?.id || 'account'}`}
+              context={{ tenancy, tenancies }}
+            />
+          ) : (
+            <QueryState pending={list.isPending} error={list.error} retry={list.refetch}>
+              {tenancy ? (
+                <>
+                  {!isActive(tenancy) && (
+                    <div className="mb-6">
+                      <Notice>
+                        Quan hệ thuê đã kết thúc hoặc chưa hiệu lực. Bạn có thể xem hồ sơ; các thao
+                        tác yêu cầu thuê đang hiệu lực được khóa.
+                      </Notice>
+                    </div>
+                  )}
+                  <Outlet key={`${user.id}-${tenancy.id}`} context={{ tenancy, tenancies }} />
+                </>
+              ) : (
+                <Notice>
+                  {requested
+                    ? 'Không tìm thấy quan hệ thuê thuộc tài khoản trong liên kết này.'
+                    : 'Mục này cần hợp đồng thuê đã được duyệt. Nộp bản ký ở mục Hợp đồng; quản lý duyệt xong bạn dùng được mục này.'}{' '}
+                  <Link to="/user/contracts" className="font-semibold underline">
+                    Mở hợp đồng
+                  </Link>
+                </Notice>
+              )}
+            </QueryState>
+          )}
+        </div>
+      </div>
     </Container>
   )
 }

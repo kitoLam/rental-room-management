@@ -10,6 +10,9 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.FieldType;
+import org.springframework.data.annotation.Version;
+
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -27,4 +30,10 @@ public class RoomSlot extends BaseDocument {
     private Integer slotNumber;
 
     private RoomSlotStatus status = RoomSlotStatus.AVAILABLE;
+
+    /** Ngày bắt đầu cho thuê; chỉ áp dụng cho slot AVAILABLE và tự dời +7 ngày khi đã qua. */
+    private LocalDate availableFrom;
+
+    @Version
+    private Long version;
 }

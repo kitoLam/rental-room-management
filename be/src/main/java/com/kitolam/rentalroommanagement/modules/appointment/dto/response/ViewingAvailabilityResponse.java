@@ -1,0 +1,22 @@
+package com.kitolam.rentalroommanagement.modules.appointment.dto.response;
+
+import com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+
+public record ViewingAvailabilityResponse(
+        String roomId, LocalDate date, String timeZone, Instant checkedAt, Long configurationVersion,
+        ViewingEligibilityResponse room, List<Period> periods, List<String> roomSlotIds, String selectionError
+) {
+    public ViewingAvailabilityResponse(String roomId, LocalDate date, String timeZone, Instant checkedAt, Long configurationVersion,
+                                        ViewingEligibilityResponse room, List<Period> periods) {
+        this(roomId, date, timeZone, checkedAt, configurationVersion, room, periods, List.of(), null);
+    }
+    public record Period(String id, ShiftType type, String startTime, String endTime,
+                         Instant startAt, Instant endAt, boolean isActive, boolean available, Reason reason) { }
+    public enum Reason {
+        AVAILABLE, ROOM_UNAVAILABLE, DISABLED, STARTED, ROOM_TAKEN,
+        TENANT_ROOM_DAY, TENANT_SAME_TYPE, TENANT_TIME_OVERLAP, NO_SLOT_SELECTED, SLOT_UNAVAILABLE
+    }
+}

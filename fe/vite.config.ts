@@ -12,15 +12,16 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    // Cho phép truy cập dev server qua tên miền ngrok (dấu chấm đầu = mọi subdomain)
-    allowedHosts: ['.ngrok-free.app'],
     proxy: {
+      '/auth': {
+        target:
+          loadEnv(mode, process.cwd(), '').VITE_BACKEND_PROXY_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/api': {
         target:
-          loadEnv(mode, process.cwd(), '').VITE_BACKEND_PROXY_TARGET || 'https://44d1-118-69-182-149.ngrok-free.app', //'http://localhost:8080',
+          loadEnv(mode, process.cwd(), '').VITE_BACKEND_PROXY_TARGET || 'http://localhost:8080',
         changeOrigin: true,
-        // Bỏ qua trang cảnh báo của ngrok free (ERR_NGROK_6024) khi target là URL ngrok
-        headers: { 'ngrok-skip-browser-warning': 'true' },
       },
     },
   },

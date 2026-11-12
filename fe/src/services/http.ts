@@ -7,18 +7,24 @@ import { realApiIssue } from './real-api'
 export class ApiError extends Error {
   status: number
   code?: number
-  constructor(message: string, status = 500, code?: number) {
+  errorCode?: string
+  constructor(message: string, status = 500, code?: number, errorCode?: string) {
     super(message)
     this.status = status
     this.code = code
+    this.errorCode = errorCode
   }
 }
 const envelope = z.object({
   status: z.number().optional(),
   code: z.number().optional(),
-  message: z.string().optional(),
+  errorCode: z.string().nullish(),
+  message: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((value) => (Array.isArray(value) ? value.join('\n') : value)),
   data: z.unknown().optional(),
-})
+}).nullable().optional()
 const messages: Record<string, string> = {
   'Invalid login credentials': 'Email hoặc mật khẩu chưa đúng.',
   'Email is already in use': 'Email này đã được đăng ký.',
@@ -55,7 +61,13 @@ export async function request<T>(
       ? new URLSearchParams(window.location.search).get('demo')
       : null
   const mockHeaders: Record<string, string> = {}
-  if (feature === 'manager' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('workspace') === 'owner') mockHeaders['X-TroPro-Workspace'] = 'OWNER'
+  if (
+    feature === 'manager' &&
+    provider(feature) === 'mock' &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('workspace') === 'owner'
+  )
+    mockHeaders['X-TroPro-Workspace'] = 'OWNER'
   if (scenario && ['loading', 'error', 'empty'].includes(scenario))
     mockHeaders['X-TroPro-Demo-Scenario'] = scenario
   if (
@@ -77,8 +89,6 @@ export async function request<T>(
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        // Bỏ qua trang cảnh báo của ngrok free khi API_BASE_URL trỏ thẳng vào ngrok
-        'ngrok-skip-browser-warning': 'true',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...mockHeaders,
@@ -90,7 +100,7 @@ export async function request<T>(
   } finally {
     clearTimeout(timer)
   }
-  if (response.status === 401 && retry && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && retry && !path.startsWith('/auth/') && !path.startsWith('/api/auth/') && !path.startsWith('/api/v1/auth/')) {
     if (useSession.getState().accessToken !== token)
       throw new ApiError('Phiên của yêu cầu đã thay đổi.', 401)
     try {
@@ -105,31 +115,44 @@ export async function request<T>(
     if (!data.success) throw new ApiError('Phản hồi máy chủ không đúng định dạng.', response.status)
     return data.data
   }
-  const parsed = envelope.safeParse(await response.json().catch(() => null))
+  const rawJson = await response.json().catch(() => null)
+  const parsed = envelope.safeParse(rawJson)
   if (!parsed.success) throw new ApiError('Phản hồi máy chủ không đúng định dạng.', response.status)
   const body = parsed.data
-  if (!response.ok || (body.code && body.code !== 0)) {
-    const message = body.message || ''
+  if (!response.ok || (body && body.code && body.code !== 0)) {
+    const rawMessage =
+      body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : ''
+    const message = messages[rawMessage] || rawMessage
     throw new ApiError(
       response.status >= 500
-        ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại.'
-        : errorMessages[body.code || 0] ||
-            messages[message] ||
-            (provider(feature) === 'mock'
-              ? message
-              : response.status === 401
-                ? 'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.'
-                : response.status === 403
-                  ? 'Bạn chưa có quyền thực hiện thao tác này.'
-                  : response.status === 409
-                    ? 'Dữ liệu đã thay đổi hoặc bị trùng. Vui lòng kiểm tra lại.'
-                    : message || 'Không thể thực hiện yêu cầu.'),
+        ? 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+        : message ||
+          errorMessages[body?.code || 0] ||
+          (response.status === 401
+            ? 'Email hoặc mật khẩu không chính xác.'
+            : response.status === 403
+              ? 'Tài khoản chưa được kích hoạt hoặc không có quyền.'
+              : response.status === 409
+                ? 'Thông tin đăng ký (email hoặc số điện thoại) đã tồn tại.'
+                : 'Không thể thực hiện yêu cầu.'),
       response.status,
-      body.code,
+      body?.code,
+      body?.errorCode ?? undefined,
     )
   }
-  const data = schema.safeParse(body.data)
-  if (!data.success) throw new ApiError('Dữ liệu máy chủ chưa khớp hợp đồng API.', 502)
+  const payload =
+    body && typeof body === 'object' && 'data' in body && body.data !== undefined
+      ? body.data
+      : rawJson
+  const data = schema.safeParse(payload)
+  if (!data.success) {
+    if (import.meta.env.DEV) {
+      console.error('[API Contract mismatch]', path, data.error.issues, 'payload was:', body?.data)
+    }
+    throw new ApiError('Dữ liệu máy chủ chưa khớp hợp đồng API.', 502)
+  }
   return data.data
 }
 export const write = (method: string, value?: unknown): RequestInit => ({
@@ -139,10 +162,10 @@ export const write = (method: string, value?: unknown): RequestInit => ({
 const realAuthSchema = z.object({
   accessToken: z.string(),
   expiresIn: z.number(),
-  accountId: z.guid(),
+  accountId: z.string(),
   email: z.string().email(),
   fullName: z.string(),
-  role: z.enum(['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN']),
+  role: z.string(),
 })
 export async function authRequest(path: string, body?: unknown): Promise<Session> {
   if (provider('auth') === 'mock')
@@ -155,7 +178,7 @@ export async function authRequest(path: string, body?: unknown): Promise<Session
       id: data.accountId,
       email: data.email,
       fullName: data.fullName,
-      roles: [data.role],
+      roles: [data.role as 'USER' | 'TENANT' | 'MANAGER' | 'OWNER' | 'ADMIN'],
       phone: null,
       dateOfBirth: null,
       gender: null,
@@ -167,7 +190,7 @@ let recovery: Promise<void> | null = null
 export function recoverSession() {
   const previousToken = useSession.getState().accessToken
   if (!recovery)
-    recovery = authRequest('/api/auth/refresh')
+    recovery = authRequest('/api/v1/auth/refresh')
       .then((s) => {
         if (useSession.getState().accessToken === previousToken) useSession.getState().setSession(s)
       })

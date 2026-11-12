@@ -1,8 +1,8 @@
 package com.kitolam.rentalroommanagement.modules.branch.dto.response;
 
 import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
-
 import java.time.Instant;
+import java.math.BigDecimal;
 
 public record BranchResponse(
         String id,
@@ -13,6 +13,10 @@ public record BranchResponse(
         String description,
         BranchStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String ownerAccountId,
+        BigDecimal electricityRate,
+        BigDecimal waterRate,
+        BigDecimal parkingRate
 ) {
 }

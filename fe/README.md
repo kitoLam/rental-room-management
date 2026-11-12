@@ -1,22 +1,24 @@
 # fe-sba-project — Giao diện quản lý phòng trọ (SBA301)
 
+Xem [cấu trúc frontend và hướng dẫn sửa từng view](docs/frontend-structure.md). Frontend của repository nằm trong `fe/`; CSS dùng chung nằm ở `src/index.css`.
+
 React 19 + Vite + TypeScript + Tailwind CSS v4 + shadcn/ui (Radix) + lucide-react + React Router 7.
 
-Guest + Auth + User đã được triển khai trên `feature/fe-rebuild`, dùng Zustand cho phiên đăng nhập, TanStack Query cho dữ liệu máy chủ và MSW cho API mô phỏng. Chi tiết API và kết quả kiểm thử: [API contract](../docs/frontend/guest-user-api-contract.md), [Implementation status](../docs/frontend/guest-user-implementation-status.md).
+Ứng dụng dùng Zustand cho phiên đăng nhập và TanStack Query cho dữ liệu. Cấu hình `.env` hiện chạy **mock**, dùng MSW và dữ liệu demo ngay trong trình duyệt, không cần backend.
 
-Mặc định chạy ở chế độ `mock`. Tài khoản thử: `an@tropro.demo` / `TroPro@123`. Không chuyển tiền thật trong bản demo.
+Đăng nhập bằng các tài khoản bên dưới, cùng mật khẩu `TroPro@123`. Trang đăng nhập có nút điền nhanh từng vai trò.
 
-Sao chép `.env.example` sang `.env.local`, đổi `VITE_API_MODE=hybrid` để dùng auth/notification BE và các tính năng còn thiếu qua mock. `real` gửi mọi yêu cầu đến BE và hiển thị lỗi khi endpoint chưa tồn tại. Khởi động lại Vite sau khi đổi cấu hình. Backend mặc định tạo liên kết xác minh tới `http://localhost:5173`; đặt `FRONTEND_BASE_URL` nếu FE chạy ở địa chỉ khác.
+| Vai trò | Email | Trang chính |
+| --- | --- | --- |
+| Quản trị | admin@tropro.demo | /admin/dashboard |
+| Chủ trọ | owner@tropro.demo | /owner/branches |
+| Quản lý | manager@tropro.demo | /manager/dashboard |
+| Người thuê | tenant@tropro.demo | /tenant/dashboard |
+| Khách tìm phòng | an@tropro.demo | /user/dashboard |
 
-Để chỉ dùng API thật cho đăng ký, đăng nhập và xác minh email trong khi giữ các chức năng khác ở mock, cấu hình `.env.local` như sau:
+Dữ liệu demo lưu trong sessionStorage của tab và giữ khi tải lại. Dashboard quản trị tính số chi nhánh, phòng và phòng công khai từ cùng kho dữ liệu với các trang quản lý. Có thể khôi phục dữ liệu demo trong dashboard quản trị. Chế độ mock không gửi yêu cầu đến backend, kể cả khi còn cấu hình provider riêng là real.
 
-```dotenv
-VITE_API_MODE=mock
-VITE_AUTH_PROVIDER=real
-```
-
-Frontend gọi `/api/auth/*` qua Vite proxy tới `http://localhost:8080` mặc định. Backend cần có cấu hình database hợp lệ và SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`). `SMTP_FROM` mặc định dùng `SMTP_USERNAME`; nếu nhà cung cấp mail yêu cầu địa chỉ gửi khác, hãy đặt `SMTP_FROM` thành địa chỉ đã xác thực. Backend mặc định tạo liên kết xác minh tới `http://localhost:5173`; đặt `FRONTEND_BASE_URL` nếu FE chạy ở địa chỉ khác. Đăng ký sẽ thất bại nếu BE không gửi được email; khi đó kiểm tra lỗi trên trang và log BE. Khởi động lại Vite sau khi sửa `.env.local`.
-Sao chép `.env.example` sang `.env.local` nếu cần cấu hình; giữ `VITE_API_MODE=real`. Vite chuyển `/api` tới `VITE_BACKEND_PROXY_TARGET` (mặc định `http://localhost:8080`). Khi deploy khác origin, đặt `VITE_API_BASE_URL` và cấu hình CORS/cookie ở BE theo origin thực tế. Khởi động lại Vite sau khi đổi cấu hình. Đặt `FRONTEND_BASE_URL=http://localhost:5173` ở BE để liên kết xác minh mở đúng FE.
+Muốn nối lại backend, đặt `VITE_API_MODE=real` và khởi động lại Vite. `/api` được chuyển tới `VITE_BACKEND_PROXY_TARGET` (mặc định `http://localhost:8080`). Khi deploy khác origin, cấu hình `VITE_API_BASE_URL` và CORS/cookie. Các API thật chưa hoàn thiện vẫn được chặn theo [báo cáo tích hợp](../docs/frontend/real-api-integration-audit.md).
 
 ## Chạy
 
@@ -64,7 +66,7 @@ src/
 
 Dữ liệu được lấy qua `src/services/guest-user.ts`. Provider theo feature được chọn trong `src/services/config.ts`; mock fixtures nằm trong `src/mocks/fixtures.ts`. Component không import trực tiếp mảng dữ liệu giả. Lỗi API thật không tự chuyển sang dữ liệu mock.
 
-Xem thử trạng thái của danh sách phòng: thêm `?demo=loading`, `?demo=empty` hoặc `?demo=error` vào URL.
+Các hướng dẫn demo và E2E dùng MSW bên dưới là tài liệu lịch sử; không phản ánh cấu hình chạy thật hiện tại. Các mock engine được giữ để unit test, không được khởi động bởi ứng dụng.
 
 ## Video hero (trang chủ)
 
@@ -86,7 +88,7 @@ ffmpeg -i input.mp4 -frames:v 1 -vf scale=1280:-2 -c:v libwebp -quality 72 livin
 
 ## Không gian chủ trọ (O01–O20)
 
-Với `VITE_API_MODE=mock`, đăng nhập `owner@tropro.demo` / `TroPro@123`, mở `/owner/dashboard`. Owner quản trị Branch, Manager, policy, QR, tài chính và phê duyệt; vận hành dùng lại các trang Manager với scope sở hữu. Guest/User/Tenant/Manager dùng cùng domain mock và được giữ nguyên.
+Luồng demo Owner trong tài liệu cũ dùng MSW và chỉ phục vụ tham khảo. Với ứng dụng hiện tại, các endpoint Owner/Branch chưa được BE cung cấp đầy đủ nên chức năng tương ứng báo chưa khả dụng, không cấp dữ liệu hay quyền từ demo.
 
 Owner APIs chưa có đầy đủ trên Backend; provider real sẽ hiển thị lỗi nếu endpoint thiếu. Quyết định duyệt điều chỉnh không tự sửa hóa đơn đã phát hành. Không dùng giấy tờ hoặc giao dịch thật trong demo.
 

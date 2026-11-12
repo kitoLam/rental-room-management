@@ -1,22 +1,18 @@
 package com.kitolam.rentalroommanagement.modules.booking.dto.request;
 
 import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
+import java.util.List;
 
 public record BookingCreateRequest(
-        @NotBlank @ValidObjectId String tenantId,
-        @NotBlank @ValidObjectId String roomId,
-        @NotNull LocalDate expectedMoveInDate,
-        @PositiveOrZero BigDecimal holdingDepositAmount,
-        Instant paymentDeadline,
-        Instant holdExpiresAt,
-        String cancellationPolicy,
-        String rejectReason
+        @NotEmpty List<@NotBlank @ValidObjectId String> roomSlotIds,
+        List<@Valid SelectedServiceRequest> selectedServices
 ) {
+    public record SelectedServiceRequest(
+            @NotBlank @ValidObjectId String serviceId,
+            @PositiveOrZero Integer quantity
+    ) {}
 }

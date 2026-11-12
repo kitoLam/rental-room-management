@@ -5,6 +5,7 @@ import { useSession } from '@/features/auth/session-store'
 import { ownerApi, type OwnerResource } from '@/services/owner'
 import { queryClient } from '@/services/query-client'
 import type { OwnedBranch } from '@/interfaces/owner'
+import type { OwnerProperty } from '@/services/owner-properties'
 export const useOwnerSelection = create<{
   selected: Record<string, string>
   select: (user: string, branch: string) => void
@@ -12,7 +13,8 @@ export const useOwnerSelection = create<{
   selected: {},
   select: (user, branch) => set((s) => ({ selected: { ...s.selected, [user]: branch } })),
 }))
-export const useOwner = () => useOutletContext<{ branches: OwnedBranch[]; scope: string }>()
+export const useOwner = () =>
+  useOutletContext<{ branches: (OwnedBranch | OwnerProperty)[]; scope: string }>()
 export function useOwnerQuery<T>(key: string, fn: () => Promise<T>, extra: unknown[] = []) {
   const user = useSession((s) => s.user!),
     { scope } = useOwner()
@@ -52,7 +54,7 @@ export function useOwnerMutation(done?: (data: { id?: string } | null) => void) 
   })
 }
 export const operationsLink = (branch: string, page = 'dashboard') =>
-  `/manager/${page}?${new URLSearchParams({ branchId: branch, workspace: 'owner' })}`
+  `/owner/${page}?${new URLSearchParams({ branchId: branch, workspace: 'owner' })}`
 export function useOwnerFilters(defaults: Record<string, string> = {}) {
   const [params, setParams] = useSearchParams()
   const filters: Record<string, string> = {

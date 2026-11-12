@@ -4,7 +4,9 @@ import { pageSchema, type Page } from '@/interfaces/domain'
 import {
   serviceCatalogResponseSchema,
   roomServiceResponseSchema,
-  contractServiceResponseSchema,
+  serviceRequestResponseSchema,
+  tenantServiceOverviewSchema,
+  serviceTenancySchema,
   roomServiceChargeResponseSchema,
   chargeDetailResponseSchema,
   costAllocationProposalResponseSchema,
@@ -14,9 +16,12 @@ import {
   type CreateRoomServiceInput,
   type UpdateRoomServiceInput,
   type RoomServiceItem,
-  type ContractServiceRegistrationInput,
-  type ProcessContractServiceInput,
-  type ContractServiceItem,
+  type ServiceRegistrationInput,
+  type ServiceTerminationInput,
+  type ServiceDateConfirmationInput,
+  type ServiceRequestItem,
+  type TenantServiceOverview,
+  type ServiceTenancy,
   type CreateRoomServiceChargeInput,
   type RoomServiceChargeItem,
   type ChargeDetailItem,
@@ -47,7 +52,7 @@ export const utilitiesService = {
       if (filters.type) params.set('type', filters.type)
       if (filters.mandatory !== undefined) params.set('mandatory', String(filters.mandatory))
       if (filters.active !== undefined) params.set('active', String(filters.active))
-      params.set('page', String(filters.page !== undefined ? filters.page : 1))
+      params.set('page', String(filters.page !== undefined ? filters.page : 0))
       params.set('size', String(filters.size !== undefined ? filters.size : 20))
 
       return request(
@@ -74,6 +79,15 @@ export const utilitiesService = {
       )
     },
 
+    delete: (serviceId: string): Promise<void> => {
+      return request(
+        'utilities',
+        `/api/services/${encodeURIComponent(serviceId)}`,
+        z.unknown(),
+        write('DELETE'),
+      ).then(() => undefined)
+    },
+
     update: (serviceId: string, input: UpdateServiceInput): Promise<ServiceCatalogItem> => {
       return request(
         'utilities',
@@ -88,6 +102,14 @@ export const utilitiesService = {
   // 2. ROOM SERVICES [P1-69]
   // ==========================================
   roomServices: {
+    listByBranch: (branchId: string, status?: string): Promise<RoomServiceItem[]> => {
+      const q = status ? `?status=${encodeURIComponent(status)}` : ''
+      return request(
+        'utilities',
+        `/api/branches/${encodeURIComponent(branchId)}/room-services${q}`,
+        z.array(roomServiceResponseSchema),
+      )
+    },
     listByRoom: (roomId: string): Promise<RoomServiceItem[]> => {
       return request(
         'utilities',
@@ -116,54 +138,96 @@ export const utilitiesService = {
   },
 
   // ==========================================
-  // 3. CONTRACT SERVICES [P1-71][P1-72][P1-73]
+  // 3. SERVICE REQUESTS: đăng ký / ngừng dịch vụ
   // ==========================================
-  contractServices: {
-    listByContract: (
-      contractId: string,
-      status?: string,
-    ): Promise<ContractServiceItem[]> => {
-      const params = new URLSearchParams()
-      if (status) params.set('status', status)
-      const q = params.toString() ? `?${params.toString()}` : ''
+  serviceRequests: {
+    // Tenant: phòng / chỗ đang thuê và danh mục dịch vụ kèm trạng thái (BE tự xác định từ token).
+    tenancy: (): Promise<ServiceTenancy> =>
+      request('utilities', '/api/v1/service-requests/tenancy', serviceTenancySchema),
 
-      return request(
-        'utilities',
-        `/api/contracts/${encodeURIComponent(contractId)}/services${q}`,
-        z.array(contractServiceResponseSchema),
-      )
-    },
+    catalog: (): Promise<TenantServiceOverview[]> =>
+      request('utilities', '/api/v1/service-requests/catalog', z.array(tenantServiceOverviewSchema)),
 
-    register: (input: ContractServiceRegistrationInput): Promise<ContractServiceItem> => {
-      return request(
+    register: (input: ServiceRegistrationInput): Promise<ServiceRequestItem> =>
+      request(
         'utilities',
-        '/api/contract-services/register',
-        contractServiceResponseSchema,
+        '/api/v1/service-requests/registrations',
+        serviceRequestResponseSchema,
         write('POST', input),
-      )
-    },
+      ),
 
-    cancel: (id: string, reason?: string): Promise<ContractServiceItem> => {
+    terminate: (input: ServiceTerminationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        '/api/v1/service-requests/terminations',
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
+
+    cancel: (id: string, note?: string): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/cancellation`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
+
+    // Manager / Owner / Admin
+    list: (
+      filters: {
+        branchId?: string
+        status?: string
+        action?: string
+        keyword?: string
+        page?: number
+        size?: number
+      } = {},
+    ): Promise<Page<ServiceRequestItem>> => {
       const params = new URLSearchParams()
-      if (reason) params.set('reason', reason)
-      const q = params.toString() ? `?${params.toString()}` : ''
-
+      if (filters.branchId) params.set('branchId', filters.branchId)
+      if (filters.status) params.set('status', filters.status)
+      if (filters.action) params.set('action', filters.action)
+      if (filters.keyword) params.set('keyword', filters.keyword)
+      params.set('page', String(filters.page ?? 1))
+      params.set('size', String(filters.size ?? 8))
       return request(
         'utilities',
-        `/api/contract-services/${encodeURIComponent(id)}/cancel${q}`,
-        contractServiceResponseSchema,
-        write('PUT'),
+        `/api/v1/service-requests?${params.toString()}`,
+        pageSchema(serviceRequestResponseSchema),
       )
     },
 
-    process: (id: string, input: ProcessContractServiceInput): Promise<ContractServiceItem> => {
-      return request(
+    approve: (id: string, note?: string): Promise<ServiceRequestItem> =>
+      request(
         'utilities',
-        `/api/contract-services/${encodeURIComponent(id)}/process`,
-        contractServiceResponseSchema,
-        write('PUT', input),
-      )
-    },
+        `/api/v1/service-requests/${encodeURIComponent(id)}/approval`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
+
+    reject: (id: string, note: string): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/rejection`,
+        serviceRequestResponseSchema,
+        write('POST', { note }),
+      ),
+
+    confirmInstallation: (id: string, input: ServiceDateConfirmationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/installation-confirmation`,
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
+
+    confirmTermination: (id: string, input: ServiceDateConfirmationInput): Promise<ServiceRequestItem> =>
+      request(
+        'utilities',
+        `/api/v1/service-requests/${encodeURIComponent(id)}/termination-confirmation`,
+        serviceRequestResponseSchema,
+        write('POST', input),
+      ),
   },
 
   // ==========================================

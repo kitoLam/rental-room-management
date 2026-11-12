@@ -4,7 +4,6 @@ import { ImageOff, MapPin, Ruler, Users } from 'lucide-react'
 
 import { StatusBadge } from '@/components/common/status-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { heroMedia } from '@/features/home/data/hero-media'
 import { formatVnd } from '@/lib/format'
 import { routes } from '@/lib/routes'
 
@@ -15,7 +14,6 @@ type RoomCardProps = { room: RoomListing }
 
 export function RoomCard({ room }: RoomCardProps) {
   const [imageFailed, setImageFailed] = useState(false)
-  const [useFallback, setUseFallback] = useState(!room.imageUrl)
   const badge = getRoomBadge(room)
 
   return (
@@ -28,12 +26,11 @@ export function RoomCard({ room }: RoomCardProps) {
           </div>
         ) : (
           <img
-            // Phòng chưa có ảnh hoặc ảnh lỗi thì dùng ảnh minh họa mặc định
-            src={useFallback ? heroMedia.poster : room.imageUrl}
+            src={room.imageUrl}
             alt={room.imageAlt}
             loading="lazy"
             decoding="async"
-            onError={() => (useFallback ? setImageFailed(true) : setUseFallback(true))}
+            onError={() => setImageFailed(true)}
             className="size-full object-cover"
           />
         )}
@@ -56,6 +53,11 @@ export function RoomCard({ room }: RoomCardProps) {
           <MapPin className="size-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{room.address}</span>
         </p>
+        {room.ownerName && (
+          <p className="text-xs text-muted-foreground truncate">
+            Chủ nhà: <span className="font-medium text-foreground">{room.ownerName}</span>
+          </p>
+        )}
         <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <li className="flex items-center gap-1">
             <Ruler className="size-3.5" aria-hidden="true" />

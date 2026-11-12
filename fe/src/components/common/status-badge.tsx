@@ -25,12 +25,12 @@ export function StatusBadge({ tone, children, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-foreground',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold text-foreground',
         t.wrap,
         className,
       )}
     >
-      <span className={cn('size-1.5 rounded-full', t.dot)} aria-hidden="true" />
+      <span className={cn('size-1.5 shrink-0 rounded-full', t.dot)} aria-hidden="true" />
       {children}
     </span>
   )

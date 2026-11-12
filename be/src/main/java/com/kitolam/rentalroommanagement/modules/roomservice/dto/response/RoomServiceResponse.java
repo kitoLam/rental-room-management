@@ -1,18 +1,19 @@
 package com.kitolam.rentalroommanagement.modules.roomservice.dto.response;
 
+import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceCalculationType;
 import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 
 public record RoomServiceResponse(
         String id,
-        String roomId,
-        String serviceId,
+        String branchId,
+        String name,
+        String unit,
         BigDecimal unitPrice,
-        LocalDate startDate,
-        LocalDate endDate,
+        RoomServiceCalculationType calculationType,
+        String description,
         RoomServiceStatus status,
         Instant createdAt,
         Instant updatedAt

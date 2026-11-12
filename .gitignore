@@ -20,6 +20,8 @@ HELP.md
 **/.next/
 **/.nuxt/
 **/coverage/
+**/test-results/
+**/playwright-report/
 **/.vite/
 npm-debug.log*
 yarn-debug.log*
@@ -51,3 +53,5 @@ out/
 .DS_Store
 Thumbs.db
 desktop.ini
+# Local credentials used for browser integration checks.
+be/browser-test.local.json

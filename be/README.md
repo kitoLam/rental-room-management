@@ -4,6 +4,8 @@ Backend quản lý phòng trọ: Spring Boot 4 + MongoDB Atlas, tổ chức theo
 
 ## 1. Chạy dự án
 
+**Đăng ký/đăng nhập JWT và xác thực email:** xem [hướng dẫn đầy đủ](docs/AUTH.md), [code từng file](docs/AUTH_SOURCE.md) và [cấu hình mẫu](.env.example). Backend hiện yêu cầu thêm JWT_SECRET, FRONTEND_URL và SMTP. Các API quản lý `/api/v1/**` yêu cầu role MANAGER hoặc ADMIN; public signup chỉ cấp TENANT.
+
 ### Yêu cầu
 - JDK 21 trở lên (đang dùng JDK 24)
 - Không cần cài Maven, dùng `mvnw` có sẵn (Maven 3.9.11)
@@ -31,7 +33,7 @@ MONGODB_DATABASE=rental_room_management
 ```
 
 - API: `http://localhost:8080/api/v1/...`
-- Swagger UI: `http://localhost:8080/swagger-ui.html` (chưa có auth, gọi thẳng được)
+- Swagger UI: `http://localhost:8080/swagger-ui.html` khi `PUBLIC_API_DOCS=true`; dùng nút Authorize để nhập access token.
 
 ### IntelliJ
 - Mở thư mục `be/` (khuyến nghị). Nếu mở thư mục gốc repo: chuột phải `be/pom.xml` → **Add as Maven Project**.
@@ -70,7 +72,7 @@ src/main/java/com/kitolam/rentalroommanagement
     │       ├── request/            # RoomCreateRequest, RoomUpdateRequest, RoomFilterRequest
     │       └── response/           # RoomResponse
     ├── branch/  roomtype/  manager/  roomslot/  furniture/  shift/
-    ├── serviceitem/  roomservice/  slotservice/
+    ├── serviceitem/  roomservice/  slotservice/  servicerequest/
     ├── tenant/  booking/  contract/  contracttenant/  roomslotoccupancy/
     ├── roomservicecharge/  slotservicecharge/  invoice/  payment/
     ├── appointment/
@@ -88,9 +90,10 @@ src/main/java/com/kitolam/rentalroommanagement
 | roomslot | RoomSlot | room_slots | /api/v1/room-slots |
 | furniture | Furniture | furnitures | /api/v1/furnitures |
 | shift | Shift | shifts | /api/v1/shifts |
-| serviceitem | ServiceItem | services | /api/v1/services |
+| serviceitem | ServiceItem | services | /api/v1/services, /api/v1/public/services |
 | roomservice | RoomService | room_services | /api/v1/room-services |
 | slotservice | SlotService | slot_services | /api/v1/slot-services |
+| servicerequest | ServiceRequest (+ HistoryEntry) | service_requests | /api/v1/service-requests |
 | tenant | Tenant | tenants | /api/v1/tenants |
 | booking | Booking | bookings | /api/v1/bookings |
 | contract | Contract | contracts | /api/v1/contracts |
@@ -107,6 +110,10 @@ src/main/java/com/kitolam/rentalroommanagement
 | reportrecord | ReportRecord | report_records | /api/v1/report-records |
 
 > `SERVICES` đặt tên class là `ServiceItem` để không trùng annotation `@Service` của Spring.
+
+> `servicerequest` là luồng đăng ký / ngừng dịch vụ. `room_services` / `slot_services` chỉ được tạo hoặc ngừng khi quản lý xác nhận ngày lắp đặt / kết thúc, nên phí luôn tính theo ngày đã xác nhận. Phòng / chỗ của người thuê lấy từ hợp đồng `ACTIVE` đang hiệu lực (qua `ContractService`); không có hợp đồng thì trả 403. `SERVICE_REQUEST_TENANCY_STUB_ENABLED=true` chỉ là fallback để demo không cần ký hợp đồng (xem `.env.example`).
+
+> Dịch vụ có cờ `mandatory`: dịch vụ bắt buộc (điện, nước `METERED` luôn bắt buộc; vệ sinh/rác do admin đánh dấu) luôn áp dụng, không đăng ký / ngừng qua `servicerequest`. `GET /api/v1/public/services?serviceScope=ROOM|SLOT` (không cần đăng nhập) trả danh mục đang cung cấp cho mục "Dịch vụ tham khảo" ở trang chi tiết phòng; lựa chọn ở đó chỉ dùng để ước tính chi phí.
 
 ## 3. Quy ước code
 
@@ -134,7 +141,7 @@ src/main/java/com/kitolam/rentalroommanagement
 ### Xoá mềm (soft delete)
 - Không xoá cứng. Gọi `document.markDeleted()` rồi `save` (set `isDeleted = true`, `deletedAt = now`).
 - **Mọi query đọc phải lọc `isDeleted = false`**: dùng `findByIdAndIsDeletedFalse` hoặc `MongoQueryHelper.baseCriteria()`.
-- Field cần duy nhất (email, số phòng trong chi nhánh, …) **không dùng unique index** (bản ghi đã xoá vẫn chiếm giá trị). Check trùng trong service bằng `MongoQueryHelper.existsOther(...)` và ném `ConflictException`.
+- Các module nghiệp vụ cũ kiểm tra trùng bằng `MongoQueryHelper.existsOther(...)`. Riêng **auth dùng unique index email/phone** để chống request đồng thời; định danh của user đã xóa mềm vẫn được giữ.
 
 ### DTO
 - Dùng `record` + Bean Validation (`@NotBlank`, `@NotNull`, `@ValidObjectId`, …).
@@ -144,10 +151,12 @@ src/main/java/com/kitolam/rentalroommanagement
 - `Response`: không bao giờ chứa field nhạy cảm (`passwordHash`).
 
 ### Response & lỗi
-Mọi API trả về cùng một format:
+Response thành công của các module nghiệp vụ cũ dùng format:
 ```json
 { "success": true, "message": "Thành công", "data": { ... }, "timestamp": "..." }
 ```
+
+Module auth dùng DTO response mô tả trong [AUTH.md](docs/AUTH.md). Toàn bộ response lỗi hiện thống nhất `{ "status": 400, "message": "...", "timestamp": "..." }`; client cũ cần cập nhật cách đọc lỗi.
 - Lỗi nghiệp vụ: ném exception trong `common/exception/exceptions`, **không** tự build `ResponseEntity` lỗi:
 
   | Exception | HTTP |

@@ -42,8 +42,10 @@ export default function PaymentPage() {
   })
   const initiate = useMutation({
     mutationFn: () => bookingService.initiate(bookingId, scenario),
-    onSuccess: async () => {
+    onSuccess: async (payment) => {
       await invalidateActivity()
+      if (provider('leasing') === 'real' && payment.paymentUrl)
+        window.location.assign(payment.paymentUrl)
     },
   })
   const paymentState = payments.data?.map((p) => `${p.id}-${p.status}`).join(',') || ''
@@ -65,7 +67,7 @@ export default function PaymentPage() {
   }
   if (!uuid(bookingId))
     return (
-      <Page title="Liên kết thanh toán không hợp lệ" back="/user/bookings">
+      <Page title="Liên kết thanh toán không hợp lệ" back="/tenant/bookings">
         <Notice>Chọn một yêu cầu giữ chỗ từ danh sách.</Notice>
       </Page>
     )
@@ -82,13 +84,14 @@ export default function PaymentPage() {
   const canPay =
     b?.status === 'AWAITING_PAYMENT' &&
     seconds > 0 &&
-    !payments.data?.some((p) => ['PENDING', 'VERIFIED'].includes(p.status))
+    !payments.data?.some((p) => p.status === 'VERIFIED' ||
+      (provider('leasing') === 'mock' && p.status === 'PENDING'))
   const mock = provider('leasing') === 'mock'
   return (
     <Page
       title="Khoản giữ chỗ của bạn."
       eyebrow={mock ? 'THANH TOÁN DEMO · KHÔNG CHUYỂN TIỀN THẬT' : 'THANH TOÁN GIỮ CHỖ'}
-      back={`/user/bookings/${bookingId}`}
+      back={`/tenant/bookings/${bookingId}`}
       description="Việc bắt đầu thanh toán chưa xác nhận giữ chỗ. Trạng thái được cập nhật sau khi giao dịch được xác minh."
     >
       <QueryState
@@ -110,12 +113,12 @@ export default function PaymentPage() {
                 {b.branchName}
                 {b.slotLabel ? ` · ${b.slotLabel}` : ''}
               </p>
-              <p className="mt-3 text-sm">
-                {dateOnly(b.startDate)} → {dateOnly(b.endDate)}
-              </p>
+              {b.hasRentalDates
+                ? <p className="mt-3 text-sm">Thời hạn thuê: {dateOnly(b.startDate)} → {dateOnly(b.endDate)}</p>
+                : <p className="mt-3 text-sm">Ngày bắt đầu thuê dự kiến: <span className="font-bold">{dateOnly(b.startDate)}</span></p>}
               <div className="my-7 rounded-xl bg-primary-soft p-5">
                 <p className="text-xs text-primary">
-                  KHOẢN GIỮ CHỖ THEO CHÍNH SÁCH V{b.policySnapshot.version}
+                  KHOẢN GIỮ CHỖ
                 </p>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <p className="text-page-title font-bold text-primary">
@@ -184,10 +187,10 @@ export default function PaymentPage() {
                   <RefreshCw />
                   Kiểm tra trạng thái
                 </Button>
-                <Button variant="outline" onClick={() => setQr(true)}>
+                {mock && <Button variant="outline" onClick={() => setQr(true)}>
                   <QrCode />
                   {mock ? 'Hướng dẫn demo' : 'Xem mã QR'}
-                </Button>
+                </Button>}
               </div>
               <div className="mt-6">
                 {b.status === 'EXPIRED' || (b.status === 'AWAITING_PAYMENT' && !seconds) ? (
@@ -197,7 +200,7 @@ export default function PaymentPage() {
                   </Notice>
                 ) : b.status === 'CONFIRMED' ? (
                   <Notice tone="success">
-                    Đã xác minh khoản giữ chỗ. Yêu cầu đã được xác nhận.
+                    Đã xác minh khoản giữ chỗ. Hợp đồng tạm đã được tạo để bạn nộp bằng chứng chữ ký.
                   </Notice>
                 ) : p?.status === 'PENDING' ? (
                   <Notice>
@@ -213,6 +216,20 @@ export default function PaymentPage() {
               </div>
             </Panel>
             <div className="space-y-6">
+              {!mock && (
+                <Panel>
+                  <h2 className="font-bold">Thanh toán qua VNPAY</h2>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    Bạn sẽ được chuyển đến cổng VNPAY để thanh toán khoản giữ chỗ đã thống nhất.
+                    Kết quả chỉ được ghi nhận sau khi máy chủ xác minh giao dịch.
+                  </p>
+                  <InlineError error={initiate.error} />
+                  <Button className="mt-5 w-full" loading={initiate.isPending}
+                    disabled={!canPay} onClick={() => initiate.mutate()}>
+                    {p?.status === 'PENDING' ? 'Tiếp tục thanh toán VNPAY' : 'Thanh toán VNPAY'}
+                  </Button>
+                </Panel>
+              )}
               {mock && (
                 <Panel>
                   <ShieldCheck className="mb-3 size-7 text-primary" />
@@ -278,7 +295,7 @@ export default function PaymentPage() {
                   </p>
                 )}
                 <Button asChild variant="link" className="mt-4 px-0">
-                  <Link to={`/user/bookings/${bookingId}`}>Về chi tiết giữ chỗ</Link>
+                  <Link to={`/tenant/bookings/${bookingId}`}>Về chi tiết giữ chỗ</Link>
                 </Button>
               </Panel>
             </div>

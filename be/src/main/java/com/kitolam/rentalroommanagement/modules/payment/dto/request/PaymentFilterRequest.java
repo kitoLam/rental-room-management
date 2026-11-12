@@ -8,8 +8,10 @@ import com.kitolam.rentalroommanagement.modules.payment.enums.PaymentStatus;
 public record PaymentFilterRequest(
         @ValidObjectId String invoiceId,
         @ValidObjectId String contractTenantId,
+        @ValidObjectId String contractId,
         PaymentMethod method,
         PaymentStatus status,
-        String keyword
+        String keyword,
+        String date
 ) {
 }

@@ -1,3 +1,4 @@
+import { localDate } from '@/lib/validation'
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import { ManagerEngine } from './manager-engine'
 import { MockDatabase } from './database'
@@ -13,7 +14,7 @@ import { referenceLink } from '@/lib/activity'
 let e: ManagerEngine
 const b = id(10),
   shared = id(12),
-  today = () => new Date().toISOString().slice(0, 10)
+  today = () => localDate(new Date())
 const month = (offset = 1) => {
   const d = new Date()
   d.setUTCDate(1)
@@ -142,10 +143,6 @@ describe('Manager authorization and coherent read models', () => {
           ).toBe(true)
   })
   it('binds all room types and slots to their actual room branch', () => {
-    for (const r of e.inventory.state.rooms)
-      expect(
-        e.inventory.state.types.some((t) => t.id === r.roomTypeId && t.branchId === r.branchId),
-      ).toBe(true)
     for (const s of e.inventory.state.slots)
       expect(e.room(s.branchId, s.roomId).rentalMode).toBe('SLOT')
   })
@@ -227,7 +224,6 @@ describe('Room and slot integrity', () => {
       e.db.listRooms({
         q: 'TD-NEW',
         area: '',
-        roomTypeId: '',
         mode: 'ALL',
         availableOnly: false,
         sort: 'recommended',

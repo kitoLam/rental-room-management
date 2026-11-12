@@ -7,8 +7,6 @@ import lombok.Setter;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
-import org.springframework.data.mongodb.core.mapping.FieldType;
 
 @Getter
 @Setter
@@ -18,11 +16,9 @@ import org.springframework.data.mongodb.core.mapping.FieldType;
 public class ReportRequestServiceItem extends BaseDocument {
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String reportRequestId;
 
     @Indexed
-    @Field(targetType = FieldType.OBJECT_ID)
     private String roomServiceId;
 
     private String note;

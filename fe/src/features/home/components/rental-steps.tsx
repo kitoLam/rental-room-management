@@ -15,7 +15,7 @@ export function RentalSteps() {
       // className="scroll-mt-24 border-y border-border bg-surface py-16 sm:py-20"
       className="scroll-mt-24 border-y border-border bg-surface-soft py-16 sm:py-20"
     >
-      <Container>
+      <Container wide>
         <h2 id="steps-title" className="text-xl font-bold">
           Thuê phòng trong 4 bước
         </h2>

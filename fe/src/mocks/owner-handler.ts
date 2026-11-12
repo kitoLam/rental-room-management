@@ -4,6 +4,7 @@ import type { User } from '@/interfaces/domain'
 import { ownerDb as o } from './owner-engine'
 import { MockError } from './database'
 import { paymentViews } from './manager-finance'
+import { handleOwnerProperties } from './owner-properties-handler'
 const ok = (data: unknown, status = 200) =>
   HttpResponse.json({ status, code: 0, message: 'Thành công', data }, { status })
 function page<T>(rows: T[], params: URLSearchParams, empty: boolean) {
@@ -26,6 +27,7 @@ export async function handleOwner(request: Request, actor: User, empty = false) 
     method = request.method,
     params = url.searchParams
   const payload = () => request.json()
+  if (path === '/properties' || path.startsWith('/properties/')) return handleOwnerProperties(request, actor)
   if (path === '/verification') {
     if (method === 'GET') return ok(o.verification(actor))
     if (method === 'POST') return ok(o.submitVerification(actor, await payload()), 201)
@@ -93,7 +95,7 @@ export async function handleOwner(request: Request, actor: User, empty = false) 
     if (child === 'qr' && method === 'PUT') return ok(o.saveQr(actor, id, await payload()))
     if (child === 'assignment' && method === 'PUT') {
       const data = z
-        .object({ managerId: z.guid().nullable(), version: z.number().int(), reason: z.string() })
+        .object({ managerId: z.uuid().nullable(), version: z.number().int(), reason: z.string() })
         .strict()
         .parse(await payload())
       return ok(o.assign(actor, id, data.managerId, data.version, data.reason))

@@ -44,7 +44,7 @@ export function AuthLayout() {
                         Về trang chủ
                     </Link>
                 </div>
-                <div className="m-auto w-full max-w-md py-12">
+                <div className="m-auto w-full max-w-lg md:max-w-xl py-10 sm:py-14">
                     <Outlet/>
                 </div>
                 <p className="text-center text-xs text-muted-foreground">

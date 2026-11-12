@@ -6,16 +6,198 @@ import type { Feature } from './config'
 export function realApiIssue(feature: Feature, path: string, method = 'GET'): string | null {
   const pathname = path.split('?')[0]
   const verb = method.toUpperCase()
-  const id = '[0-9a-fA-F-]{36}'
+  const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'admin' && pathname === '/api/v1/admin/dashboard' && verb === 'GET') return null
+  if (feature === 'tenant' && verb === 'GET' && ['/api/v1/dashboard/tenant', '/api/v1/dashboard/tenant/tenancies'].includes(pathname)) return null
+  if ((feature === 'manager' || feature === 'owner') && ['/api/v1/dashboard/management', '/api/v1/dashboard/reports'].includes(pathname) && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && (matches(`/api/v1/branches(/${id})?`) || pathname === '/api/v1/branches/managed') && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && matches(`/api/v1/payments(/${id})?`) && verb === 'GET') return null
+  if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
+  if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
+  // Đăng ký / ngừng dịch vụ (BE module servicerequest).
+  if (
+    feature === 'utilities' &&
+    ((verb === 'GET' &&
+      (matches('/api/v1/service-requests(/tenancy|/catalog|/mine)?') ||
+        matches('/api/v1/service-requests/[0-9a-fA-F]{24}'))) ||
+      (verb === 'POST' &&
+        (matches('/api/v1/service-requests/(registrations|terminations)') ||
+          matches(
+            '/api/v1/service-requests/[0-9a-fA-F]{24}/(cancellation|approval|rejection|installation-confirmation|termination-confirmation)',
+          ))))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    ((pathname === '/api/v1/appointments/notifications' && verb === 'GET') ||
+      (matches('/api/v1/appointments/notifications/([0-9a-f]{64}/read|read-all)') &&
+        verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    ((pathname === '/api/v1/appointments' && ['GET', 'POST'].includes(verb)) ||
+      (matches('/api/v1/appointments/[0-9a-fA-F]{24}(/history)?') && verb === 'GET') ||
+      (matches(
+        '/api/v1/appointments/[0-9a-fA-F]{24}/(approval|rejection|cancellation|completion|no-show|result-corrections)',
+      ) &&
+        verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    matches('/api/v1/shifts/branches/[0-9a-fA-F]{24}') &&
+    ['GET', 'PATCH'].includes(verb)
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    ((matches('/api/v1/shifts/rooms/[0-9a-fA-F]{24}') && ['GET', 'PUT'].includes(verb)) ||
+      (matches('/api/v1/shifts/rooms/[0-9a-fA-F]{24}/availability') && verb === 'GET'))
+  )
+    return null
+  if (
+    feature === 'viewing' &&
+    verb === 'GET' &&
+    (pathname === '/api/v1/appointments/context' ||
+      matches('/api/v1/appointments/rooms/[0-9a-fA-F]{24}/eligibility'))
+  )
+    return null
+  if (
+    feature === 'auth' &&
+    ((pathname === '/api/v1/auth/signup' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/login' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/setup-password' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/me' && ['GET', 'PATCH'].includes(verb)) ||
+      (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
+  )
+    return null
+  if (
+    (feature === 'manager' || feature === 'owner') &&
+    ((pathname === '/api/v1/branches/managed' && verb === 'GET') ||
+      (pathname === '/api/v1/tenants' && ['GET', 'POST'].includes(verb)) ||
+      (pathname === '/api/v1/tenants/stats' && verb === 'GET') ||
+      (matches(`/api/v1/tenants/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/tenants/${id}/branch-status`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/role`) && verb === 'PATCH') ||
+      (matches(`/api/v1/tenants/${id}/resend-verification`) && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'owner' &&
+    ((matches('/api/owner/properties') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/owner/properties/${id}`) && ['GET', 'PUT'].includes(verb)) ||
+      (matches(`/api/owner/properties/${id}/rooms`) && ['GET', 'POST'].includes(verb)))
+  )
+    return null
 
-  if (feature === 'auth' && verb === 'POST' &&
-      matches('/api/auth/(login|register|verify-email|refresh|logout)')) return null
+  if (feature === 'catalog' && verb === 'GET' && (matches(`/api/v1/public/rooms(/${id})?`) ||
+      matches(`/api/v1/public/branches(/${id})?`) ||
+      pathname === '/api/v1/public/room-types' ||
+      pathname === '/api/v1/public/services'))
+    return null
 
-  if (feature === 'catalog' && verb === 'GET' &&
-      matches(`/api/v1/public/rooms(/${id})?`)) return null
+  if (
+    feature === 'leasing' &&
+    ((pathname === '/api/v1/room-slots' && verb === 'GET') ||
+      (matches('/api/v1/bookings') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
+      (matches('/api/v1/bookings/availability(/batch)?') && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/(cancel|terms|payments)`) && ['POST', 'GET'].includes(verb)) ||
+      (matches(`/api/v1/bookings/${id}/payments/${id}/(reconcile)`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'leasing' &&
+    ((matches('/api/v1/contracts') && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/services`) && verb === 'PATCH') ||
+      (matches(`/api/v1/contracts/${id}/evidence`) && verb === 'POST'))
+  )
+    return null
+
+  if (
+    feature === 'manager' &&
+    ((matches('/api/v1/(rooms|room-types)') && verb === 'GET') ||
+      (matches('/api/v1/bookings') && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/payments`) && verb === 'GET') ||
+      (matches(`/api/v1/bookings/${id}/payments/${id}/reconcile`) && verb === 'POST') ||
+      (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST') ||
+      (matches('/api/v1/contracts') && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST') ||
+      (matches(`/api/v1/contracts/${id}/evidence/review`) && verb === 'POST') ||
+      (matches('/api/v1/contract-tenants') && ['GET', 'POST'].includes(verb)) ||
+      (matches('/api/v1/contract-tenants/eligible') && verb === 'GET') ||
+      (matches(`/api/v1/contract-tenants/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)))
+  )
+    return null
+
+  // Chỉ số điện từng phòng theo tháng.
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/meter-readings/board' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings' && verb === 'PUT') ||
+      (matches(`/api/v1/meter-readings/${id}/(confirm|reopen)`) && verb === 'POST'))
+  )
+    return null
+  // Danh mục dịch vụ theo phòng / tự chọn + yêu cầu dịch vụ tự chọn.
+  if (
+    feature === 'manager' &&
+    ((matches('/api/v1/(room-services|slot-services)') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/(room-services|slot-services)/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (pathname === '/api/v1/slot-service-requests' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/(approve|reject)`) && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
+      (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
+      (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
+  )
+    return null
+  if (feature === 'catalog' && verb === 'GET' && matches(`/api/v1/public/branches/${id}/(room-services|slot-services)`))
+    return null
+
+  // Hoá đơn hàng tháng theo hợp đồng (BE module invoice) + thanh toán VNPay.
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/invoices/my' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && verb === 'GET') ||
+      (pathname === '/api/v1/contracts' && verb === 'GET') ||
+      (pathname === '/api/v1/vnpay/create-payment' && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/invoices' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/invoices/${id}/issue`) && verb === 'PATCH') ||
+      (matches(`/api/v1/invoices/contracts/${id}`) && verb === 'POST') ||
+      (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
+  )
+    return null
+  if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')
+    return null
 
   if (feature === 'adminUsers') {
+    if (
+      (pathname === '/api/v1/admin/users' && verb === 'GET') ||
+      (pathname === '/api/v1/admin/roles' && verb === 'GET') ||
+      (matches(`/api/v1/admin/users/${id}/role`) && verb === 'PATCH')
+    )
+      return null
     if (pathname === '/api/users' && ['GET', 'POST'].includes(verb)) return null
     if (matches(`/api/users/${id}`) && verb === 'GET') return null
     if (matches(`/api/users/${id}/active-status`) && verb === 'PATCH') return null
@@ -25,6 +207,50 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     if (verb === 'GET' && matches(`/api/notifications(/unread-count|/${id})?`)) return null
     if (verb === 'PUT' && matches('/api/notifications/(mark-read|mark-all-read)')) return null
   }
+
+  if (feature === 'utilities') {
+    if (
+      verb === 'GET' &&
+      (matches(`/api/branches/${id}/services`) ||
+        matches(`/api/services/${id}`) ||
+        matches(`/api/rooms/${id}/services`) ||
+        matches(`/api/branches/${id}/room-services`) ||
+        matches(`/api/room-services/${id}`) ||
+        matches(`/api/contracts/${id}/services`) ||
+        matches('/api/contract-services'))
+    )
+      return null
+    if (
+      verb === 'POST' &&
+      (matches(`/api/branches/${id}/services`) ||
+        matches(`/api/branches/${id}/room-services`) ||
+        matches('/api/contract-services/register'))
+    )
+      return null
+    if (verb === 'DELETE' && matches(`/api/services/${id}`)) return null
+    if (
+      verb === 'PUT' &&
+      (matches(`/api/services/${id}`) ||
+        matches(`/api/room-services/${id}`) ||
+        matches(`/api/contract-services/${id}/cancel`) ||
+        matches(`/api/contract-services/${id}/process`))
+    )
+      return null
+  }
+
+  if (
+    (feature === 'tenant' || feature === 'manager' || feature === 'owner' || feature === 'admin') &&
+    ((matches('/api/v1/report-requests') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/report-requests/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(
+        `/api/v1/report-requests/${id}/(start|assign|request-info|supplement|reject|progress|resolve|confirm-close|reopen|cancel)`,
+      ) &&
+        verb === 'POST') ||
+      (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/report-records/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/report-records/by-report/${id}`) && verb === 'GET'))
+  )
+    return null
 
   return 'Chức năng này hiện chưa khả dụng. Vui lòng thử lại khi có thông báo cập nhật.'
 }

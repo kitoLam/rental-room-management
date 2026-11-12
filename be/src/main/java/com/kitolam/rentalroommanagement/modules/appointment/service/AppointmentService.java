@@ -1,21 +1,77 @@
 package com.kitolam.rentalroommanagement.modules.appointment.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentCreateRequest;
 import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentFilterRequest;
-import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentUpdateRequest;
+import com.kitolam.rentalroommanagement.modules.appointment.dto.request.AppointmentActionRequest;
 import com.kitolam.rentalroommanagement.modules.appointment.dto.response.AppointmentResponse;
+import com.kitolam.rentalroommanagement.modules.appointment.dto.response.ViewingContextResponse;
+import com.kitolam.rentalroommanagement.modules.appointment.dto.response.ViewingEligibilityResponse;
+import com.kitolam.rentalroommanagement.modules.appointment.dto.response.ViewingAvailabilityResponse;
+import com.kitolam.rentalroommanagement.modules.shift.dto.request.ShiftUpdateRequest;
+import com.kitolam.rentalroommanagement.modules.shift.dto.response.ShiftResponse;
+import com.kitolam.rentalroommanagement.modules.shift.dto.request.ShiftBulkUpdateRequest;
+import com.kitolam.rentalroommanagement.modules.shift.dto.response.BranchShiftResponse;
+import com.kitolam.rentalroommanagement.modules.shift.dto.response.ShiftBulkUpdateResponse;
+
+import java.time.LocalDate;
+
 import org.springframework.data.domain.Pageable;
 
-public interface AppointmentService {
 
-    AppointmentResponse create(AppointmentCreateRequest request);
+public interface AppointmentService {
+    PagedResponse<com.kitolam.rentalroommanagement.modules.notification.dto.response.NotificationResponse> notifications(Boolean read, Pageable pageable);
+
+    com.kitolam.rentalroommanagement.modules.notification.dto.response.NotificationResponse readNotification(String id);
+
+    long readAllNotifications();
+
+    PagedResponse<BranchShiftResponse> branchShiftConfigurations(String branchId, int page, int size);
+
+    ShiftBulkUpdateResponse updateBranchShifts(String branchId, ShiftBulkUpdateRequest request);
+
+    ShiftResponse shiftConfiguration(String roomId);
+
+    ShiftResponse updateShiftConfiguration(String roomId, ShiftUpdateRequest request);
+
+    ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date);
+    ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date, List<String> roomSlotIds);
+
+    ViewingContextResponse currentContext();
+
+    ViewingEligibilityResponse publicRoomEligibility(String roomId);
+
+    AppointmentResponse create(AppointmentCreateRequest request, String idempotencyKey);
 
     AppointmentResponse getById(String id);
 
     PagedResponse<AppointmentResponse> search(AppointmentFilterRequest filter, Pageable pageable);
 
-    AppointmentResponse update(String id, AppointmentUpdateRequest request);
+    AppointmentResponse approve(String id, AppointmentActionRequest.Approval request);
 
-    void delete(String id);
+    AppointmentResponse reject(String id, AppointmentActionRequest.Rejection request);
+
+    AppointmentResponse cancel(String id, AppointmentActionRequest.Cancellation request);
+
+    AppointmentResponse complete(String id, AppointmentActionRequest.Completion request);
+
+    AppointmentResponse noShow(String id, AppointmentActionRequest.NoShow request);
+
+    AppointmentResponse correctResult(String id, AppointmentActionRequest.Correction request);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewAppointment> readForOverview(List<String> ids);
+
+    record OverviewAppointment(String id, String roomId, java.time.LocalDate appointmentDate,
+                               java.time.Instant startAt, java.time.Instant endAt,
+                               com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType shiftType,
+                               com.kitolam.rentalroommanagement.modules.appointment.enums.AppointmentStatus status,
+                               String contactName, String contactPhone, java.time.Instant approvedAt,
+                               String approvedBy, String approvedByName) { }
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }

@@ -10,7 +10,12 @@ import { dateTime, referenceLink } from '@/lib/activity'
 import { useSession } from '@/features/auth/session-store'
 import { provider } from '@/services/config'
 import { SendNotificationDialog } from './send-notification-dialog'
+import ViewingNotificationsPage from '@/features/leasing/viewing-notifications-page'
 export default function NotificationsPage() {
+  if (provider('notifications') === 'real') return <ViewingNotificationsPage />
+  return <DemoNotificationsPage />
+}
+function DemoNotificationsPage() {
   const [params, setParams] = useSearchParams()
   const [sendOpen, setSendOpen] = useState(false)
   const user = useSession((s) => s.user)
@@ -47,6 +52,11 @@ export default function NotificationsPage() {
       description="Theo dõi phản hồi lịch xem phòng, giữ chỗ và trạng thái thanh toán."
       actions={
         <div className="flex flex-wrap gap-2">
+          {provider('viewing') === 'real' && (
+            <Button asChild variant="outline">
+              <Link to="/notifications/viewing">Thông báo lịch xem</Link>
+            </Button>
+          )}
           {canSend && (
             <Button onClick={() => setSendOpen(true)}>
               <Send size={16} />
@@ -99,9 +109,14 @@ export default function NotificationsPage() {
               ['TENANT_ALLOCATION', 'Phân bổ phí'],
               ['TENANT_MAINTENANCE', 'Bảo trì'],
               ['TENANT_BRANCH', 'Chi nhánh'],
-              ...(useSession.getState().user?.roles.includes('ADMIN') ? [['ADMIN_VERIFICATION','Xác minh chủ trọ'],['ADMIN_USER','Quản trị tài khoản']] : []),
-              ['OWNER_VERIFICATION','Kết quả xác minh chủ trọ'],
-              ['ACCOUNT_STATUS','Trạng thái tài khoản'],
+              ...(useSession.getState().user?.roles.includes('ADMIN')
+                ? [
+                    ['ADMIN_VERIFICATION', 'Xác minh chủ trọ'],
+                    ['ADMIN_USER', 'Quản trị tài khoản'],
+                  ]
+                : []),
+              ['OWNER_VERIFICATION', 'Kết quả xác minh chủ trọ'],
+              ['ACCOUNT_STATUS', 'Trạng thái tài khoản'],
             ].map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -130,7 +145,12 @@ export default function NotificationsPage() {
             <Panel>
               <ul className="divide-y divide-border">
                 {list.data.content.map((n) => {
-                  const to = referenceLink(n.referenceType, n.referenceId, n.contractTenantId,n.branchId)
+                  const to = referenceLink(
+                    n.referenceType,
+                    n.referenceId,
+                    n.contractTenantId,
+                    n.branchId,
+                  )
                   return (
                     <li key={n.id} className="flex gap-4 py-5 first:pt-0 last:pb-0">
                       <div

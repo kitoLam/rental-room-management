@@ -7,9 +7,12 @@ import { queryClient } from './services/query-client'
 import { recoverSession } from './services/http'
 import { useSession } from './features/auth/session-store'
 import './index.css'
+import { hasMocks } from './services/config'
 async function start() {
-  // Unregister the old demo worker so a previous installation cannot serve mock responses.
-  if ('serviceWorker' in navigator) {
+  if (hasMocks) {
+    const { worker } = await import('./mocks/browser')
+    await worker.start({ onUnhandledFrame: 'bypass' })
+  } else if ('serviceWorker' in navigator) {
     const controller = navigator.serviceWorker.controller
     const wasControlledByMock = controller &&
       new URL(controller.scriptURL).pathname.endsWith('/mockServiceWorker.js')
