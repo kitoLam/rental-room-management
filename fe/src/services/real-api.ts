@@ -142,7 +142,16 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')
+    return null
+
   if (feature === 'adminUsers') {
+    if (
+      (pathname === '/api/v1/admin/users' && verb === 'GET') ||
+      (pathname === '/api/v1/admin/roles' && verb === 'GET') ||
+      (matches(`/api/v1/admin/users/${id}/role`) && verb === 'PATCH')
+    )
+      return null
     if (pathname === '/api/users' && ['GET', 'POST'].includes(verb)) return null
     if (matches(`/api/users/${id}`) && verb === 'GET') return null
     if (matches(`/api/users/${id}/active-status`) && verb === 'PATCH') return null

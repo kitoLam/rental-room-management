@@ -225,6 +225,55 @@ export const managerApi = {
     resource: K,
     filters: Record<string, string> = {},
   ): Promise<Page<ManagerRecord<K>>> => {
+    if (resource === 'invoices' && filters.debtOnly === 'true' && provider('manager') === 'real') {
+      const query = new URLSearchParams({
+        branchId,
+        page: String(Number(filters.page || 0) + 1),
+        size: filters.size || '8',
+      })
+      if (filters.q) query.set('keyword', filters.q)
+      if (filters.roomId) query.set('roomId', filters.roomId)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.financialStatus === 'OVERDUE') query.set('overdueOnly', 'true')
+      const page = await request(
+        'manager',
+        `/api/v1/dashboard/debts?${query}`,
+        pageSchema(
+          z.object({
+            invoiceId: z.string(),
+            contractTenantId: z.string(),
+            tenantName: z.string(),
+            roomId: z.string(),
+            roomNumber: z.string().nullable(),
+            invoiceNumber: z.string().nullable(),
+            period: z.string().nullable(),
+            dueDate: z.string().nullable(),
+            totalAmount: z.number(),
+            remainingAmount: z.number(),
+            status: z.enum(['UNPAID', 'PARTIAL', 'OVERDUE']),
+            overdueDays: z.number().int().nonnegative(),
+          }),
+        ),
+      )
+      return {
+        ...page,
+        number: Math.max(0, page.number - 1),
+        content: page.content.map((d) => ({
+          id: d.invoiceId,
+          contractTenantId: d.contractTenantId,
+          tenantName: d.tenantName,
+          roomId: d.roomId,
+          roomName: d.roomNumber ? `Phòng ${d.roomNumber}` : '',
+          code: d.invoiceNumber ?? '',
+          billingMonth: d.period ?? '',
+          dueDate: d.dueDate ?? '',
+          totalAmount: d.totalAmount,
+          outstanding: d.remainingAmount,
+          financialStatus: d.status,
+          overdueDays: d.overdueDays,
+        })),
+      } as unknown as Page<ManagerRecord<K>>
+    }
     if (resource === 'bookings' && provider('manager') === 'real') {
       const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1, filters)
       return result as unknown as Page<ManagerRecord<K>>

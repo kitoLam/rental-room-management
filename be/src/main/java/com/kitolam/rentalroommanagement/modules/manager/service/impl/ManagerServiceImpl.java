@@ -36,6 +36,16 @@ public class ManagerServiceImpl implements ManagerService {
     }
 
     @Override
+    public void deactivateByEmail(String email) {
+        if (email == null) return;
+        var query = org.springframework.data.mongodb.core.query.Query.query(MongoQueryHelper.notDeleted()
+                .and("email").is(email));
+        overviewMongo.update(Manager.class).matching(query)
+                .apply(new org.springframework.data.mongodb.core.query.Update().set("status", "INACTIVE"))
+                .all();
+    }
+
+    @Override
     public ManagerResponse create(ManagerCreateRequest request) {
         // TODO: implement
         throw new UnsupportedOperationException("Not implemented yet");

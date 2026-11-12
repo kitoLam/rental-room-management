@@ -1,4 +1,4 @@
-import { dateOnly } from '@/lib/activity'
+import { dateOnly, vnDateKey } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { useState } from 'react'
 import {
@@ -10,6 +10,16 @@ import {
   SearchBox,
 } from './components'
 import { useManagerList } from './context'
+
+const DAY_MS = 86_400_000
+
+/** Backend value when present; otherwise derived from dueDate (mock data) in Vietnam time. */
+function overdueDays(invoice: { overdueDays?: number; dueDate: string; financialStatus: string }) {
+  if (invoice.overdueDays !== undefined) return invoice.overdueDays
+  if (invoice.financialStatus === 'PAID' || !invoice.dueDate) return 0
+  const diff = Date.parse(`${vnDateKey(new Date().toISOString())}T00:00:00Z`) - Date.parse(`${invoice.dueDate}T00:00:00Z`)
+  return Number.isNaN(diff) ? 0 : Math.max(0, Math.floor(diff / DAY_MS))
+}
 
 export function ManagerDebts() {
   const [q, setQ] = useState(''),
@@ -33,7 +43,7 @@ export function ManagerDebts() {
   return (
     <ManagerPage
       title="Công nợ cá nhân"
-      description="Số dư được tính từ hóa đơn, trả trước áp dụng và thanh toán đã xác minh."
+      description="Số dư được tính từ hóa đơn, trả trước áp dụng và thanh toán đã xác minh; hiển thị số ngày trễ hạn của từng khoản."
     >
       <ScopeFilters
         value={scope}
@@ -92,12 +102,23 @@ export function ManagerDebts() {
             label: 'Hạn / trạng thái',
             render: (i) => (
               <>
-                {dateOnly(i.dueDate)}
+                {i.dueDate ? dateOnly(i.dueDate) : 'Chưa có hạn'}
                 <p className="mt-2">
                   <ManagerStatus value={i.financialStatus} />
                 </p>
               </>
             ),
+          },
+          {
+            label: 'Thời gian trễ hạn',
+            render: (i) => {
+              const days = overdueDays(i)
+              return days > 0 ? (
+                <strong className="text-destructive">Trễ {days} ngày</strong>
+              ) : (
+                <span className="text-muted-foreground">Chưa quá hạn</span>
+              )
+            },
           },
         ]}
         empty="Không có công nợ phù hợp."

@@ -2,9 +2,11 @@ import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
 import { adminApi } from '@/services/admin'
+import { provider } from '@/services/config'
 import { useState } from 'react'
 import { AdminLink, AdminPage } from './components'
 import { useAdminQuery } from './context'
+import { RoleChangePanel } from './role-change-panel'
 
 export function AdminRoles() {
   const query = useAdminQuery('roles', adminApi.roles),
@@ -13,7 +15,7 @@ export function AdminRoles() {
   return (
     <AdminPage
       title="Vai trò & quyền truy cập"
-      description="Năm vai trò chính thức và phạm vi tài nguyên. Danh sách chỉ đọc."
+      description="Các vai trò chính thức, phạm vi tài nguyên và đổi vai trò người dùng."
     >
       <QueryState pending={query.isPending} error={query.error} retry={query.refetch}>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -32,6 +34,11 @@ export function AdminRoles() {
           ))}
         </div>
       </QueryState>
+      {provider('adminUsers') === 'real' ? (
+        <RoleChangePanel />
+      ) : (
+        <Notice>Đổi vai trò người dùng cần chế độ API thật (provider adminUsers = real).</Notice>
+      )}
       <Modal
         title={role?.name || 'Phạm vi vai trò'}
         open={!!role}
@@ -49,7 +56,7 @@ export function AdminRoles() {
               ]}
             />
             <AdminLink to={`/admin/users?role=${role.id}`}>Xem tài khoản có vai trò</AdminLink>
-            <Notice>Không cấp hoặc thu hồi vai trò tùy ý từ màn hình này.</Notice>
+            <Notice>Chỉ cho phép Người thuê → Chủ trọ và Quản lý → Người thuê.</Notice>
           </div>
         )}
       </Modal>

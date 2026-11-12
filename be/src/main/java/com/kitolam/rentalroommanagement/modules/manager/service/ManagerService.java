@@ -14,6 +14,9 @@ public interface ManagerService {
     String VIEWING_PERMISSION = "MANAGE_VIEWING_APPOINTMENTS";
     Optional<ManagerResponse> findAssignment(String email);
 
+    /** Marks every manager assignment of the account INACTIVE (used when an Admin demotes a Manager). */
+    void deactivateByEmail(String email);
+
     ManagerResponse create(ManagerCreateRequest request);
 
     ManagerResponse getById(String id);

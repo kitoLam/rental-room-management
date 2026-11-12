@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { pageSchema, userSchema } from '@/interfaces/domain'
 import {
   adminUserSchema,
+  backendAdminUserSchema,
+  backendAdminUsersSchema,
   springUsersSchema,
   reviewSchema,
   adminRoleSchema,
@@ -29,6 +31,25 @@ export const adminApi = {
           z.object({ user: userSchema, permissions: z.array(z.string()) }),
         ),
   users: async (params: Record<string, string>) => {
+    if (provider('adminUsers') === 'real') {
+      const query = new URLSearchParams({
+        page: String(Number(params.page || 0) + 1),
+        size: params.size || '8',
+      })
+      if (params.role) query.set('role', params.role)
+      if (params.q) query.set('keyword', params.q)
+      const raw = await request('adminUsers', `/api/v1/admin/users?${query}`, backendAdminUsersSchema)
+      return {
+        ...raw,
+        content: raw.content.map(
+          ({ role, createdAt, ...u }): z.infer<typeof adminUserSchema> => ({
+            ...u,
+            roles: [role],
+            createdAt: createdAt ?? '',
+          }),
+        ),
+      }
+    }
     const supported =
       provider('adminUsers') === 'real'
         ? { page: params.page || '0', size: params.size || '20' }
@@ -91,7 +112,18 @@ export const adminApi = {
       `/api/admin/owner-verifications/${encodeURIComponent(id)}/document`,
       z.object({ mime: z.literal('image/svg+xml'), content: z.string(), expiresAt: z.string() }),
     ),
-  roles: () => request('admin', '/api/admin/roles', z.array(adminRoleSchema)),
+  roles: () =>
+    provider('adminUsers') === 'real'
+      ? request('adminUsers', '/api/v1/admin/roles', z.array(adminRoleSchema))
+      : request('admin', '/api/admin/roles', z.array(adminRoleSchema)),
+  /** Tenant → Owner and Manager → Tenant only; the backend enforces the allowed transitions. */
+  changeRole: (id: string, role: 'OWNER' | 'TENANT') =>
+    request(
+      'adminUsers',
+      `/api/v1/admin/users/${encodeURIComponent(id)}/role`,
+      backendAdminUserSchema,
+      write('PATCH', { role }),
+    ),
   event: (id: string) =>
     request('admin', `/api/admin/activity/${encodeURIComponent(id)}`, auditSchema),
   reset: () => request('admin', '/api/admin/demo/reset', z.null(), write('POST', {})),

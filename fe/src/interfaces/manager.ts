@@ -260,6 +260,8 @@ export const managerInvoiceSchema = invoiceSchema.extend({
   tenantName: z.string(),
   roomName: z.string(),
   roomId: uuid,
+  /** Days past dueDate while outstanding (debt list from the backend); absent elsewhere. */
+  overdueDays: z.number().int().nonnegative().optional(),
 })
 export const invoiceInputSchema = z.object({
   contractTenantId: uuid,

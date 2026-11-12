@@ -33,5 +33,12 @@ public interface InvoiceService {
                          java.math.BigDecimal totalAmount, java.math.BigDecimal remainingAmount,
                          com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus status) { }
 
+    /** Issued invoices that still have an outstanding balance; tenancy IDs must already be authorized. */
+    List<DebtInvoice> readDebts(List<String> contractTenantIds);
+
+    record DebtInvoice(String id, String contractTenantId, String invoiceNumber, String period,
+                       java.time.LocalDate dueDate, java.math.BigDecimal totalAmount,
+                       java.math.BigDecimal remainingAmount) { }
+
     record OverviewInvoice(String id, String contractTenantId) { }
 }

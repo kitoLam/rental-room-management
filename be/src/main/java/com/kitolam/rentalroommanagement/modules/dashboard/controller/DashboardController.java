@@ -1,6 +1,9 @@
 package com.kitolam.rentalroommanagement.modules.dashboard.controller;
 
+import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.DebtItemResponse;
+import com.kitolam.rentalroommanagement.modules.dashboard.service.DebtOverviewService;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
@@ -32,6 +35,7 @@ public class DashboardController {
     private final DashboardService dashboardService;
     private final ManagementReportService managementReportService;
     private final TenantOverviewService tenantOverviewService;
+    private final DebtOverviewService debtOverviewService;
 
     @GetMapping("/tenant/tenancies")
     @PreAuthorize("hasRole('TENANT')")
@@ -54,6 +58,21 @@ public class DashboardController {
             @AuthenticationPrincipal AuthPrincipal principal,
             @Valid @ModelAttribute ManagementReportRequest request) {
         return StandardResponse.success(managementReportService.report(principal, request));
+    }
+
+    @GetMapping("/debts")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
+    public StandardResponse<PagedResponse<DebtItemResponse>> debts(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestParam(required = false) @ValidObjectId String branchId,
+            @RequestParam(required = false) @ValidObjectId String roomId,
+            @RequestParam(required = false) @ValidObjectId String contractTenantId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "false") boolean overdueOnly,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "8") int size) {
+        return StandardResponse.success(debtOverviewService.debts(principal, branchId, roomId, contractTenantId,
+                keyword, overdueOnly, page, size));
     }
 
     @GetMapping("/management")
