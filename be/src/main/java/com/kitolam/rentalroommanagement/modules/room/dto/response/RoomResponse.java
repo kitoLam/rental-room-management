@@ -18,6 +18,7 @@ public record RoomResponse(
         BigDecimal listedDepositAmount,
         List<String> amenities,
         List<String> images,
+        List<String> roomServiceIds,
         String rules,
         RoomStatus status,
         Instant createdAt,

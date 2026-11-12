@@ -40,6 +40,8 @@ public class PublicRoomService {
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
     private final RoomService roomService;
+    private final com.kitolam.rentalroommanagement.modules.roomservice.repository.RoomServiceRepository roomServiceRepository;
+    private final com.kitolam.rentalroommanagement.modules.roomservice.service.RoomServiceCatalogService roomServiceCatalog;
 
     public PagedResponse<PublicRoomResponse> search(
             String keyword,
@@ -279,6 +281,14 @@ public class PublicRoomService {
         return mongoTemplate.find(query, Room.class);
     }
 
+    private List<com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomServiceResponse> roomServices(Room room) {
+        if (room.getRoomServiceIds() == null || room.getRoomServiceIds().isEmpty()) return List.of();
+        return roomServiceRepository.findByIdInAndIsDeletedFalse(room.getRoomServiceIds()).stream()
+                .filter(s -> s.getStatus() == com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus.ACTIVE)
+                .map(roomServiceCatalog::toResponse)
+                .toList();
+    }
+
     private PublicRoomResponse toResponse(Room room, Branch branch, User owner, boolean includeRates) {
         PublicRoomResponse.PublicRoom publicRoom = new PublicRoomResponse.PublicRoom(
                 room.getId(),
@@ -303,7 +313,8 @@ public class PublicRoomService {
                 branch != null ? branch.getName() : "",
                 branch != null && branch.getAddress() != null ? branch.getAddress() : "",
                 owner != null ? owner.getFullName() : "",
-                includeRates ? roomService.publicUtilityRates(room.getId()) : null
+                includeRates ? roomService.publicUtilityRates(room.getId()) : null,
+                includeRates ? roomServices(room) : null
         );
     }
 

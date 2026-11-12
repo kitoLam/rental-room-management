@@ -80,16 +80,35 @@ public class RoomDataSeeder implements CommandLineRunner {
             log.warn("Room seed skipped: no ACTIVE branch found");
             return;
         }
+        List<String> roomServiceIds = mongoTemplate.find(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                        Criteria.where("branchId").is(MongoQueryHelper.toObjectId(target)),
+                        Criteria.where("status").is("ACTIVE"))),
+                com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService.class)
+                .stream().map(com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService::getId).toList();
         int created = 0;
         for (Sample sample : SAMPLES) {
-            if (exists(target, sample.number())) continue;
+            if (exists(target, sample.number())) {
+                attachServices(target, sample.number(), roomServiceIds);
+                continue;
+            }
             roomService.create(new RoomCreateRequest(target, sample.title(), sample.number(), sample.floor(),
                     BigDecimal.valueOf(sample.area()), sample.occupants(), BigDecimal.valueOf(sample.price()),
-                    BigDecimal.valueOf(sample.price()), sample.amenities(), sample.images(),
+                    BigDecimal.valueOf(sample.price()), sample.amenities(), sample.images(), roomServiceIds,
                     "Giữ yên lặng sau 22h. Không hút thuốc trong phòng. Khách ở lại qua đêm cần báo quản lý."), SYSTEM);
             created++;
         }
         log.info("Room seed: created {} rooms in branch {}", created, target);
+    }
+
+    /** Existing sample rooms without room services get every active service of the branch. */
+    private void attachServices(String branchId, String roomNumber, List<String> roomServiceIds) {
+        if (roomServiceIds.isEmpty()) return;
+        mongoTemplate.updateFirst(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                        Criteria.where("branchId").is(MongoQueryHelper.toObjectId(branchId)),
+                        Criteria.where("roomNumber").is(roomNumber),
+                        new Criteria().orOperator(Criteria.where("roomServiceIds").exists(false), Criteria.where("roomServiceIds").size(0)))),
+                new org.springframework.data.mongodb.core.query.Update().set("roomServiceIds",
+                        roomServiceIds.stream().map(MongoQueryHelper::toObjectId).toList()), Room.class);
     }
 
     private String oldestActiveBranch() {

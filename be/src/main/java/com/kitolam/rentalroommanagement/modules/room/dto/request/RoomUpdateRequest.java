@@ -22,6 +22,7 @@ public record RoomUpdateRequest(
         @PositiveOrZero BigDecimal listedDepositAmount,
         List<String> amenities,
         List<String> images,
+        List<@com.kitolam.rentalroommanagement.common.validation.ValidObjectId String> roomServiceIds,
         String rules,
         RoomStatus status
 ) {

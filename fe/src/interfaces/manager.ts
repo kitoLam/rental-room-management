@@ -35,6 +35,7 @@ export const roomInputSchema = z.object({
   floor: z.number().int().min(0).max(100).nullable(),
   price: vnd,
   deposit: vnd.nullable().optional(),
+  roomServiceIds: z.array(z.string()).optional(),
   description: z.string().max(3000),
   amenities: z.array(z.string().trim().min(1).max(80)).max(20),
   images: z.array(z.string().max(1400000)).max(6),

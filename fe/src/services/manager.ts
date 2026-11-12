@@ -31,6 +31,7 @@ const roomDto = z.object({
   listedDepositAmount: z.number().nullable(),
   amenities: z.array(z.string()).nullable(),
   images: z.array(z.string()).nullable(),
+  roomServiceIds: z.array(z.string()).nullish(),
   rules: z.string().nullable(),
   status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
 })
@@ -127,6 +128,7 @@ function roomView(r: z.infer<typeof roomDto>) {
     images,
     description: r.rules || '',
     amenities: r.amenities || [],
+    roomServiceIds: r.roomServiceIds || [],
     services: [],
   }
 }
@@ -155,6 +157,7 @@ function roomPayload(value: Record<string, unknown>, branchId: string) {
     rules: value.description,
     amenities: value.amenities,
     images: value.images,
+    roomServiceIds: value.roomServiceIds ?? [],
     status: value.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : value.operationalStatus,
   }
 }

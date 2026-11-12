@@ -24,6 +24,8 @@ public record RoomCreateRequest(
         @PositiveOrZero BigDecimal listedDepositAmount,
         List<String> amenities,
         List<String> images,
+        /** Ids from the branch's room service catalog (GET /api/v1/room-services?branchId=). */
+        List<@ValidObjectId String> roomServiceIds,
         String rules
 ) {
 }

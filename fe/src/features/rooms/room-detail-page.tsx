@@ -206,14 +206,14 @@ export default function RoomDetailPage() {
                   )}
                 </section>
                 <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
-                  <h2 className="mb-4 text-xl font-bold">Dịch vụ tham khảo</h2>
+                  <h2 className="mb-4 text-xl font-bold">Dịch vụ</h2>
                   {roomServices.isPending ? <p className="text-sm text-muted-foreground">Đang tải danh sách dịch vụ…</p>
                     : roomServices.error ? <InlineError error={roomServices.error} />
                       : roomServices.data?.length ? (
                     <>
                       <p className="mb-2 text-sm text-muted-foreground">
-                        Dịch vụ bắt buộc luôn được áp dụng. Tích chọn dịch vụ tùy chọn để cộng vào dự
-                        tính chi phí bên dưới; lựa chọn chỉ để tham khảo.
+                        Dịch vụ đi kèm phòng luôn được áp dụng. Dịch vụ tự chọn (gửi xe, giặt sấy...) bạn có
+                        thể tích để dự tính chi phí, và đăng ký sau khi hợp đồng có hiệu lực.
                       </p>
                       <RoomServicePicker
                         services={roomServices.data}

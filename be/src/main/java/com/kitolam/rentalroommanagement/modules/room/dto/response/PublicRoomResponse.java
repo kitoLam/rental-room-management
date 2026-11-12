@@ -10,7 +10,9 @@ public record PublicRoomResponse(
         String branchName,
         String address,
         String ownerName,
-        UtilityRatesResponse utilityRates
+        UtilityRatesResponse utilityRates,
+        /** Services that come with the room (detail only). */
+        List<com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomServiceResponse> roomServices
 ) {
 
     public record PublicRoom(

@@ -44,6 +44,20 @@ export const roomSchema = z.object({
   rentalMode: modeSchema,
   /** Listed deposit; present for rooms coming from the real API. */
   deposit: z.number().nullish(),
+  /** Ids of the room services (from the branch catalog) that come with the room. */
+  roomServiceIds: z.array(z.string()).optional(),
+  /** Room services with prices; public room detail only. */
+  roomServices: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        unit: z.string(),
+        unitPrice: z.number(),
+        calculationType: z.string().nullish(),
+      }),
+    )
+    .optional(),
   status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
   operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
   imageUrl: z.string(),

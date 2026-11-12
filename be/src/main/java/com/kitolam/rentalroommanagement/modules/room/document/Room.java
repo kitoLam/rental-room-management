@@ -51,6 +51,10 @@ public class Room extends BaseDocument {
 
     private List<String> images = new ArrayList<>();
 
+    /** Services from the branch's room service catalog that come with this room. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> roomServiceIds = new ArrayList<>();
+
     private String rules;
 
     private RoomStatus status = RoomStatus.AVAILABLE;

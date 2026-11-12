@@ -115,6 +115,17 @@ const publicRoomSchema = z.object({
   branchName: z.string(),
   address: z.string(),
   ownerName: z.string().nullish(),
+  roomServices: z
+    .array(
+      z.object({
+        id: databaseIdSchema,
+        name: z.string(),
+        unit: z.string(),
+        unitPrice: z.coerce.number(),
+        calculationType: z.string().nullish(),
+      }),
+    )
+    .nullish(),
 })
 type RealRoom = z.infer<typeof publicRoomSchema>
 function adaptRoom(data: RealRoom) {
@@ -158,6 +169,7 @@ function adaptRoom(data: RealRoom) {
     services: [],
     utilityRates: data.utilityRates,
     ownerName: data.ownerName || undefined,
+    roomServices: data.roomServices ?? undefined,
   })
 }
 export const defaultFilters: RoomFilters = {
@@ -232,21 +244,34 @@ export const catalogService = {
         calculationType: s.calculationType ?? 'FIXED',
         quantityRule: 'FIXED_ONE',
       }))
-    // Dịch vụ tự chọn của chi nhánh: khách chọn trước khi đặt, kích hoạt khi hợp đồng có hiệu lực.
+    // Dịch vụ theo phòng luôn áp dụng (bắt buộc); dịch vụ tự chọn của chi nhánh khách tích thêm,
+    // được kích hoạt khi hợp đồng có hiệu lực.
+    const included = (room.roomServices || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      unit: s.unit,
+      price: s.unitPrice,
+      mandatory: true,
+      calculationType: s.calculationType === 'PER_PERSON' ? 'PER_PERSON' : 'FIXED',
+      quantityRule: s.calculationType === 'PER_PERSON' ? ('PER_SLOT' as const) : ('FIXED_ONE' as const),
+    }))
     const items = await request(
       'catalog',
       `/api/v1/public/branches/${encodeURIComponent(room.branchId)}/slot-services`,
       z.array(publicServiceSchema),
     )
-    return items.map((s) => ({
-      id: s.id,
-      name: s.name,
-      unit: s.unit,
-      price: s.unitPrice,
-      mandatory: false,
-      calculationType: 'FIXED',
-      quantityRule: 'USER_INPUT',
-    }))
+    return [
+      ...included,
+      ...items.map((s) => ({
+        id: s.id,
+        name: s.name,
+        unit: s.unit,
+        price: s.unitPrice,
+        mandatory: false,
+        calculationType: 'FIXED',
+        quantityRule: 'USER_INPUT' as const,
+      })),
+    ]
   },
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }

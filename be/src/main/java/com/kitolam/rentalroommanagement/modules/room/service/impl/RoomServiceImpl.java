@@ -98,6 +98,7 @@ public class RoomServiceImpl implements RoomService {
         room.setAmenities(request.amenities() == null ? new ArrayList<>() : new ArrayList<>(request.amenities()));
         room.setImages(request.images() == null ? new ArrayList<>() : new ArrayList<>(request.images()));
         room.setRules(request.rules());
+        room.setRoomServiceIds(validRoomServices(request.branchId(), request.roomServiceIds()));
         ensureUniqueNumber(room);
         Room saved = roomRepository.save(room);
         syncSlots(saved);
@@ -136,6 +137,7 @@ public class RoomServiceImpl implements RoomService {
         if (request.amenities() != null) room.setAmenities(new ArrayList<>(request.amenities()));
         if (request.images() != null) room.setImages(new ArrayList<>(request.images()));
         if (request.rules() != null) room.setRules(request.rules());
+        if (request.roomServiceIds() != null) room.setRoomServiceIds(validRoomServices(room.getBranchId(), request.roomServiceIds()));
         if (request.status() != null) room.setStatus(request.status());
         ensureUniqueNumber(room);
         syncSlots(room);
@@ -191,6 +193,19 @@ public class RoomServiceImpl implements RoomService {
             slot.setStatus(RoomSlotStatus.AVAILABLE);
             roomSlotRepository.save(slot);
         }
+    }
+
+    /** Every id must be a live entry of the same branch's room service catalog. */
+    private List<String> validRoomServices(String branchId, List<String> ids) {
+        if (ids == null || ids.isEmpty()) return new ArrayList<>();
+        List<String> distinct = ids.stream().distinct().toList();
+        long found = mongo.count(new org.springframework.data.mongodb.core.query.Query(new Criteria().andOperator(
+                MongoQueryHelper.notDeleted(),
+                Criteria.where("_id").in(distinct.stream().map(MongoQueryHelper::toObjectId).toList()),
+                Criteria.where("branchId").is(MongoQueryHelper.toObjectId(branchId)))),
+                com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService.class);
+        if (found != distinct.size()) throw new BadRequestException("Có dịch vụ phòng không thuộc chi nhánh hoặc đã bị xoá");
+        return new ArrayList<>(distinct);
     }
 
     private Set<String> heldSlotIds(List<RoomSlot> slots) {

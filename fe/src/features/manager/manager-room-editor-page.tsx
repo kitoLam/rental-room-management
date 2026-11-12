@@ -8,6 +8,7 @@ import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ImagePicker, ManagerForm, ManagerLink, ManagerPage, type FieldSpec } from './components'
+import { RoomServiceSelect } from './room-service-select'
 import {
   managerLink,
   useManager,
@@ -25,6 +26,7 @@ export function ManagerRoomEditor() {
       [roomId],
     ),
     [images, setImages] = useState<string[] | null>(null),
+    [serviceIds, setServiceIds] = useState<string[] | null>(null),
     [preview, setPreview] = useState<Record<string, unknown> | null>(null),
     mutation = useManagerAction((result) => {
       setPreview(null)
@@ -114,12 +116,21 @@ export function ManagerRoomEditor() {
                 ...value,
                 title: value.title || `Phòng ${value.code}`,
                 images: images || query.data?.images || [],
+                roomServiceIds: serviceIds ?? query.data?.roomServiceIds ?? [],
               })
             }
             pending={mutation.isPending}
             error={mutation.error}
             submitLabel="Xem trước"
           >
+            {provider('manager') === 'real' && (
+              <RoomServiceSelect
+                branchId={branch.id}
+                value={serviceIds ?? query.data?.roomServiceIds ?? []}
+                onChange={setServiceIds}
+                disabled={mutation.isPending}
+              />
+            )}
             <ImagePicker
               value={images || query.data?.images || []}
               onChange={setImages}
@@ -143,6 +154,9 @@ export function ManagerRoomEditor() {
                 ['Chi nhánh', branch.name],
                 ['Số phòng', String(preview.code)],
                 ['Sức chứa', `${Number(preview.capacity)} người`],
+                ...(provider('manager') === 'real'
+                  ? [['Dịch vụ đi kèm', `${(preview.roomServiceIds as string[] | undefined)?.length ?? 0} dịch vụ`] as [string, string]]
+                  : []),
                 ...(provider('manager') === 'mock' ? [['Hình thức', preview.rentalMode === 'SLOT' ? 'Thuê chỗ' : 'Nguyên phòng'] as [string, string]] : []),
                 ['Giá tham khảo', formatVnd(Number(preview.price))],
               ]}
