@@ -43,6 +43,10 @@ app:
       enabled: ${AUTH_SEED_ENABLED:false}
     services:
       enabled: ${SERVICE_SEED_ENABLED:false}
+    rooms:
+      enabled: ${ROOM_SEED_ENABLED:false}
+      # Empty = oldest ACTIVE branch
+      branch-id: ${ROOM_SEED_BRANCH_ID:}
   security:
     jwt-secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:rental-room-management}

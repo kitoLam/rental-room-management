@@ -8,7 +8,6 @@ import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
 public interface RoomMapper {
-    UtilityRatesResponse toUtilityRates(Room room);
     UtilityRatesResponse toUtilityRates(BranchResponse branch);
     RoomResponse toResponse(Room room);
 }

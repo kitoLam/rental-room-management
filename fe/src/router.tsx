@@ -69,22 +69,21 @@ const managementRoutes: RouteObject[] = [
     }),
   },
   {
-    path: 'room-types',
+    path: 'meter-readings',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-room-types-page')).ManagerRoomTypes,
-    }),
-  },
-  {
-    path: 'services',
-    lazy: async () => ({
-      Component: (await import('@/features/manager/manager-services-page')).ManagerServices,
+      Component: (await import('@/features/manager/manager-meter-readings-page')).ManagerMeterReadings,
     }),
   },
   {
     path: 'room-services',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-room-services-page'))
-        .ManagerRoomServices,
+      Component: (await import('@/features/manager/manager-service-catalog-page')).ManagerRoomServiceCatalog,
+    }),
+  },
+  {
+    path: 'slot-services',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/manager-service-catalog-page')).ManagerSlotServiceCatalog,
     }),
   },
   {
@@ -150,8 +149,8 @@ const managementRoutes: RouteObject[] = [
   {
     path: 'service-requests',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-service-requests-page'))
-        .ManagerServiceRequests,
+      Component: (await import('@/features/manager/manager-slot-service-requests-page'))
+        .ManagerSlotServiceRequests,
     }),
   },
   {
@@ -239,6 +238,12 @@ const managementRoutes: RouteObject[] = [
     path: 'debts',
     lazy: async () => ({
       Component: (await import('@/features/manager/manager-debts-page')).ManagerDebts,
+    }),
+  },
+  {
+    path: 'billing',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/manager-billing-page')).ManagerBilling,
     }),
   },
 ]
@@ -586,6 +591,13 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                path: 'my-room/invoices/:invoiceId',
+                lazy: async () => ({
+                  Component: (await import('@/features/tenant/monthly-invoice-detail-page'))
+                    .MonthlyInvoiceDetailPage,
+                }),
+              },
+              {
                 path: 'contracts',
                 lazy: async () => ({
                   Component: (await import('@/features/tenant/contracts-page')).ContractsPage,
@@ -626,7 +638,7 @@ export const router = createBrowserRouter([
               {
                 path: 'services',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/services-page')).ServicesPage,
+                  Component: (await import('@/features/tenant/slot-services-page')).SlotServicesPage,
                 }),
               },
               {
@@ -710,6 +722,18 @@ export const router = createBrowserRouter([
                 path: 'profile',
                 lazy: async () => ({
                   Component: (await import('@/features/user/profile-page')).default,
+                }),
+              },
+              {
+                path: 'user/payments',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/my-payments-page')).default,
+                }),
+              },
+              {
+                path: 'user/contracts',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/my-contracts-page')).default,
                 }),
               },
               {

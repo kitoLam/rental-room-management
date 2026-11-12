@@ -33,8 +33,8 @@ import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.service.RoomSlotOccupancyService;
-import com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus;
-import com.kitolam.rentalroommanagement.modules.servicerequest.service.ServiceRequestService;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.service.SlotServiceRequestService;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService.OverviewTenant;
 import java.math.BigDecimal;
@@ -63,7 +63,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final ContractTenantService tenancies;
     private final BookingService bookings;
     private final AppointmentService appointments;
-    private final ServiceRequestService serviceRequests;
+    private final SlotServiceRequestService serviceRequests;
     private final ReportRequestService reports;
     private final ReportRecordService reportRecords;
     private final TenantService tenants;
@@ -221,7 +221,8 @@ public class DashboardServiceImpl implements DashboardService {
         }
         contractList.stream().filter(c -> c.status() == ContractStatus.DRAFT && c.evidenceSubmittedAt() != null)
                 .forEach(c -> increment(workByBranch, roomById.get(c.roomId()), 2));
-        serviceList.stream().filter(s -> s.status() == ServiceRequestStatus.PENDING || s.status() == ServiceRequestStatus.APPROVED)
+        // Optional-service requests still waiting for a manager decision.
+        serviceList.stream().filter(s -> s.status() == SlotServiceRequestStatus.PENDING)
                 .forEach(s -> increment(workByBranch, roomById.get(s.roomId()), 3));
         reportList.stream().filter(r -> r.status() == ReportRequestStatus.PENDING || r.status() == ReportRequestStatus.IN_PROGRESS)
                 .forEach(r -> increment(workByBranch, roomById.get(r.roomId()), 4));

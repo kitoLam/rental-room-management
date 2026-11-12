@@ -19,6 +19,7 @@ import {
   Plug,
   Droplets,
   ReceiptText,
+  CalendarRange,
   Wallet,
   CircleDollarSign,
   Armchair,
@@ -39,7 +40,6 @@ const groups = [
     label: 'Phòng & người thuê',
     items: [
       ['rooms', 'Phòng', House],
-      ['room-types', 'Loại phòng', House],
       ['tenants', 'Quản lý tài khoản', Users],
     ],
   },
@@ -54,16 +54,17 @@ const groups = [
   {
     label: 'Dịch vụ & vận hành',
     items: [
-      ['services', 'Dịch vụ', Plug],
-      ['room-services', 'Dịch vụ phòng', Plug],
+      ['room-services', 'Dịch vụ theo phòng', Plug],
+      ['slot-services', 'Dịch vụ tự chọn', Plug],
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
-      ['utility-charges', 'Điện nước', Droplets],
+      ['meter-readings', 'Chỉ số điện', Droplets],
       ['maintenance', 'Yêu cầu hỗ trợ', Wrench],
     ],
   },
   {
     label: 'Tài chính',
     items: [
+      ['billing', 'Billing theo tháng', CalendarRange],
       ['invoices', 'Hóa đơn', ReceiptText],
       ['payments', 'Thanh toán', Wallet],
       ['debts', 'Công nợ', CircleDollarSign],

@@ -11,20 +11,17 @@ export function ManagerRooms() {
     [mode, setMode] = useState(''),
     [status, setStatus] = useState(''),
     [availability, setAvailability] = useState(''),
-    [type, setType] = useState(''),
     [price, setPrice] = useState(''),
     [minPrice, setMinPrice] = useState(''),
     [from, setFrom] = useState(''),
     [to, setTo] = useState(''),
     [capacity, setCapacity] = useState(''),
-    types = useManagerList('room-types', { size: '100' }),
     query = useManagerList('rooms', {
       q,
       page: String(page - 1),
       rentalMode: mode,
       operationalStatus: status,
       availability,
-      roomTypeId: type,
       maxPrice: price,
       minPrice,
       startDate: from,
@@ -43,15 +40,13 @@ export function ManagerRooms() {
       }
     >
       <div className="flex flex-wrap gap-3">
-        {provider('manager') === 'mock' && (
-          <SearchBox
-            value={q}
-            onChange={(v) => {
-              setQ(v)
-              setPage(1)
-            }}
-          />
-        )}
+        <SearchBox
+          value={q}
+          onChange={(v) => {
+            setQ(v)
+            setPage(1)
+          }}
+        />
         {provider('manager') === 'mock' && (
           <select
             aria-label="Hình thức thuê"
@@ -67,22 +62,6 @@ export function ManagerRooms() {
             <option value="SLOT">Thuê chỗ</option>
           </select>
         )}
-        <select
-          aria-label="Loại phòng"
-          className="input w-auto max-w-full"
-          value={type}
-          onChange={(e) => {
-            setType(e.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">Tất cả loại phòng</option>
-          {types.data?.content.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
         <select
           aria-label="Trạng thái vận hành"
           className="input w-auto"
@@ -192,7 +171,7 @@ export function ManagerRooms() {
                   <ManagerLink to={`/manager/rooms/${r.id}`}>{r.code}</ManagerLink>
                   <p className="break-words text-xs text-muted-foreground">{r.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {r.roomTypeName} · Tầng {r.floor} · {r.sizeM2} m²
+                    Tầng {r.floor ?? '—'} · {r.sizeM2 ?? '—'} m² · {r.capacity} chỗ
                   </p>
                 </div>
               </div>

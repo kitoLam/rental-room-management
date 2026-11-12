@@ -33,11 +33,12 @@ const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
   ['/tenant/appointments', 'Lịch xem', CalendarDays],
   ['/tenant/bookings', 'Giữ phòng', KeyRound],
-  ['/tenant/my-room', 'Chỗ ở của tôi', House],
-  ['/tenant/contracts', 'Hợp đồng', FileText],
+  ['/tenant/my-room', 'Phòng của tôi', House],
+  // Per-slot contracts: submit the signed copy of each one (account page, no tenancy needed).
+  ['/user/contracts', 'Hợp đồng', FileText],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
-  ['/tenant/payments', 'Thanh toán', Wallet],
-  ['/tenant/services', 'Dịch vụ', Plug],
+  ['/user/payments', 'Thanh toán', Wallet],
+  ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Điện & nước', Droplets],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
   ['/notifications', 'Thông báo', Bell],
@@ -47,6 +48,8 @@ const accountPages = [
   '/tenant/dashboard',
   '/tenant/appointments',
   '/tenant/bookings',
+  '/user/contracts',
+  '/user/payments',
   '/profile',
   '/notifications',
 ]
@@ -184,9 +187,9 @@ export function TenantLayout() {
                 <Notice>
                   {requested
                     ? 'Không tìm thấy quan hệ thuê thuộc tài khoản trong liên kết này.'
-                    : 'Mục này cần hợp đồng thuê. Bạn có thể tiếp tục theo dõi lịch xem và giữ phòng.'}{' '}
-                  <Link to="/tenant/dashboard" className="font-semibold underline">
-                    Về Tổng quan
+                    : 'Mục này cần hợp đồng thuê đã được duyệt. Nộp bản ký ở mục Hợp đồng; quản lý duyệt xong bạn dùng được mục này.'}{' '}
+                  <Link to="/user/contracts" className="font-semibold underline">
+                    Mở hợp đồng
                   </Link>
                 </Notice>
               )}

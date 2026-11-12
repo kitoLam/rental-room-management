@@ -28,8 +28,8 @@ import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.service.RoomSlotOccupancyService;
-import com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus;
-import com.kitolam.rentalroommanagement.modules.servicerequest.service.ServiceRequestService;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.service.SlotServiceRequestService;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService;
 import java.math.BigDecimal;
 import java.time.*;
@@ -59,7 +59,7 @@ class DashboardServiceTest {
     @Mock ContractTenantService tenancies;
     @Mock BookingService bookings;
     @Mock AppointmentService appointments;
-    @Mock ServiceRequestService serviceRequests;
+    @Mock SlotServiceRequestService serviceRequests;
     @Mock ReportRequestService reports;
     @Mock TenantService tenants;
     @Mock ManagerService managers;
@@ -126,7 +126,7 @@ class DashboardServiceTest {
                         com.kitolam.rentalroommanagement.modules.shift.enums.ShiftType.MORNING,
                         AppointmentStatus.PENDING, null, null, null, null, null)));
         when(serviceRequests.readForOverview(anyList())).thenReturn(List.of(
-                new ServiceRequestService.OverviewServiceRequest(ROOM, ServiceRequestStatus.APPROVED)));
+                new SlotServiceRequestService.OverviewServiceRequest(ROOM, SlotServiceRequestStatus.PENDING, null, null, null, null)));
         when(reports.readForOverview(anyList())).thenReturn(List.of(
                 new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.PENDING),
                 new ReportRequestService.OverviewReport(ROOM, ReportRequestStatus.WAITING_INFO),
@@ -168,8 +168,8 @@ class DashboardServiceTest {
         when(bookings.readForOverview(anyList())).thenReturn(List.of(new BookingService.OverviewBooking(
                 "booking", "tenant", SLOT, List.of(SLOT), null, null, null, null, null, BookingStatus.REJECTED)));
         when(contracts.readForOverview(anyList())).thenReturn(List.of(activeContract("contract", "tenant", LocalDate.of(2026, 12, 1))));
-        when(serviceRequests.readForOverview(anyList())).thenReturn(List.of(new ServiceRequestService.OverviewServiceRequest(
-                ROOM, ServiceRequestStatus.REJECTED, "service", "Người thuê", "Gửi xe", "S01")));
+        when(serviceRequests.readForOverview(anyList())).thenReturn(List.of(new SlotServiceRequestService.OverviewServiceRequest(
+                ROOM, SlotServiceRequestStatus.REJECTED, "service", "Người thuê", "Gửi xe", "S01")));
         when(reports.readForOverview(anyList())).thenReturn(List.of(new ReportRequestService.OverviewReport(
                 ROOM, ReportRequestStatus.RESOLVED, "report", "Sửa vòi nước", "tenant")));
         when(appointments.readActivitiesForOverview(anyList(), any(), any())).thenReturn(List.of(

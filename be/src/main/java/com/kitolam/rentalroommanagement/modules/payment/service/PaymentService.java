@@ -25,6 +25,10 @@ public interface PaymentService {
     PaymentResponse update(String id, PaymentUpdateRequest request);
 
     void delete(String id);
+
+    /** Payments of the logged-in tenant's bookings, newest first. */
+    java.util.List<com.kitolam.rentalroommanagement.modules.payment.dto.response.MyPaymentResponse> mine(
+            com.kitolam.rentalroommanagement.common.security.AuthPrincipal principal);
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewPayment> readForOverview(List<String> ids, java.time.Instant from, java.time.Instant to);
 

@@ -21,11 +21,9 @@ import com.kitolam.rentalroommanagement.modules.payment.service.PaymentService;
 import com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportRequestStatus;
 import com.kitolam.rentalroommanagement.modules.reportrequest.service.ReportRequestService;
 import com.kitolam.rentalroommanagement.modules.room.service.RoomService;
-import com.kitolam.rentalroommanagement.modules.roomservice.service.RoomServiceService;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService;
-import com.kitolam.rentalroommanagement.modules.servicerequest.enums.ServiceRequestStatus;
-import com.kitolam.rentalroommanagement.modules.servicerequest.service.ServiceRequestService;
-import com.kitolam.rentalroommanagement.modules.slotservice.service.SlotServiceService;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.service.SlotServiceRequestService;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService;
 import java.time.*;
 import java.util.*;
@@ -50,9 +48,8 @@ public class TenantOverviewServiceImpl implements TenantOverviewService {
     private final InvoiceService invoices;
     private final PaymentService payments;
     private final ReportRequestService support;
-    private final ServiceRequestService serviceRequests;
-    private final RoomServiceService roomServices;
-    private final SlotServiceService slotServices;
+    private final SlotServiceRequestService serviceRequests;
+    private final com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository contractRepository;
     private final NotificationService notifications;
     private final Clock clock;
 
@@ -143,14 +140,18 @@ public class TenantOverviewServiceImpl implements TenantOverviewService {
                 && r.status() != ReportRequestStatus.CANCELLED && r.status() != ReportRequestStatus.REJECTED).count();
         var recentSupport = requests.stream().sorted(Comparator.comparing(ReportRequestService.TenantSupport::updatedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())).thenComparing(ReportRequestService.TenantSupport::id)).limit(3).toList();
-        long pendingServices = serviceRequests.readForTenantOverview(principal.userId(), selected.contractId()).stream()
-                .filter(r -> r.status() == ServiceRequestStatus.PENDING || r.status() == ServiceRequestStatus.APPROVED).count();
+        long pendingServices = serviceRequests.statusesForContract(selected.contractId()).stream()
+                .filter(status -> status == SlotServiceRequestStatus.PENDING).count();
         Long activeServices = null;
         if ("ACTIVE".equals(selected.status())) {
-            long count = roomServices.listActiveByRoom(selected.roomId()).stream()
-                    .filter(s -> covers(s.startDate(), s.endDate(), today)).count();
-            for (String slotId : selected.roomSlotIds()) count += slotServices.listActiveBySlot(slotId).stream()
-                    .filter(s -> covers(s.startDate(), s.endDate(), today)).count();
+            // Services in use = services that come with the room + optional services active on the contract today.
+            var room = rooms.getById(selected.roomId());
+            var roomServiceIds = room == null ? null : room.roomServiceIds();
+            long count = roomServiceIds == null ? 0 : roomServiceIds.size();
+            count += contractRepository.findByIdAndIsDeletedFalse(selected.contractId())
+                    .map(c -> c.getActiveSlotServices() == null ? 0L : c.getActiveSlotServices().stream()
+                            .filter(s -> s.isActiveOn(today)).count())
+                    .orElse(0L);
             activeServices = count;
         }
         var lastPayment = payments.readForReports(bills.stream().map(TenantInvoice::id).toList(), Instant.EPOCH, now.plusNanos(1))

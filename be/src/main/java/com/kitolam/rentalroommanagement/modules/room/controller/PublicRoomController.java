@@ -5,7 +5,6 @@ import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.modules.branch.dto.response.BranchResponse;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.PublicRoomResponse;
 import com.kitolam.rentalroommanagement.modules.room.service.PublicRoomService;
-import com.kitolam.rentalroommanagement.modules.roomtype.dto.response.RoomTypeResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,7 +28,7 @@ public class PublicRoomController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String branchId,
-            @RequestParam(required = false) String roomTypeId,
+            @RequestParam(required = false) Integer minCapacity,
             @RequestParam(required = false) String address,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -41,7 +40,7 @@ public class PublicRoomController {
     ) {
         String effectiveKeyword = StringUtils.hasText(keyword) ? keyword : q;
         return StandardResponse.success(publicRoomService.search(
-                effectiveKeyword, branchId, roomTypeId, address, minPrice, maxPrice, minArea, maxArea, page, size, sort
+                effectiveKeyword, branchId, minCapacity, address, minPrice, maxPrice, minArea, maxArea, page, size, sort
         ));
     }
 
@@ -50,10 +49,6 @@ public class PublicRoomController {
         return StandardResponse.success(publicRoomService.getById(id));
     }
 
-    @GetMapping("/room-types")
-    public StandardResponse<List<RoomTypeResponse>> getRoomTypes() {
-        return StandardResponse.success(publicRoomService.getPublicRoomTypes());
-    }
 
     @GetMapping("/branches")
     public StandardResponse<List<BranchResponse>> getBranches() {

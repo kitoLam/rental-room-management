@@ -1,4 +1,5 @@
 import { Panel, QueryState } from '@/components/common/page'
+import { RoomServiceList } from './room-service-select'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
 import { formatVnd } from '@/lib/format'
@@ -31,7 +32,9 @@ export function ManagerRoomDetail() {
                   <h2 className="text-xl font-bold">
                     {query.data.code} · {query.data.title}
                   </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">{query.data.roomTypeName}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Sức chứa {query.data.capacity} người · {query.data.capacity} chỗ ở
+                  </p>
                 </div>
                 {provider('manager') === 'mock' && (
                   <ManagerStatus value={query.data.availability || 'UNKNOWN'} />
@@ -50,6 +53,12 @@ export function ManagerRoomDetail() {
               <p className="mt-5 text-sm leading-7 text-muted-foreground">
                 {query.data.description}
               </p>
+              {provider('manager') === 'real' && (
+                <div className="mt-6">
+                  <h3 className="mb-2 text-sm font-bold">Dịch vụ đi kèm phòng</h3>
+                  <RoomServiceList branchId={query.data.branchId} ids={query.data.roomServiceIds || []} />
+                </div>
+              )}
               <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
                 <Link className="inline-flex min-h-11 items-center text-sm font-bold text-primary" to={`/rooms/${roomId}/viewing-settings`}>Cấu hình ca xem phòng</Link>
                 <ManagerLink to={`/manager/rooms/${roomId}/edit`}>Chỉnh sửa</ManagerLink>
@@ -58,9 +67,6 @@ export function ManagerRoomDetail() {
                 )}
                 <ManagerLink to="/manager/tenants" params={{ roomId }}>
                   Người thuê / lịch sử
-                </ManagerLink>
-                <ManagerLink to="/manager/room-services" params={{ roomId }}>
-                  Cấu hình dịch vụ
                 </ManagerLink>
                 <Button variant="ghost" className="text-danger" onClick={() => setDeleting(true)}>
                   Xóa khi đủ điều kiện

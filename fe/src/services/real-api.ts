@@ -142,6 +142,53 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  // Chỉ số điện từng phòng theo tháng.
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/meter-readings/board' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings' && verb === 'PUT') ||
+      (matches(`/api/v1/meter-readings/${id}/(confirm|reopen)`) && verb === 'POST'))
+  )
+    return null
+  // Danh mục dịch vụ theo phòng / tự chọn + yêu cầu dịch vụ tự chọn.
+  if (
+    feature === 'manager' &&
+    ((matches('/api/v1/(room-services|slot-services)') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/(room-services|slot-services)/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (pathname === '/api/v1/slot-service-requests' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/(approve|reject)`) && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
+      (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
+      (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
+  )
+    return null
+  if (feature === 'catalog' && verb === 'GET' && matches(`/api/v1/public/branches/${id}/(room-services|slot-services)`))
+    return null
+
+  // Hoá đơn hàng tháng theo hợp đồng (BE module invoice) + thanh toán VNPay.
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/invoices/my' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && verb === 'GET') ||
+      (pathname === '/api/v1/contracts' && verb === 'GET') ||
+      (pathname === '/api/v1/vnpay/create-payment' && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/invoices' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/invoices/${id}/issue`) && verb === 'PATCH') ||
+      (matches(`/api/v1/invoices/contracts/${id}`) && verb === 'POST') ||
+      (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
+  )
+    return null
   if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')
     return null
 

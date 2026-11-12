@@ -18,11 +18,10 @@ import com.kitolam.rentalroommanagement.modules.reportrequest.enums.ReportReques
 import com.kitolam.rentalroommanagement.modules.reportrequest.service.ReportRequestService;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomResponse;
 import com.kitolam.rentalroommanagement.modules.room.service.RoomService;
-import com.kitolam.rentalroommanagement.modules.roomservice.service.RoomServiceService;
 import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.RoomSlotService;
-import com.kitolam.rentalroommanagement.modules.servicerequest.service.ServiceRequestService;
-import com.kitolam.rentalroommanagement.modules.slotservice.service.SlotServiceService;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.service.SlotServiceRequestService;
+import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.service.TenantService;
 import java.math.BigDecimal;
 import java.time.*;
@@ -51,15 +50,14 @@ class TenantOverviewServiceTest {
     @Mock InvoiceService invoices;
     @Mock PaymentService payments;
     @Mock ReportRequestService support;
-    @Mock ServiceRequestService serviceRequests;
-    @Mock RoomServiceService roomServices;
-    @Mock SlotServiceService slotServices;
+    @Mock SlotServiceRequestService serviceRequests;
+    @Mock ContractRepository contractRepository;
     @Mock NotificationService notifications;
     TenantOverviewServiceImpl service;
 
     @BeforeEach void setup() {
         service = new TenantOverviewServiceImpl(tenants, contracts, tenancies, rooms, slots, branches, invoices,
-                payments, support, serviceRequests, roomServices, slotServices, notifications, Clock.fixed(NOW, ZoneOffset.UTC));
+                payments, support, serviceRequests, contractRepository, notifications, Clock.fixed(NOW, ZoneOffset.UTC));
     }
     void scope(boolean representative, List<String> assigned, LocalDate joinedAt) {
         when(tenants.profileIdByEmail(TENANT.email())).thenReturn(Optional.of("profile"));
@@ -92,7 +90,7 @@ class TenantOverviewServiceTest {
         when(tenants.profileIdByEmail(TENANT.email())).thenReturn(Optional.empty()); inbox();
         var result = service.overview(TENANT, null);
         assertNull(result.tenancy()); assertNull(result.unpaidInvoiceCount());
-        verifyNoInteractions(invoices, payments, support, roomServices, slotServices);
+        verifyNoInteractions(invoices, payments, support, contractRepository);
     }
     @Test void rejectsForeignTenancyBeforeReadingMoneyOrNotifications() {
         scope(false, List.of("own-slot"), LocalDate.of(2026, 11, 1));
@@ -130,8 +128,8 @@ class TenantOverviewServiceTest {
         assertEquals(1L, result.unpaidInvoiceCount()); assertEquals(new BigDecimal("100"), result.nextDueAmount());
         assertEquals(LocalDate.of(2026, 11, 14), result.nextDueDate());
         assertEquals(2, result.needsResponseCount()); assertEquals(2, result.openSupportCount());
-        verify(slotServices).listActiveBySlot("own-slot"); verify(slotServices, never()).listActiveBySlot("other-slot");
-        verify(serviceRequests).readForTenantOverview("account", "contract");
+        verify(contractRepository).findByIdAndIsDeletedFalse("contract");
+        verify(serviceRequests).statusesForContract("contract");
     }
     @Test void missingBalanceIsUnknownRatherThanZeroDebt() {
         scope(false, List.of("own-slot"), LocalDate.of(2026, 11, 1)); inbox();

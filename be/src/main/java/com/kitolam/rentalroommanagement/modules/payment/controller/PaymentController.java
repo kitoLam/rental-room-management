@@ -43,6 +43,14 @@ public class PaymentController {
         return StandardResponse.success("Tạo thanh toán thành công", paymentService.create(request));
     }
 
+    @GetMapping("/mine")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('TENANT')")
+    @Operation(summary = "Thanh toán của người thuê đang đăng nhập")
+    public StandardResponse<java.util.List<com.kitolam.rentalroommanagement.modules.payment.dto.response.MyPaymentResponse>> mine(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.kitolam.rentalroommanagement.common.security.AuthPrincipal principal) {
+        return StandardResponse.success(paymentService.mine(principal));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Lấy thanh toán theo id")
     public StandardResponse<PaymentResponse> getById(@PathVariable String id) {

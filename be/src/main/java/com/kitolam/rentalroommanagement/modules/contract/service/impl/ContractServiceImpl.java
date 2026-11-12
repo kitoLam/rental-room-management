@@ -117,7 +117,9 @@ public class ContractServiceImpl implements ContractService {
         if (occupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
                 .noneMatch(item -> item.getRoomSlotId().equals(slot.getId()) && item.getStatus() == OccupancyStatus.RESERVED))
             throw new ConflictException("Booking không còn reservation đang hoạt động");
-        var existing = contractRepository.findByBookingIdAndIsDeletedFalse(bookingId).orElse(null);
+        var existing = contractRepository.findAllByBookingIdAndIsDeletedFalse(bookingId).stream()
+                .filter(item -> slot.getId().equals(item.getRoomSlotId()))
+                .findFirst().orElse(null);
         if (existing != null) {
             if (existing.getStatus() == ContractStatus.DRAFT) return response(existing);
             throw new ConflictException("Booking đã có hợp đồng");
@@ -173,8 +175,9 @@ public class ContractServiceImpl implements ContractService {
         if (claimed == null) {
             contract.markDeleted();
             contractRepository.save(contract);
-            return contractRepository.findByBookingIdAndIsDeletedFalse(bookingId)
+            return contractRepository.findAllByBookingIdAndIsDeletedFalse(bookingId).stream()
                     .filter(current -> current.getStatus() == ContractStatus.DRAFT)
+                    .findFirst()
                     .map(this::response)
                     .orElseThrow(() -> new ConflictException("Booking vừa được cập nhật; vui lòng tải lại"));
         }
@@ -221,7 +224,8 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Đã quá hạn check-in của booking");
         if (contract.getServices() != null && contract.getServices().stream().anyMatch(s -> s.isMandatory() && !s.isSelected()))
             throw new ConflictException("Hợp đồng chưa có đủ dịch vụ bắt buộc");
-        ContractTenant contractTenant = contractTenantRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
+        ContractTenant contractTenant = contractTenantRepository.findByContractIdAndIsDeletedFalse(contract.getId()).stream()
+                .findFirst()
                 .orElseGet(() -> {
                     ContractTenant created = new ContractTenant();
                     created.setContractId(contract.getId());
@@ -243,11 +247,9 @@ public class ContractServiceImpl implements ContractService {
         occupancyRepository.save(occupancy);
         contract.setSignedFileUrl(request.signedFileUrl().trim());
         contract.setStatus(ContractStatus.ACTIVE);
+        activateBookedServices(contract, booking.getExpectedMoveInDate());
         Contract saved = contractRepository.save(contract);
-        booking.setStatus(BookingStatus.CONVERTED);
-        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
-        booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.CONVERTED.name(), clock.instant(), "Đã bàn giao phòng và lưu hợp đồng đã ký giấy."));
-        bookingRepository.save(booking);
+        convertBookingWhenAllActive(booking, "Đã bàn giao phòng và lưu hợp đồng đã ký giấy.");
         refreshRoomStatus(room);
         eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(),
                 booking.getStatus(), booking.getDepositStatus(), "Bàn giao phòng hoàn tất."));
@@ -321,7 +323,8 @@ public class ContractServiceImpl implements ContractService {
         contract.setSignedFileUrl(contract.getSignedEvidenceUrl());
         contract.setStatus(ContractStatus.ACTIVE);
         addEvidenceHistory(contract, "APPROVED", clock.instant(), null);
-        ContractTenant contractTenant = contractTenantRepository.findByBookingIdAndIsDeletedFalse(booking.getId())
+        ContractTenant contractTenant = contractTenantRepository.findByContractIdAndIsDeletedFalse(contract.getId()).stream()
+                .findFirst()
                 .orElseGet(() -> {
                     ContractTenant created = new ContractTenant();
                     created.setContractId(contract.getId());
@@ -335,8 +338,11 @@ public class ContractServiceImpl implements ContractService {
                     created.setStatus(ContractTenantStatus.ACTIVE);
                     return contractTenantRepository.save(created);
                 });
+        // Only the slot(s) of this contract; the other contracts of the booking keep their reservation.
         List<RoomSlotOccupancy> reservations = occupancyRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
-                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED).toList();
+                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED)
+                .filter(item -> contract.getRoomSlotIds().contains(item.getRoomSlotId()))
+                .toList();
         if (reservations.size() != contract.getRoomSlotIds().size())
             throw new ConflictException("Không tìm thấy đủ slot đang được giữ bởi booking");
         reservations.forEach(item -> {
@@ -347,15 +353,44 @@ public class ContractServiceImpl implements ContractService {
             occupancyRepository.save(item);
         });
         contract.setMaxOccupants(contract.getRoomSlotIds().size());
+        activateBookedServices(contract, effectiveDate);
         Contract saved = contractRepository.save(contract);
-        booking.setStatus(BookingStatus.CONVERTED);
-        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
-        booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.CONVERTED.name(), clock.instant(), "Manager đã duyệt bằng chứng hợp đồng."));
-        bookingRepository.save(booking);
+        convertBookingWhenAllActive(booking, "Manager đã duyệt bằng chứng hợp đồng " + contract.getContractNumber() + ".");
         refreshRoomStatus(room(contract.getRoomId()));
         eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(), booking.getStatus(),
                 booking.getDepositStatus(), "Bằng chứng hợp đồng đã được duyệt; tenancy đã kích hoạt."));
         return response(saved);
+    }
+
+    /** Booking becomes CONVERTED only when every one of its (non-terminated) contracts is ACTIVE. */
+    private void convertBookingWhenAllActive(Booking booking, String note) {
+        List<Contract> contracts = contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId());
+        boolean allActive = contracts.stream()
+                .filter(item -> item.getStatus() != ContractStatus.TERMINATED)
+                .allMatch(item -> item.getStatus() == ContractStatus.ACTIVE);
+        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
+        if (allActive) booking.setStatus(BookingStatus.CONVERTED);
+        booking.getTimeline().add(new BookingTimelineEntry(booking.getStatus().name(), clock.instant(), note));
+        bookingRepository.save(booking);
+    }
+
+    /** Optional services picked while booking start being used on the day the contract takes effect. */
+    private void activateBookedServices(Contract contract, LocalDate startDate) {
+        if (contract.getServices() == null || startDate == null) return;
+        if (contract.getActiveSlotServices() == null) contract.setActiveSlotServices(new ArrayList<>());
+        contract.getServices().stream()
+                .filter(service -> service.isSelected() && !service.isMandatory())
+                .filter(service -> contract.getActiveSlotServices().stream().noneMatch(a -> a.getSlotServiceId().equals(service.getServiceId())))
+                .forEach(service -> {
+                    var active = new com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService();
+                    active.setSlotServiceId(service.getServiceId());
+                    active.setName(service.getName());
+                    active.setUnit(service.getUnit());
+                    active.setUnitPrice(service.getUnitPrice());
+                    active.setQuantity(service.getQuantity() == null ? 1 : service.getQuantity());
+                    active.setStartDate(startDate);
+                    contract.getActiveSlotServices().add(active);
+                });
     }
 
     private void expireEvidenceContract(Contract contract) {
@@ -363,19 +398,29 @@ public class ContractServiceImpl implements ContractService {
         addEvidenceHistory(contract, "EXPIRED", clock.instant(), "Hạn nộp bằng chứng hợp đồng đã hết.");
         contract.setStatus(ContractStatus.TERMINATED);
         contract.setTerminatedAt(clock.instant());
-        contract.setTerminationReason("Quá hạn nộp bằng chứng hợp đồng; booking hết hiệu lực và tiền cọc chờ hoàn.");
+        contract.setTerminationReason("Quá hạn nộp bằng chứng hợp đồng; slot được trả lại và tiền cọc của slot chờ hoàn.");
         contract.setEvidenceDeadline(null);
         contractRepository.save(contract);
-        booking.setStatus(BookingStatus.EXPIRED);
-        booking.setDepositStatus(DepositStatus.PAID);
-        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
-        booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.EXPIRED.name(), clock.instant(), contract.getTerminationReason()));
-        bookingRepository.save(booking);
+        // Release only this contract's slot; the booking expires once none of its contracts is left.
         occupancyRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
-                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED).forEach(item -> {
+                .filter(item -> item.getStatus() == OccupancyStatus.RESERVED)
+                .filter(item -> contract.getRoomSlotIds().contains(item.getRoomSlotId()))
+                .forEach(item -> {
                     item.setStatus(OccupancyStatus.ENDED);
                     occupancyRepository.save(item);
                 });
+        boolean allTerminated = contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId()).stream()
+                .allMatch(item -> item.getStatus() == ContractStatus.TERMINATED);
+        if (booking.getTimeline() == null) booking.setTimeline(new ArrayList<>());
+        if (allTerminated) {
+            booking.setStatus(BookingStatus.EXPIRED);
+            booking.setDepositStatus(DepositStatus.PAID);
+            booking.getTimeline().add(new BookingTimelineEntry(BookingStatus.EXPIRED.name(), clock.instant(), contract.getTerminationReason()));
+        } else {
+            booking.getTimeline().add(new BookingTimelineEntry(booking.getStatus().name(), clock.instant(),
+                    "Hợp đồng " + contract.getContractNumber() + " hết hạn nộp bằng chứng; các hợp đồng khác vẫn tiếp tục."));
+        }
+        bookingRepository.save(booking);
         eventPublisher.publishEvent(new BookingStatusChangedEvent(booking.getId(), booking.getTenantId(), booking.getStatus(),
                 booking.getDepositStatus(), "Hạn nộp bằng chứng hợp đồng đã hết; cần xử lý hoàn cọc."));
     }
@@ -564,7 +609,9 @@ public class ContractServiceImpl implements ContractService {
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
                 c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getContractUrl(),
-                c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(), c.getCreatedAt(), c.getUpdatedAt());
+                c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(),
+                c.getActiveSlotServices() == null ? List.of() : List.copyOf(c.getActiveSlotServices()),
+                c.getCreatedAt(), c.getUpdatedAt());
     }
 
     @Override

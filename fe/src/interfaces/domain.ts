@@ -46,8 +46,22 @@ export const roomSchema = z.object({
   capacity: z.number(),
   availableSlots: z.number().nullable(),
   rentalMode: modeSchema,
-  roomTypeId: databaseIdSchema,
-  roomTypeName: z.string(),
+  /** Listed deposit; present for rooms coming from the real API. */
+  deposit: z.number().nullish(),
+  /** Ids of the room services (from the branch catalog) that come with the room. */
+  roomServiceIds: z.array(z.string()).optional(),
+  /** Room services with prices; public room detail only. */
+  roomServices: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        unit: z.string(),
+        unitPrice: z.number(),
+        calculationType: z.string().nullish(),
+      }),
+    )
+    .optional(),
   status: z.enum(['AVAILABLE', 'HELD', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE', 'UNKNOWN']),
   operationalStatus: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']),
   imageUrl: z.string(),
@@ -192,6 +206,8 @@ export const bookingSchema = z.object({
   createdAt: z.string(),
   timeline: timelineSchema,
   contractId: databaseIdSchema.nullable(),
+  /** One contract per booked slot (real API). */
+  contractIds: z.array(databaseIdSchema).optional(),
   selectedServices: z.array(z.object({
     serviceId: databaseIdSchema,
     name: z.string(),
@@ -262,7 +278,6 @@ export type RoomFilters = {
   minArea?: number
   maxArea?: number
   mode: 'ALL' | RentalMode
-  roomTypeId: string
   minCapacity?: number
   availableOnly: boolean
   sort: string

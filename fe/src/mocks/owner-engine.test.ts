@@ -332,7 +332,6 @@ describe('Owner branches and assignment integrity', () => {
           q: '',
           area: '',
           mode: 'ALL',
-          roomTypeId: '',
           sort: 'recommended',
           page: 0,
           availableOnly: false,

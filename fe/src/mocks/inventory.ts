@@ -24,10 +24,6 @@ export function seedInventory(): InventoryState {
       active: true,
     })),
   )
-  for (const room of rooms)
-    room.roomTypeId = types.find(
-      (t) => t.branchId === room.branchId && t.name === room.roomTypeName,
-    )!.id
   const slots: ManagerSlot[] = rooms.flatMap((r, index) =>
     r.rentalMode === 'SLOT'
       ? Array.from({ length: r.capacity }, (_, n) => ({
@@ -48,10 +44,6 @@ export class MockInventory {
   state: InventoryState
   constructor(state?: InventoryState) {
     this.state = state || seedInventory()
-    for(const room of this.state.rooms){
-      const type=this.state.types.find(t=>t.id===room.roomTypeId)
-      if(type&&type.branchId!==room.branchId){let local=this.state.types.find(t=>t.branchId===room.branchId&&t.name===type.name);if(!local){local={...type,id:crypto.randomUUID(),branchId:room.branchId};this.state.types.push(local)}room.roomTypeId=local.id}
-    }
   }
   save() {
     if (typeof sessionStorage !== 'undefined')

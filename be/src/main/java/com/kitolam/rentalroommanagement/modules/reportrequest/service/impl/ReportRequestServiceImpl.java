@@ -990,9 +990,6 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             if (contract != null && StringUtils.hasText(contract.getManagerId())) {
                 return contract.getManagerId();
             }
-            if (room != null && StringUtils.hasText(room.getManagerId())) {
-                return room.getManagerId();
-            }
             if (room != null && StringUtils.hasText(room.getBranchId()) && org.bson.types.ObjectId.isValid(room.getBranchId())) {
                 Query q = new Query(Criteria.where("branchId").is(new org.bson.types.ObjectId(room.getBranchId()))
                         .and("status").is(ManagerStatus.ACTIVE.name())

@@ -450,7 +450,7 @@ export class TenantEngine {
       images: room.images,
       area: room.sizeM2 || 25,
       floor: room.floor || 2,
-      roomType: room.roomTypeName,
+      roomType: `Sức chứa ${room.capacity} người`,
       amenities: room.amenities,
       rules: ['Yên tĩnh sau 22 giờ', 'Không hút thuốc trong phòng', 'Giữ sạch khu vực chung'],
       manager: { name: 'Bộ phận quản lý chi nhánh', phone: '0900000999' },
