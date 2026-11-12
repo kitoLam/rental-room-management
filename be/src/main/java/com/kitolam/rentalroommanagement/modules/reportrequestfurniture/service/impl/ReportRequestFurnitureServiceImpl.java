@@ -27,6 +27,7 @@ public class ReportRequestFurnitureServiceImpl implements ReportRequestFurniture
     private final ReportRequestFurnitureRepository reportRequestFurnitureRepository;
     private final MongoTemplate mongoTemplate;
 
+    /** Tạo mới bản ghi liên kết món nội thất trong phòng vào phiếu yêu cầu hỗ trợ. */
     @Override
     public ReportRequestFurnitureResponse create(ReportRequestFurnitureCreateRequest request) {
         ReportRequestFurniture entity = new ReportRequestFurniture();
@@ -38,6 +39,7 @@ public class ReportRequestFurnitureServiceImpl implements ReportRequestFurniture
         return ReportRequestFurnitureResponse.from(saved);
     }
 
+    /** Lấy chi tiết một bản ghi liên kết nội thất trong yêu cầu hỗ trợ theo ID. */
     @Override
     public ReportRequestFurnitureResponse getById(String id) {
         ReportRequestFurniture entity = reportRequestFurnitureRepository.findByIdAndIsDeletedFalse(id)
@@ -45,6 +47,7 @@ public class ReportRequestFurnitureServiceImpl implements ReportRequestFurniture
         return ReportRequestFurnitureResponse.from(entity);
     }
 
+    /** Tìm kiếm và phân trang danh sách liên kết nội thất theo reportRequestId hoặc furnitureId. */
     @Override
     public PagedResponse<ReportRequestFurnitureResponse> search(ReportRequestFurnitureFilterRequest filter, Pageable pageable) {
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
@@ -57,6 +60,7 @@ public class ReportRequestFurnitureServiceImpl implements ReportRequestFurniture
         return PagedResponse.from(page.map(ReportRequestFurnitureResponse::from));
     }
 
+    /** Cập nhật mô tả sự cố (issueDescription) của món nội thất gắn trong yêu cầu hỗ trợ. */
     @Override
     public ReportRequestFurnitureResponse update(String id, ReportRequestFurnitureUpdateRequest request) {
         ReportRequestFurniture entity = reportRequestFurnitureRepository.findByIdAndIsDeletedFalse(id)
@@ -70,6 +74,7 @@ public class ReportRequestFurnitureServiceImpl implements ReportRequestFurniture
         return ReportRequestFurnitureResponse.from(updated);
     }
 
+    /** Xóa mềm bản ghi liên kết nội thất khỏi yêu cầu hỗ trợ theo ID. */
     @Override
     public void delete(String id) {
         ReportRequestFurniture entity = reportRequestFurnitureRepository.findByIdAndIsDeletedFalse(id)

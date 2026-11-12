@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:10MB}
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:50MB}
   application:
     name: rental-room-management
   mail:
@@ -38,6 +42,12 @@ server:
   forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
 
 app:
+  cloudinary:
+    cloud-name: ${CLOUD_NAME:}
+    api-key: ${CLOUD_API_KEY:}
+    api-secret: ${CLOUD_SECRET_KEY:}
+    # Default folder for uploads (a request may pass a sub folder)
+    folder: ${CLOUD_FOLDER:rental-room-management}
   seed:
     auth:
       enabled: ${AUTH_SEED_ENABLED:false}

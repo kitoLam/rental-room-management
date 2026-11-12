@@ -258,6 +258,7 @@ export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
   id: z.string(),
   contractTenantId: z.string(),
+  roomId: z.string().nullable().optional(),
   roomName: z.string().nullable().optional(),
   assetName: z.string(),
   status: z.enum([

@@ -38,6 +38,7 @@ function adaptReportRequest(item: ReportRequestItem, tenancyId?: string): Mainte
   return {
     id: item.id,
     contractTenantId: tenancyId || item.tenantId,
+    roomId: item.roomId,
     roomName: item.roomName ? (item.slotName ? `${item.roomName} - ${item.slotName}` : item.roomName) : null,
     assetId: item.roomId,
     category: item.type as any,
@@ -206,7 +207,7 @@ export const tenantApi = {
         totalElements: z.number(),
         totalPages: z.number(),
       })
-      const page = await request('tenant', `/api/v1/payments?page=1&size=100`, backendPayments)
+      const page = await request('tenant', `/api/v1/payments?page=1&size=1000`, backendPayments)
       return page.content.map((p) => tenantPaymentSchema.parse({
         id: p.id,
         contractTenantId: p.contractTenantId || (/^[0-9a-fA-F]{24}$|^[0-9a-fA-F-]{36}$/.test(id) ? id : p.id),
@@ -362,9 +363,15 @@ export const tenantApi = {
     }
     return request('tenant', path(id, 'allocations'), proposalSchema, write('POST', value))
   },
-  reports: async (id: string): Promise<MaintenanceReport[]> => {
+  reports: async (id: string, roomId?: string): Promise<MaintenanceReport[]> => {
     if (provider('tenant') === 'real') {
-      const p = await reportRequestService.search({ size: 100 }, 'tenant')
+      const p = await reportRequestService.search(
+        {
+          size: 100,
+          roomId: roomId || undefined,
+        },
+        'tenant',
+      )
       const seen = new Set<string>()
       return (p.content || [])
         .filter((item) => {
@@ -379,7 +386,11 @@ export const tenantApi = {
     const user = useSession.getState().user
     const t = tenantDb.state.tenancies.find((x) => x.id === id && (!user || x.userId === user.id))
     if (!t) return []
-    return tenantDb.state.reports.filter((r) => r.contractTenantId === t.id || r.contractTenantId === id)
+    return tenantDb.state.reports.filter(
+      (r) =>
+        (r.contractTenantId === t.id || r.contractTenantId === id) &&
+        (!roomId || r.roomId === roomId),
+    )
   },
   report: async (id: string, reportId: string): Promise<MaintenanceReport> => {
     if (provider('tenant') === 'real') {
