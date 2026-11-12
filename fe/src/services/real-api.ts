@@ -9,7 +9,8 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
   if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
-  if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && (matches(`/api/v1/branches(/${id})?`) || pathname === '/api/v1/branches/managed') && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && matches(`/api/v1/payments(/${id})?`) && verb === 'GET') return null
   // Đăng ký / ngừng dịch vụ (BE module servicerequest).
   if (
     feature === 'utilities' &&

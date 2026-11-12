@@ -89,6 +89,9 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.email());
         user.setPhone(request.phone());
         user.setPasswordHash(passwords.encode(request.password()));
+        user.setCccdNumber(request.cccdNumber());
+        user.setCccdFrontImageUrl(request.cccdFrontImageUrl());
+        user.setCccdBackImageUrl(request.cccdBackImageUrl());
         user.setRole(Role.TENANT);
         user.setEnabled(false);
         user.setEmailVerified(false);

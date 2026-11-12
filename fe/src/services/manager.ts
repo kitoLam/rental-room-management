@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnDateKey } from '@/lib/activity'
 import { request, write } from './http'
 import { provider } from './config'
 import { databaseIdSchema, pageSchema, type Page } from '@/interfaces/domain'
@@ -210,10 +211,11 @@ export const managerApi = {
   branches: async () => {
     if (provider('manager') === 'mock') return request('manager', '/api/manager/branches', z.array(branchAssignmentSchema))
     const branches = await request('manager', '/api/v1/branches/managed', z.array(z.object({
-      id: z.string(), ownerAccountId: z.string(), name: z.string(), address: z.string().nullable(), status: z.enum(['ACTIVE','INACTIVE']),
+      id: z.string(), ownerAccountId: z.string().nullable().optional(), name: z.string(), address: z.string().nullable(), status: z.string(),
     })))
     return branches.map(branch => branchAssignmentSchema.parse({
-      id: branch.id, ownerId: branch.ownerAccountId, name: branch.name, address: branch.address ?? '', status: branch.status,
+      id: branch.id, ownerId: branch.ownerAccountId || branch.id, name: branch.name || 'Chi nhánh', address: branch.address ?? '',
+      status: (['DRAFT', 'ACTIVE', 'INACTIVE'].includes(branch.status) ? branch.status : 'ACTIVE') as any,
       managerId: null, managerName: '', zaloUrl: null, zaloEnabled: false,
     }))
   },
@@ -392,7 +394,75 @@ export const managerApi = {
         z.array(slotDto),
       ).then(slotListPage) as Promise<Page<ManagerRecord<K>>>
     }
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const query = new URLSearchParams({ page: String(Number(filters.page || 0) + 1), size: filters.size || '8' })
+      if (filters.status) {
+        const backendStatus =
+          filters.status === 'VERIFIED'
+            ? 'SUCCESS'
+            : filters.status === 'REVIEW'
+              ? 'LATE_PAID'
+              : filters.status
+        query.set('status', backendStatus)
+      }
+      if (filters.keyword || filters.q) query.set('keyword', filters.keyword || filters.q)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.invoiceId) query.set('invoiceId', filters.invoiceId)
+      if (filters.method) query.set('method', filters.method)
+      if (filters.date) query.set('date', filters.date)
+      const paymentPageSchema = z.object({
+        content: z.array(z.object({
+          id: z.string(),
+          invoiceId: z.string().nullable(),
+          contractTenantId: z.string().nullable(),
+          amount: z.number(),
+          method: z.string().nullable(),
+          transactionCode: z.string().nullable(),
+          paidAt: z.string().nullable(),
+          status: z.string(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+        number: z.number(),
+        size: z.number(),
+        totalElements: z.number(),
+        totalPages: z.number(),
+      })
+      const page = await request('manager', `/api/v1/payments?${query}`, paymentPageSchema)
+      let content = page.content.map((p) => ({
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      }))
+      if (filters.date) {
+        content = content.filter((p) => vnDateKey(p.createdAt) === filters.date || vnDateKey(p.verifiedAt) === filters.date)
+      }
+      return {
+        content,
+        number: Math.max(0, page.number - 1),
+        size: page.size,
+        totalElements: page.totalElements,
+        totalPages: page.totalPages,
+      } as unknown as Page<ManagerRecord<K>>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
         try {
           const pageIndex = Number(filters.page || 0)
@@ -597,7 +667,46 @@ export const managerApi = {
     resource: K,
     id: string,
   ): Promise<ManagerRecord<K>> => {
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const paymentDetailSchema = z.object({
+        id: z.string(),
+        invoiceId: z.string().nullable(),
+        contractTenantId: z.string().nullable(),
+        bookingId: z.string().nullable().optional(),
+        amount: z.number(),
+        method: z.string().nullable(),
+        transactionCode: z.string().nullable(),
+        gatewayTransactionNo: z.string().nullable().optional(),
+        paidAt: z.string().nullable(),
+        status: z.string(),
+        createdAt: z.string().nullable(),
+        updatedAt: z.string().nullable(),
+      })
+      const p = await request('manager', `/api/v1/payments/${encodeURIComponent(id)}`, paymentDetailSchema)
+      return {
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: p.bookingId || null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.gatewayTransactionNo || p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      } as unknown as ManagerRecord<K>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
         try {
           const item = await reportRequestService.getById(id, 'manager')

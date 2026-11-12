@@ -19,6 +19,12 @@ export const registerSchema = z
       .string()
       .trim()
       .regex(/^(?:0|\+84)[35789][0-9]{8}$/, 'Nhập số di động Việt Nam hợp lệ.'),
+    cccdNumber: z
+      .string()
+      .trim()
+      .regex(/^\d{9,12}$/, 'Số CCCD phải gồm 9 đến 12 chữ số.'),
+    cccdFrontImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt trước CCCD.'),
+    cccdBackImageUrl: z.string().min(1, 'Vui lòng tải lên ảnh mặt sau CCCD.'),
     termsAccepted: z.boolean().refine((value) => value, 'Bạn phải đồng ý điều khoản.'),
     password: passwordField
       .regex(/\p{Lu}/u, 'Mật khẩu cần có chữ hoa.')

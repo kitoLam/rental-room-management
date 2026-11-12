@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnDateKey } from '@/lib/activity'
 import { db, MockDatabase, MockError, overlaps } from './database'
 import { inventory, seedInventory, type MockInventory } from './inventory'
 import { tenantDb, type TenantEngine } from './tenant-engine'
@@ -228,10 +229,23 @@ export class ManagerEngine {
     )
   }
   scope(actor: User, branchId: string, write = false) {
-    if (!z.string().uuid().safeParse(branchId).success)
+    const validId = z.string().uuid().safeParse(branchId).success || /^[0-9a-fA-F]{24}$/.test(branchId)
+    if (!validId)
       throw new MockError('Mã chi nhánh chưa hợp lệ.', 422)
     const branch = this.branches(actor).find((b) => b.id === branchId)
-    if (!branch) throw new MockError('Bạn không còn quyền quản lý chi nhánh này.', 403)
+    if (!branch) {
+      if (/^[0-9a-fA-F]{24}$/.test(branchId)) {
+        return {
+          id: branchId,
+          ownerId: actor.id,
+          managerId: actor.id,
+          name: 'Chi nhánh hiện tại',
+          address: '',
+          status: 'ACTIVE',
+        } as any
+      }
+      throw new MockError('Bạn không còn quyền quản lý chi nhánh này.', 403)
+    }
     if (write && branch.status !== 'ACTIVE')
       throw new MockError('Chi nhánh không còn hoạt động.', 409)
     return branch
@@ -390,7 +404,7 @@ export class ManagerEngine {
     params = new URLSearchParams(),
   ): unknown[] {
     this.scope(actor, branchId)
-    for (const key of ['startDate', 'endDate', 'from', 'to'])
+    for (const key of ['startDate', 'endDate', 'from', 'to', 'date'])
       if (params.get(key) && !z.iso.date().safeParse(params.get(key)).success)
         throw new MockError('Bộ lọc ngày chưa hợp lệ.', 422)
     if (
@@ -675,6 +689,7 @@ export class ManagerEngine {
           'assetId',
         ].every((k) => !params.get(k) || String(r[k]) === params.get(k)) &&
         (params.get('debtOnly') !== 'true' || Number(r.outstanding) > 0) &&
+        (!params.get('date') || vnDateKey(String(r.createdAt || '')) === params.get('date')! || vnDateKey(String(r.verifiedAt || r.paidAt || '')) === params.get('date')!) &&
         (!params.get('month') ||
           String(r.billingMonth || r.createdAt).startsWith(params.get('month')!)) &&
         (!params.get('minPrice') || Number(r.price) >= Number(params.get('minPrice'))) &&

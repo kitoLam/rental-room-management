@@ -1,4 +1,4 @@
-import { dateTime } from '@/lib/activity'
+import { dateTime, vnDateKey } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { useState } from 'react'
 import {
@@ -6,7 +6,6 @@ import {
   ManagerPage,
   ManagerStatus,
   Records,
-  ScopeFilters,
   SearchBox,
 } from './components'
 import { useManagerList } from './context'
@@ -14,67 +13,59 @@ import { useManagerList } from './context'
 export function ManagerPayments() {
   const [q, setQ] = useState(''),
     [status, setStatus] = useState(''),
-    [type, setType] = useState(''),
-    [environment, setEnvironment] = useState(''),
+    [date, setDate] = useState(''),
     [page, setPage] = useState(1),
-    [scope, setScope] = useState<Record<string, string>>({
-      month: new URLSearchParams(location.search).get('month') || '',
-    }),
     query = useManagerList(
       'payments',
-      { q, status, targetType: type, environment, ...scope, page: String(page - 1) },
+      {
+        q,
+        status,
+        date,
+        page: String(page - 1),
+      },
       true,
     )
+
+  const filteredContent = query.data
+    ? query.data.content.filter((p) => {
+        if (date) {
+          const created = vnDateKey(p.createdAt)
+          const verified = vnDateKey(p.verifiedAt)
+          if (created !== date && verified !== date) return false
+        }
+        return true
+      })
+    : undefined
+
+  const filteredQuery = {
+    ...query,
+    data:
+      query.data && filteredContent
+        ? {
+            ...query.data,
+            content: filteredContent,
+            totalElements: date ? filteredContent.length : query.data.totalElements,
+            totalPages: date
+              ? Math.max(1, Math.ceil(filteredContent.length / (query.data.size || 8)))
+              : query.data.totalPages,
+          }
+        : undefined,
+  }
+
   return (
     <ManagerPage
       title="Thanh toán & đối soát"
       description="Tách tiền giữ phòng, trả trước, tiền hóa đơn và giao dịch mô phỏng."
     >
-      <ScopeFilters
-        value={scope}
-        onChange={(v) => {
-          setScope(v)
-          setPage(1)
-        }}
-        tenant
-        dates
-      />
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <SearchBox
           value={q}
           onChange={(v) => {
             setQ(v)
             setPage(1)
           }}
+          placeholder="Tìm theo mã hoặc tên..."
         />
-        <select
-          aria-label="Loại thanh toán"
-          className="input w-auto"
-          value={type}
-          onChange={(e) => {
-            setType(e.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">Tất cả loại</option>
-          <option value="BOOKING_HOLD">Giữ phòng</option>
-          <option value="PREPAID_RENT">Thuê trả trước</option>
-          <option value="INVOICE">Hóa đơn</option>
-        </select>
-        <select
-          aria-label="Môi trường thanh toán"
-          className="input w-auto"
-          value={environment}
-          onChange={(e) => {
-            setEnvironment(e.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">Tất cả môi trường</option>
-          <option value="SANDBOX">Mô phỏng</option>
-          <option value="LIVE">Biên nhận ngân hàng</option>
-          <option value="PRODUCTION">Nhà cung cấp</option>
-        </select>
         <select
           aria-label="Trạng thái thanh toán"
           className="input w-auto"
@@ -90,9 +81,31 @@ export function ManagerPayments() {
           <option value="REVIEW">Cần đối soát</option>
           <option value="FAILED">Thất bại</option>
         </select>
+        <input
+          aria-label="Lọc theo ngày"
+          className="input w-auto"
+          type="date"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value)
+            setPage(1)
+          }}
+        />
+        {date && (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:underline"
+            onClick={() => {
+              setDate('')
+              setPage(1)
+            }}
+          >
+            Xóa lọc ngày
+          </button>
+        )}
       </div>
       <Records
-        query={query}
+        query={filteredQuery}
         page={page}
         onPage={setPage}
         columns={[

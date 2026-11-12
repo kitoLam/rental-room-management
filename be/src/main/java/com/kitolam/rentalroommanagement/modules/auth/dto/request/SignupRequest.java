@@ -22,6 +22,17 @@ public record SignupRequest(
                 message = "Số di động Việt Nam phải gồm 10 số, đầu 03/05/07/08/09")
         String phone,
 
+        @NotBlank(message = "Số CCCD không được để trống")
+        @Pattern(regexp = "^[0-9]{9,12}$",
+                message = "Số CCCD phải gồm 9 đến 12 chữ số")
+        String cccdNumber,
+
+        @NotBlank(message = "Ảnh mặt trước CCCD không được để trống")
+        String cccdFrontImageUrl,
+
+        @NotBlank(message = "Ảnh mặt sau CCCD không được để trống")
+        String cccdBackImageUrl,
+
         @NotBlank(message = "Mật khẩu không được để trống")
         @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s]).{8,72}$",
                 message = "Mật khẩu cần ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt")
@@ -40,6 +51,9 @@ public record SignupRequest(
         email = email == null ? null : email.strip().toLowerCase(Locale.ROOT);
         phone = phone == null ? null : phone.strip();
         if (phone != null && phone.startsWith("+84")) phone = "0" + phone.substring(3);
+        cccdNumber = cccdNumber == null ? null : cccdNumber.strip();
+        cccdFrontImageUrl = cccdFrontImageUrl == null ? null : cccdFrontImageUrl.strip();
+        cccdBackImageUrl = cccdBackImageUrl == null ? null : cccdBackImageUrl.strip();
     }
 
     @JsonIgnore

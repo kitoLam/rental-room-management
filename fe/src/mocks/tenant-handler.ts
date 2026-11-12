@@ -51,7 +51,11 @@ export async function handleTenant(request: Request, userId: string, empty = fal
   if (resource === `contracts/${t.contractId}` && method === 'GET') return ok(t)
   if (resource === 'invoices' && method === 'GET')
     return ok(list(tenantDb.state.invoices).map((i) => tenantDb.invoice(t, i.id)))
-  if (resource === 'payments' && method === 'GET') return ok(list(tenantDb.state.payments))
+  if (resource === 'payments' && method === 'GET') {
+    const direct = list(tenantDb.state.payments)
+    if (direct.length > 0) return ok(direct)
+    return ok(tenantDb.state.payments.map((p) => ({ ...p, contractTenantId: t.id })))
+  }
   if (resource === 'prepaid-payments' && method === 'POST')
     return created(
       tenantDb.prepay(t, await request.json()),

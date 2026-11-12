@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.payment.service;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentCreateRequest;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentFilterRequest;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentUpdateRequest;
@@ -14,6 +15,10 @@ public interface PaymentService {
     PaymentResponse getById(String id);
 
     PagedResponse<PaymentResponse> search(PaymentFilterRequest filter, Pageable pageable);
+
+    default PagedResponse<PaymentResponse> search(PaymentFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
+        return search(filter, pageable);
+    }
 
     PaymentResponse update(String id, PaymentUpdateRequest request);
 

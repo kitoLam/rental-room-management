@@ -167,7 +167,17 @@ export function PaymentRow({
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border py-4 first:border-0 first:pt-0">
       <div className="min-w-0">
-        <p className="break-all text-sm font-bold">{p.reference}</p>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="break-all text-left text-sm font-bold text-primary hover:underline"
+          >
+            {p.reference}
+          </button>
+        ) : (
+          <p className="break-all text-sm font-bold">{p.reference}</p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           {dateTime(p.createdAt)} · {p.environment === 'SANDBOX' ? 'Mô phỏng' : 'Thực tế'} ·{' '}
           {p.method === 'SANDBOX' ? 'Sandbox' : 'Chuyển khoản'}

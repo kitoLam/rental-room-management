@@ -298,13 +298,13 @@ export const invoiceSourcesSchema = z.object({
 })
 export type InvoiceSources = z.infer<typeof invoiceSourcesSchema>
 export const managerPaymentSchema = z.object({
-  id: uuid,
-  branchId: uuid,
+  id: databaseIdSchema,
+  branchId: databaseIdSchema,
   reference: z.string(),
   targetType: z.enum(['BOOKING_HOLD', 'INVOICE', 'PREPAID_RENT']),
-  invoiceId: uuid.nullable(),
-  bookingId: uuid.nullable(),
-  contractTenantId: uuid.nullable(),
+  invoiceId: databaseIdSchema.nullable(),
+  bookingId: databaseIdSchema.nullable(),
+  contractTenantId: databaseIdSchema.nullable(),
   payerName: z.string(),
   tenantName: z.string(),
   amountReceived: vnd,

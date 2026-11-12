@@ -294,9 +294,86 @@ export const tenantApi = {
   invoices: (id: string) => request('tenant', path(id, 'invoices'), z.array(invoiceSchema)),
   invoice: (id: string, invoiceId: string) =>
     request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}`), invoiceSchema),
-  payments: (id: string) => request('tenant', path(id, 'payments'), z.array(tenantPaymentSchema)),
-  payment: (id: string, paymentId: string) =>
-    request('tenant', path(id, `payments/${encodeURIComponent(paymentId)}`), tenantPaymentSchema),
+  payments: async (id: string) => {
+    if (provider('tenant') === 'real' || provider('manager') === 'real') {
+      const backendPayments = z.object({
+        content: z.array(z.object({
+          id: z.string(),
+          invoiceId: z.string().nullable(),
+          contractTenantId: z.string().nullable(),
+          amount: z.number(),
+          method: z.string().nullable(),
+          transactionCode: z.string().nullable(),
+          paidAt: z.string().nullable(),
+          status: z.string(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+        number: z.number(),
+        size: z.number(),
+        totalElements: z.number(),
+        totalPages: z.number(),
+      })
+      const page = await request('tenant', `/api/v1/payments?page=1&size=100`, backendPayments)
+      return page.content.map((p) => tenantPaymentSchema.parse({
+        id: p.id,
+        contractTenantId: p.contractTenantId || (/^[0-9a-fA-F]{24}$|^[0-9a-fA-F-]{36}$/.test(id) ? id : p.id),
+        invoiceId: p.invoiceId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        amountReceived: Math.round(p.amount),
+        allocatedAmount: Math.round(p.amount),
+        prepaidFirstAmount: 0,
+        prepaidLastAmount: 0,
+        prepaidFirstApplied: 0,
+        prepaidLastApplied: 0,
+        payerName: 'Người thuê',
+        method: p.method === 'SANDBOX' ? 'SANDBOX' : 'TRANSFER',
+        environment: p.method === 'SANDBOX' ? 'SANDBOX' : 'LIVE',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' : p.status === 'FAILED' ? 'FAILED' : p.status === 'LATE_PAID' ? 'REVIEW' : 'PENDING',
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        evidence: [],
+      }))
+    }
+    return request('tenant', path(id, 'payments'), z.array(tenantPaymentSchema))
+  },
+  payment: async (id: string, paymentId: string) => {
+    if (provider('tenant') === 'real' || provider('manager') === 'real') {
+      const pSchema = z.object({
+        id: z.string(),
+        invoiceId: z.string().nullable(),
+        contractTenantId: z.string().nullable(),
+        amount: z.number(),
+        method: z.string().nullable(),
+        transactionCode: z.string().nullable(),
+        paidAt: z.string().nullable(),
+        status: z.string(),
+        createdAt: z.string().nullable(),
+        updatedAt: z.string().nullable(),
+      })
+      const p = await request('tenant', `/api/v1/payments/${encodeURIComponent(paymentId)}`, pSchema)
+      return tenantPaymentSchema.parse({
+        id: p.id,
+        contractTenantId: p.contractTenantId || (/^[0-9a-fA-F]{24}$|^[0-9a-fA-F-]{36}$/.test(id) ? id : p.id),
+        invoiceId: p.invoiceId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        amountReceived: Math.round(p.amount),
+        allocatedAmount: Math.round(p.amount),
+        prepaidFirstAmount: 0,
+        prepaidLastAmount: 0,
+        prepaidFirstApplied: 0,
+        prepaidLastApplied: 0,
+        payerName: 'Người thuê',
+        method: p.method === 'SANDBOX' ? 'SANDBOX' : 'TRANSFER',
+        environment: p.method === 'SANDBOX' ? 'SANDBOX' : 'LIVE',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' : p.status === 'FAILED' ? 'FAILED' : p.status === 'LATE_PAID' ? 'REVIEW' : 'PENDING',
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        evidence: [],
+      })
+    }
+    return request('tenant', path(id, `payments/${encodeURIComponent(paymentId)}`), tenantPaymentSchema)
+  },
   pay: (id: string, invoiceId: string, value: unknown) =>
     request(
       'tenant',

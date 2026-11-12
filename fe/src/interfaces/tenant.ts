@@ -134,9 +134,9 @@ export const invoiceSchema = z.object({
 })
 export type Invoice = z.infer<typeof invoiceSchema>
 export const tenantPaymentSchema = z.object({
-  id,
-  contractTenantId: id,
-  invoiceId: id.nullable(),
+  id: databaseId,
+  contractTenantId: databaseId,
+  invoiceId: databaseId.nullable(),
   reference: z.string(),
   amountReceived: money,
   allocatedAmount: money,

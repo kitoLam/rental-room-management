@@ -36,6 +36,9 @@ export const authService = {
     email: string
     password: string
     phone: string
+    cccdNumber: string
+    cccdFrontImageUrl: string
+    cccdBackImageUrl: string
     confirmPassword: string
     termsAccepted: boolean
   }) =>

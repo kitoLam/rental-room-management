@@ -24,4 +24,7 @@ public class User extends BaseDocument {
     private Instant lastVerificationSentAt;
     private String dateOfBirth;
     private String gender;
+    private String cccdNumber;
+    private String cccdFrontImageUrl;
+    private String cccdBackImageUrl;
 }

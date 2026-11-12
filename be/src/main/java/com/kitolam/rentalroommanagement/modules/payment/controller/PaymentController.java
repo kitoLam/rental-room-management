@@ -2,6 +2,8 @@ package com.kitolam.rentalroommanagement.modules.payment.controller;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.base.StandardResponse;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentCreateRequest;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentFilterRequest;
 import com.kitolam.rentalroommanagement.modules.payment.dto.request.PaymentUpdateRequest;
@@ -51,8 +53,9 @@ public class PaymentController {
     @Operation(summary = "Tìm kiếm / phân trang thanh toán")
     public StandardResponse<PagedResponse<PaymentResponse>> search(
             @Valid @ParameterObject PaymentFilterRequest filter,
-            @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return StandardResponse.success(paymentService.search(filter, pageable));
+            @ParameterObject @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(paymentService.search(filter, pageable, principal));
     }
 
     @PatchMapping("/{id}")
