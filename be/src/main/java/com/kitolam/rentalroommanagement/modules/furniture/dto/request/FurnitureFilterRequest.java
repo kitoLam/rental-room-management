@@ -5,6 +5,7 @@ import com.kitolam.rentalroommanagement.modules.furniture.enums.FurnitureConditi
 
 /** Query parameters for search; all optional. */
 public record FurnitureFilterRequest(
+        @ValidObjectId String branchId,
         @ValidObjectId String roomId,
         FurnitureCondition condition,
         String keyword
