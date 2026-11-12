@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { Link, useParams, useSearchParams } from 'react-router'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Field, Notice, Page, Panel, QueryState } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,8 @@ const reasonLabels: Record<ViewingAvailability['periods'][number]['reason'], str
   TENANT_ROOM_DAY: 'Bạn đã có lịch của phòng này trong ngày',
   TENANT_SAME_TYPE: 'Bạn đã có lịch cùng loại ca',
   TENANT_TIME_OVERLAP: 'Trùng giờ với lịch của bạn',
+  NO_SLOT_SELECTED: 'Chưa chọn slot',
+  SLOT_UNAVAILABLE: 'Slot chưa thể xem vào ngày này',
 }
 const roomReasons: Record<string, string> = {
   BRANCH_INACTIVE: 'Chi nhánh đang ngừng nhận lịch xem.',
@@ -28,14 +30,32 @@ const roomReasons: Record<string, string> = {
   TEMPORARY_HOLD: 'Phòng hoặc chỗ trống cuối đang được giữ tạm. Vui lòng kiểm tra lại sau.',
   OFFICIAL_HOLD: 'Phòng hiện đã được giữ chỗ thuê.',
   NO_VACANCY: 'Phòng hiện không còn chỗ cho thuê.',
+  VIEWING_DISABLED: 'Owner/Manager đang tắt tính năng đặt lịch xem của phòng này.',
 }
 
 export function ViewingAvailabilityPage() {
   const { roomId = '' } = useParams()
-  const [date, setDate] = useState(viewingToday)
-  const [selection, setSelection] = useState<{ date: string; id: string; version: number } | null>(
-    null,
+  const [params] = useSearchParams()
+  const [roomSlotIds, setRoomSlotIds] = useState<string[]>(() => {
+    try {
+      const value: unknown = JSON.parse(params.get('slots') || '[]')
+      return Array.isArray(value) &&
+        value.every((id) => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id))
+        ? [...new Set((value as string[]).map((id) => id.toLowerCase()))]
+        : []
+    } catch {
+      return []
+    }
+  })
+  const [date, setDate] = useState(() =>
+    /^\d{4}-\d{2}-\d{2}$/.test(params.get('date') || '') ? params.get('date')! : viewingToday(),
   )
+  const [selection, setSelection] = useState<{
+    date: string
+    id: string
+    version: number
+    slots: string
+  } | null>(null)
   const valid = /^[0-9a-fA-F]{24}$/.test(roomId)
   const context = useQuery({
     queryKey: ['viewing-context'],
@@ -45,19 +65,24 @@ export function ViewingAvailabilityPage() {
     staleTime: 0,
   })
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= viewingToday()
+  const slotKey = [...roomSlotIds].sort().join(',')
   const query = useQuery({
-    queryKey: ['viewing-availability', roomId, date],
-    queryFn: () => viewingDependenciesService.availability(roomId, date),
+    queryKey: ['viewing-availability', roomId, date, slotKey],
+    queryFn: () => viewingDependenciesService.availability(roomId, date, roomSlotIds),
     enabled: valid && validDate,
     refetchInterval: 30000,
+    placeholderData: keepPreviousData,
   })
-  const chosen = query.data?.periods.find(
-    (p) =>
-      p.id === selection?.id &&
-      selection.date === date &&
-      selection.version === query.data?.configurationVersion &&
-      p.available,
-  )
+  const chosen = query.isPlaceholderData
+    ? undefined
+    : query.data?.periods.find(
+        (p) =>
+          p.id === selection?.id &&
+          selection.slots === slotKey &&
+          selection.date === date &&
+          selection.version === query.data?.configurationVersion &&
+          p.available,
+      )
   return (
     <Page
       title="Ca xem phòng"
@@ -108,6 +133,52 @@ export function ViewingAvailabilityPage() {
                   {!query.data.room.canReceiveRequest && (
                     <Notice tone="warning">{roomReasons[query.data.room.reason]}</Notice>
                   )}
+                  <fieldset className="mt-5 rounded-xl border border-border p-5">
+                    <legend className="px-2 text-sm font-bold">Slot muốn xem (bắt buộc)</legend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {query.data.room.slots.map((slot) => (
+                        <label key={slot.id} className="flex items-start gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-1 accent-primary"
+                            checked={roomSlotIds.includes(slot.id)}
+                            disabled={!slot.selectable}
+                            onChange={(e) => {
+                              setRoomSlotIds((current) =>
+                                e.target.checked
+                                  ? [...current, slot.id]
+                                  : current.filter((id) => id !== slot.id),
+                              )
+                              setSelection(null)
+                            }}
+                          />
+                          <span>
+                            <span className="font-semibold">{slot.slotCode}</span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {!slot.selectable
+                                ? 'Bảo trì / ngừng hoạt động'
+                                : slot.status === 'OCCUPIED'
+                                  ? 'Đang thuê · chọn ngày xem sau khi kết thúc hợp đồng'
+                                  : 'Có thể chọn để kiểm tra ngày xem'}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Chọn một hoặc nhiều slot trong phòng, kể cả phòng chỉ có một slot.
+                    </p>
+                  </fieldset>
+                  {query.isPlaceholderData && (
+                    <p role="status" className="mt-4 text-sm text-muted-foreground">
+                      Đang kiểm tra ngày và slot đã chọn…
+                    </p>
+                  )}
+                  {!query.isPlaceholderData && query.data.selectionError && (
+                    <div role="alert" className="mt-4 whitespace-pre-line">
+                      <Notice tone="warning">{query.data.selectionError}</Notice>
+                    </div>
+                  )}
                   <fieldset className="mt-5 grid gap-3" aria-label="Ca xem phòng">
                     <legend className="sr-only">Chọn một ca còn trống</legend>
                     {query.data.periods.map((period) => (
@@ -119,7 +190,7 @@ export function ViewingAvailabilityPage() {
                           type="radio"
                           name="viewing-period"
                           value={period.id}
-                          disabled={!period.available}
+                          disabled={!period.available || query.isPlaceholderData}
                           checked={chosen?.id === period.id}
                           className="size-4 accent-primary"
                           onChange={() =>
@@ -127,6 +198,7 @@ export function ViewingAvailabilityPage() {
                               date,
                               id: period.id,
                               version: query.data!.configurationVersion,
+                              slots: slotKey,
                             })
                           }
                         />
@@ -161,6 +233,7 @@ export function ViewingAvailabilityPage() {
                       key={`${context.data.accountId}:${roomId}`}
                       account={context.data}
                       roomId={roomId}
+                      roomSlotIds={roomSlotIds}
                       date={date}
                       period={chosen}
                       version={query.data.configurationVersion}
@@ -176,7 +249,7 @@ export function ViewingAvailabilityPage() {
                       <Notice>
                         <Link
                           className="font-bold underline"
-                          to={`/login?redirect=${encodeURIComponent(`/rooms/${roomId}/viewing`)}`}
+                          to={`/login?redirect=${encodeURIComponent(`/rooms/${roomId}/viewing?${new URLSearchParams({ slots: JSON.stringify(roomSlotIds), date })}`)}`}
                         >
                           Đăng nhập để gửi yêu cầu xem phòng
                         </Link>

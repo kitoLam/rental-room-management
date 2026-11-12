@@ -39,6 +39,7 @@ public interface AppointmentService {
     ShiftResponse updateShiftConfiguration(String roomId, ShiftUpdateRequest request);
 
     ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date);
+    ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date, List<String> roomSlotIds);
 
     ViewingContextResponse currentContext();
 

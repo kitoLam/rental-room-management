@@ -347,6 +347,11 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     {record.branchName}
                                   </p>
+                                  {record.slotCodes.length > 0 && (
+                                    <p className="mt-1 text-sm">
+                                      Slot: {record.slotCodes.join(', ')}
+                                    </p>
+                                  )}
                                   <p className="mt-3 text-sm">
                                     {record.shiftType && `${shiftLabels[record.shiftType]} · `}
                                     {viewingDateTime(record.startAt)}
@@ -517,6 +522,14 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
                         <dt className="text-muted-foreground">Ca đã chọn</dt>
                         <dd className="mt-2 font-bold">
                           {record.shiftType ? shiftLabels[record.shiftType] : 'Chưa xác định'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Slot đã chọn</dt>
+                        <dd className="mt-2 font-bold">
+                          {record.slotCodes.length
+                            ? record.slotCodes.join(', ')
+                            : 'Lịch cũ theo phòng'}
                         </dd>
                       </div>
                       <div>

@@ -577,9 +577,11 @@ public class ContractServiceImpl implements ContractService {
     public List<OverviewContract> readForOverview(List<String> ids) {
         if (ids.isEmpty()) return List.of();
         var query = MongoQueryHelper.byReferenceIds("roomId", ids);
-        query.fields().include("roomId", "tenantId", "bookingId", "contractNumber", "status", "startDate", "endDate", "evidenceSubmittedAt");
+        query.fields().include("roomId", "roomSlotId", "roomSlotIds", "tenantId", "bookingId", "contractNumber", "status", "startDate", "endDate", "evidenceSubmittedAt");
         return mongoTemplate.find(query, Contract.class).stream()
-                .map(item -> new OverviewContract(item.getId(), item.getRoomId(), item.getTenantId(), item.getBookingId(), item.getContractNumber(), item.getStatus(), item.getStartDate(), item.getEndDate(), item.getEvidenceSubmittedAt())).toList();
+                .map(item -> new OverviewContract(item.getId(), item.getRoomId(), item.getTenantId(), item.getBookingId(), item.getContractNumber(), item.getStatus(), item.getStartDate(), item.getEndDate(), item.getEvidenceSubmittedAt(),
+                        item.getRoomSlotIds() != null && !item.getRoomSlotIds().isEmpty() ? List.copyOf(item.getRoomSlotIds())
+                                : item.getRoomSlotId() == null ? List.of() : List.of(item.getRoomSlotId()))).toList();
     }
 
     @Override

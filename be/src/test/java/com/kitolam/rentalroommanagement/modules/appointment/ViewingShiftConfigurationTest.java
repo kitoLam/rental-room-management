@@ -33,6 +33,17 @@ class ViewingShiftConfigurationTest {
     }
 
     @Test
+    void viewingSwitchCanBeChangedAndOldPeriodOnlyUpdatesPreserveIt() {
+        assertTrue(current.getViewingEnabled());
+        service.updateForRoom(ROOM, new ShiftUpdateRequest(0L, inputs(), false));
+        assertFalse(current.getViewingEnabled());
+        service.updateForRoom(ROOM, new ShiftUpdateRequest(0L, inputs()));
+        assertFalse(current.getViewingEnabled());
+        service.updateForRoom(ROOM, new ShiftUpdateRequest(0L, inputs(), true));
+        assertTrue(current.getViewingEnabled());
+    }
+
+    @Test
     void missingConfigurationInitializesExactlyThreeDefaultsWithStableDatabaseIds() {
         when(repository.findByIdAndIsDeletedFalse(ROOM)).thenReturn(Optional.empty());
         when(repository.insert(any(Shift.class))).thenAnswer(call -> call.getArgument(0));

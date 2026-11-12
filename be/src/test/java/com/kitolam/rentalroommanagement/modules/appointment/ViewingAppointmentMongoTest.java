@@ -105,7 +105,7 @@ class ViewingAppointmentMongoTest {
         assertEquals(1, stored.getHistory().size()); assertEquals(1, stored.getNotificationIntents().size());
         assertEquals(1, appointments.count());
         assertThrows(ConflictException.class, () -> service.create(new AppointmentCreateRequest(ROOM,
-                input.shiftId(), DAY, input.configurationVersion(), "Tên khác", input.contactPhone()), "request-one"));
+                input.shiftId(), DAY, input.configurationVersion(), "Tên khác", input.contactPhone(), input.roomSlotIds()), "request-one"));
     }
 
     @Test
@@ -504,7 +504,7 @@ class ViewingAppointmentMongoTest {
         mongo.getCollection("appointments").dropIndexes();
         var firstInput = input(ROOM, 0);
         var secondInput = new AppointmentCreateRequest(firstInput.roomId(), firstInput.shiftId(), DAY.plusDays(1),
-                firstInput.configurationVersion(), firstInput.contactName(), firstInput.contactPhone());
+                firstInput.configurationVersion(), firstInput.contactName(), firstInput.contactPhone(), firstInput.roomSlotIds());
         try (var pool = Executors.newFixedThreadPool(2)) {
             var barrier = new CyclicBarrier(2);
             var first = pool.submit(() -> race(user("a"), firstInput, "same-key", barrier));
@@ -537,7 +537,7 @@ class ViewingAppointmentMongoTest {
     private AppointmentCreateRequest input(String room, int period) {
         var configuration = shifts.getForRoom(room);
         return new AppointmentCreateRequest(room, configuration.getPeriods().get(period).id(), DAY,
-                configuration.getVersion(), "Người đặt thử", "0901234567");
+                configuration.getVersion(), "Người đặt thử", "0901234567", List.of("74" + room.substring(2)));
     }
     private Actor user(String id) {
         return new Actor(new AuthPrincipal(id, "account@example.test", null, Role.TENANT.name(), true, "Account " + id, "0901234567"), null, Set.of());

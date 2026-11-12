@@ -33,6 +33,7 @@ import com.kitolam.rentalroommanagement.modules.appointment.dto.response.Viewing
 import com.kitolam.rentalroommanagement.modules.appointment.service.support.AppointmentAccessService.Actor;
 import com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingInventoryGateway;
 import com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingRoomSnapshot;
+import com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingSlotSnapshot;
 import com.kitolam.rentalroommanagement.modules.appointment.service.support.AppointmentAccessService;
 import com.kitolam.rentalroommanagement.modules.appointment.repository.AppointmentRepository;
 import com.kitolam.rentalroommanagement.modules.appointment.service.AppointmentService;
@@ -230,11 +231,21 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date) {
+        return viewingAvailability(roomId, date, List.of());
+    }
+
+    @Override
+    public ViewingAvailabilityResponse viewingAvailability(String roomId, LocalDate date, List<String> roomSlotIds) {
         Instant now = viewingClock.instant();
         if (date == null || date.isBefore(LocalDate.ofInstant(now, VIEWING_ZONE))) {
             throw new BadRequestException("Ngày xem phòng không được ở quá khứ");
         }
-        ViewingEligibilityResponse eligibility = publicRoomEligibility(roomId);
+        var selectedIds = normalizeSlotIds(roomSlotIds, false);
+        var base = publicRoomEligibility(roomId);
+        var datedSlots = inventory.slotsForViewing(roomId, date);
+        String selectionError = selectedSlotError(selectedIds, datedSlots);
+        var eligibility = new ViewingEligibilityResponse(base.roomId(), base.branchId(), base.roomNumber(), base.branchName(),
+                base.publicContactPhone(), base.rentalMode(), base.canReceiveRequest(), base.reason(), datedSlots);
         expireMatching(Query.query(Criteria.where("roomId").is(MongoQueryHelper.toObjectId(roomId))
                 .and("appointmentDate").is(date)));
         Shift configuration = shiftService.getForRoom(roomId);
@@ -248,9 +259,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             Instant end = date.atTime(LocalTime.parse(p.endTime())).atZone(VIEWING_ZONE).toInstant();
             ViewingAvailabilityResponse.Reason reason;
             if (!eligibility.canReceiveRequest()) reason = ViewingAvailabilityResponse.Reason.ROOM_UNAVAILABLE;
+            else if (selectedIds.isEmpty()) reason = ViewingAvailabilityResponse.Reason.NO_SLOT_SELECTED;
+            else if (selectionError != null) reason = ViewingAvailabilityResponse.Reason.SLOT_UNAVAILABLE;
             else if (!p.isActive()) reason = ViewingAvailabilityResponse.Reason.DISABLED;
             else if (!start.isAfter(now)) reason = ViewingAvailabilityResponse.Reason.STARTED;
-            else if (roomAppointments.stream().anyMatch(a -> holds(a, now)
+            else if (roomAppointments.stream().anyMatch(a -> holds(a, now) && intersectsSlots(a, selectedIds)
                     && (p.id().equals(a.getShiftId()) || p.type() == a.getShiftType() || overlapsOrUnknown(a, start, end)))) {
                 reason = ViewingAvailabilityResponse.Reason.ROOM_TAKEN;
             } else if (ownRoomDay) reason = ViewingAvailabilityResponse.Reason.TENANT_ROOM_DAY;
@@ -262,7 +275,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return new ViewingAvailabilityResponse.Period(p.id(), p.type(), p.startTime(), p.endTime(),
                     start, end, p.isActive(), reason == ViewingAvailabilityResponse.Reason.AVAILABLE, reason);
         }).toList();
-        return new ViewingAvailabilityResponse(roomId, date, VIEWING_ZONE.getId(), now, configuration.getVersion(), eligibility, periods);
+        return new ViewingAvailabilityResponse(roomId, date, VIEWING_ZONE.getId(), now, configuration.getVersion(), eligibility, periods, selectedIds, selectionError);
     }
 
     private List<Appointment> ownAppointments(LocalDate date) {
@@ -289,7 +302,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private ShiftResponse scheduleResponse(Shift configuration, List<Appointment> appointments) {
         ViewingRoomSnapshot room = inventory.getRoom(configuration.getRoomId());
         return new ShiftResponse(configuration.getRoomId(), room.branchId(), room.roomNumber(), room.branchName(),
-                configuration.getVersion(), configuration.getPeriods(), appointments.stream().map(this::existingAppointment).toList());
+                configuration.getVersion(), configuration.getPeriods(), appointments.stream().map(this::existingAppointment).toList(), !Boolean.FALSE.equals(configuration.getViewingEnabled()));
     }
 
     private ShiftResponse.ExistingAppointment existingAppointment(Appointment a) {
@@ -321,16 +334,50 @@ public class AppointmentServiceImpl implements AppointmentService {
     public ViewingEligibilityResponse publicRoomEligibility(String roomId) {
         ViewingRoomSnapshot room = inventory.getRoom(roomId);
         if (!room.publicListing()) throw new NotFoundException("Không tìm thấy phòng công khai");
+        var configuration = shiftService.getForRoom(roomId);
+        var slots = inventory.slotsForViewing(roomId, LocalDate.ofInstant(viewingClock.instant(), VIEWING_ZONE));
         Reason reason;
         if (!room.branchActive()) reason = Reason.BRANCH_INACTIVE;
         else if (!room.roomOperational()) reason = Reason.ROOM_UNAVAILABLE;
-        else if (room.availableUnits() > 0) reason = Reason.AVAILABLE;
-        else if (room.temporarilyHeldUnits() > 0) reason = Reason.TEMPORARY_HOLD;
-        else if (room.officiallyHeldUnits() > 0) reason = Reason.OFFICIAL_HOLD;
-        else reason = Reason.NO_VACANCY;
+        else if (Boolean.FALSE.equals(configuration.getViewingEnabled())) reason = Reason.VIEWING_DISABLED;
+        else if (slots.stream().noneMatch(ViewingSlotSnapshot::selectable)) reason = Reason.NO_VACANCY;
+        else reason = Reason.AVAILABLE;
         return new ViewingEligibilityResponse(room.roomId(), room.branchId(), room.roomNumber(),
                 room.branchName(), room.publicContactPhone(), room.rentalMode(),
-                reason == Reason.AVAILABLE, reason);
+                reason == Reason.AVAILABLE, reason, slots);
+    }
+
+    private List<String> normalizeSlotIds(List<String> ids, boolean required) {
+        if (ids == null || ids.isEmpty()) {
+            if (required) throw new BadRequestException("Chọn ít nhất một slot để đặt lịch xem phòng", "VIEWING_SLOT_REQUIRED");
+            return List.of();
+        }
+        if (ids.size() > 100) throw new BadRequestException("Mỗi lịch được chọn tối đa 100 slot");
+        var normalized = ids.stream().map(id -> MongoQueryHelper.toObjectId(id).toHexString()).sorted().toList();
+        if (new HashSet<>(normalized).size() != normalized.size()) throw new BadRequestException("Không được chọn slot trùng nhau");
+        return normalized;
+    }
+
+    private String selectedSlotError(List<String> ids, List<ViewingSlotSnapshot> slots) {
+        if (ids.isEmpty()) return "Chọn ít nhất một slot để kiểm tra ngày và ca xem phòng.";
+        if (ids.stream().anyMatch(id -> slots.stream().noneMatch(s -> id.equals(s.id()))))
+            throw new BadRequestException("Có slot không tồn tại hoặc không thuộc phòng được chọn", "INVALID_VIEWING_SLOTS");
+        return slots.stream().filter(s -> ids.contains(s.id()) && !s.available())
+                .map(s -> s.message() == null ? "Slot " + s.slotCode() + " không thể xem vào ngày này." : s.message())
+                .collect(Collectors.collectingAndThen(Collectors.joining("\n"), message -> message.isBlank() ? null : message));
+    }
+
+    private List<ViewingSlotSnapshot> requireSlotDate(String roomId, List<String> ids, LocalDate date) {
+        var states = inventory.slotsForViewing(roomId, date);
+        String error = selectedSlotError(ids, states);
+        if (error != null) throw new ConflictException(error, "SLOT_DATE_UNAVAILABLE");
+        return states;
+    }
+
+    private boolean intersectsSlots(Appointment appointment, List<String> ids) {
+        // Historical room-level appointments continue to block the whole room until completed/cancelled.
+        return appointment.getRoomSlotIds() == null || appointment.getRoomSlotIds().isEmpty()
+                || !java.util.Collections.disjoint(appointment.getRoomSlotIds(), ids);
     }
 
     private Actor requireRequester() {
@@ -367,17 +414,19 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BadRequestException("Thông tin đặt lịch chưa đầy đủ hoặc ngày không đúng YYYY-MM-DD");
         }
         String roomId = MongoQueryHelper.toObjectId(request.roomId()).toHexString();
+        var selectedIds = normalizeSlotIds(request.roomSlotIds(), true);
         String shiftId = MongoQueryHelper.toObjectId(request.shiftId()).toHexString();
         String contactName = request.contactName().trim();
         String phone = request.contactPhone().replaceAll("[\\s().-]", "");
         if (contactName.length() < 2 || contactName.length() > 120 || contactName.codePoints().anyMatch(Character::isISOControl)
                 || !phone.matches("\\+?[0-9]{9,15}")) throw new BadRequestException("Họ tên hoặc số điện thoại liên hệ không hợp lệ");
         String fingerprint = fingerprint(String.join("\u0000", roomId, shiftId, request.appointmentDate().toString(),
-                request.configurationVersion().toString(), contactName, phone));
+                request.configurationVersion().toString(), contactName, phone, String.join(",", selectedIds)));
         var replay = appointmentRepository.findByRequesterAccountIdAndIdempotencyKeyAndIsDeletedFalse(account.accountId(), idempotencyKey);
         if (replay.isPresent()) return replay(replay.get(), fingerprint);
 
         if (!publicRoomEligibility(roomId).canReceiveRequest()) throw new ConflictException("Phòng hiện không nhận lịch xem", "ROOM_UNAVAILABLE");
+        requireSlotDate(roomId, selectedIds, request.appointmentDate());
         shiftService.getForRoom(roomId); // Initialize outside the transaction, before reading a selected period.
         try {
             return appointmentRepository.withCreationGuards(account.accountId(), roomId, request.appointmentDate().toString(), () -> {
@@ -399,8 +448,9 @@ public class AppointmentServiceImpl implements AppointmentService {
                 shiftService.lockForAppointment(roomId, configuration.getVersion());
                 ViewingRoomSnapshot room = inventory.getRoom(roomId);
                 if (!publicRoomEligibility(roomId).canReceiveRequest()) throw new ConflictException("Phòng không còn nhận lịch xem", "ROOM_UNAVAILABLE");
+                var selectedStates = requireSlotDate(roomId, selectedIds, request.appointmentDate());
                 var roomAppointments = appointmentRepository.findByRoomIdAndAppointmentDateAndIsDeletedFalse(roomId, request.appointmentDate());
-                if (roomAppointments.stream().anyMatch(a -> holds(a, now) && (shiftId.equals(a.getShiftId())
+                if (roomAppointments.stream().anyMatch(a -> holds(a, now) && intersectsSlots(a, selectedIds) && (shiftId.equals(a.getShiftId())
                         || period.type() == a.getShiftType() || overlapsOrUnknown(a, start, end)))) {
                     throw new ConflictException("Ca này đã có lịch. Vui lòng chọn ca khác.", "ROOM_SHIFT_TAKEN");
                 }
@@ -421,6 +471,9 @@ public class AppointmentServiceImpl implements AppointmentService {
                 appointment.setId(fingerprint(account.accountId() + "\u0000" + idempotencyKey).substring(0, 24));
                 appointment.setRequesterAccountId(account.accountId()); appointment.setTenantId(account.tenantProfileId());
                 appointment.setRoomId(roomId); appointment.setBranchId(room.branchId()); appointment.setShiftId(shiftId);
+                appointment.setRoomSlotIds(selectedIds);
+                appointment.setSlotCodes(selectedIds.stream().map(id -> selectedStates.stream()
+                        .filter(s -> id.equals(s.id())).findFirst().orElseThrow().slotCode()).toList());
                 appointment.setShiftType(period.type()); appointment.setAppointmentDate(request.appointmentDate());
                 appointment.setStartAt(start); appointment.setEndAt(end); appointment.setConfigurationVersion(configuration.getVersion());
                 appointment.setExpiresAt(start.isBefore(committedAt.plus(Duration.ofHours(24))) ? start : committedAt.plus(Duration.ofHours(24)));
@@ -532,6 +585,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         var room = inventory.getRoom(a.getRoomId());
         if (!Objects.equals(a.getBranchId(), room.branchId())) throw new ConflictException("Phạm vi phòng đã thay đổi; cần kiểm tra lại lịch", "ROOM_SCOPE_CHANGED");
         if (!publicRoomEligibility(a.getRoomId()).canReceiveRequest()) throw new ConflictException("Phòng hiện không đủ điều kiện duyệt lịch", "ROOM_UNAVAILABLE");
+        if (a.getRoomSlotIds() != null && !a.getRoomSlotIds().isEmpty()) requireSlotDate(a.getRoomId(), a.getRoomSlotIds(), a.getAppointmentDate());
+        else if (room.availableUnits() <= 0) throw new ConflictException("Phòng hiện không đủ điều kiện duyệt lịch cũ theo phòng", "ROOM_UNAVAILABLE");
         Instant now = viewingClock.instant();
         requirePendingDeadline(a, now);
         return saveAction(a, actor, "APPROVED", AppointmentStatus.CONFIRMED, now, null,

@@ -25,7 +25,12 @@ class ViewingDependenciesTest {
     void setUp() {
         security = mock(AppointmentAccessService.class);
         inventory = mock(ViewingInventoryGateway.class);
-        service = new AppointmentServiceImpl(mock(AppointmentRepository.class), security, inventory, mock(com.kitolam.rentalroommanagement.modules.shift.service.ShiftService.class), java.time.Clock.systemUTC(),
+        var shifts = mock(com.kitolam.rentalroommanagement.modules.shift.service.ShiftService.class);
+        when(shifts.getForRoom(ROOM)).thenReturn(new com.kitolam.rentalroommanagement.modules.shift.document.Shift());
+        when(inventory.slotsForViewing(eq(ROOM), any())).thenReturn(List.of(new com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingSlotSnapshot(
+                "740000000000000000000001", "S01", com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus.AVAILABLE,
+                true, true, null, "AVAILABLE", null)));
+        service = new AppointmentServiceImpl(mock(AppointmentRepository.class), security, inventory, shifts, java.time.Clock.systemUTC(),
                 org.mapstruct.factory.Mappers.getMapper(com.kitolam.rentalroommanagement.modules.appointment.mapper.AppointmentMapper.class),
                 new com.kitolam.rentalroommanagement.modules.appointment.service.support.AppointmentNotificationSupport(security),
                 mock(com.kitolam.rentalroommanagement.modules.notification.service.NotificationService.class));
@@ -45,25 +50,25 @@ class ViewingDependenciesTest {
     }
 
     @Test
-    void lastSlotTemporarilyHeldIsDifferentFromAnOfficialHold() {
+    void holdsDoNotHideSlotSelectionBeforeDateValidation() {
         when(inventory.getRoom(ROOM)).thenReturn(room(RentalMode.SLOT, 4, 2, 1, 1, true, true, true));
-        assertEquals(Reason.TEMPORARY_HOLD, service.publicRoomEligibility(ROOM).reason());
-        assertFalse(service.publicRoomEligibility(ROOM).canReceiveRequest());
+        assertEquals(Reason.AVAILABLE, service.publicRoomEligibility(ROOM).reason());
+        assertTrue(service.publicRoomEligibility(ROOM).canReceiveRequest());
         when(inventory.getRoom(ROOM)).thenReturn(room(RentalMode.SLOT, 4, 2, 2, 0, true, true, true));
-        assertEquals(Reason.OFFICIAL_HOLD, service.publicRoomEligibility(ROOM).reason());
+        assertEquals(Reason.AVAILABLE, service.publicRoomEligibility(ROOM).reason());
     }
 
     @Test
-    void occupiedRoomIsUnavailableRegardlessOfAFutureViewingDate() {
+    void occupiedRoomStillAllowsSelectingSlotsForAFutureViewingDate() {
         when(inventory.getRoom(ROOM)).thenReturn(room(RentalMode.ROOM, 1, 1, 0, 0, true, true, true));
-        assertEquals(Reason.NO_VACANCY, service.publicRoomEligibility(ROOM).reason());
+        assertTrue(service.publicRoomEligibility(ROOM).canReceiveRequest());
     }
 
     @Test
     void expiredTemporaryHoldMustBeAbsentFromTheSourceSnapshot() {
         when(inventory.getRoom(ROOM)).thenReturn(room(RentalMode.ROOM, 1, 0, 0, 1, true, true, true),
                 room(RentalMode.ROOM, 1, 0, 0, 0, true, true, true));
-        assertEquals(Reason.TEMPORARY_HOLD, service.publicRoomEligibility(ROOM).reason());
+        assertEquals(Reason.AVAILABLE, service.publicRoomEligibility(ROOM).reason());
         assertTrue(service.publicRoomEligibility(ROOM).canReceiveRequest());
     }
 

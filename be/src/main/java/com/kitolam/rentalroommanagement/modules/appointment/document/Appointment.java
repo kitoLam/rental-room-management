@@ -33,6 +33,10 @@ public class Appointment extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String roomId;
 
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> roomSlotIds = new ArrayList<>();
+    private List<String> slotCodes = new ArrayList<>();
+
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String shiftId;

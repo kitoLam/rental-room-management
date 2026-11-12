@@ -45,12 +45,14 @@ const errors: Record<string, string> = {
 export function ViewingRequestForm({
   account,
   roomId,
+  roomSlotIds,
   date,
   period,
   version,
 }: {
   account: ViewingContext
   roomId: string
+  roomSlotIds: string[]
   date: string
   period: ViewingAvailability['periods'][number] | undefined
   version: number
@@ -103,6 +105,7 @@ export function ViewingRequestForm({
     if (attemptRef.current || create.isPending || !period) return
     const input = viewingAppointmentInputSchema.safeParse({
       roomId,
+      roomSlotIds,
       shiftId: period.id,
       appointmentDate: date,
       configurationVersion: version,
