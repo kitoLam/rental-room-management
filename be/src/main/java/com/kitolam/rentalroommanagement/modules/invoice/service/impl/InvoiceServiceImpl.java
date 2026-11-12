@@ -57,10 +57,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class InvoiceServiceImpl implements InvoiceService {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
@@ -73,6 +73,27 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final TenantRepository tenantRepository;
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
+
+    @Autowired
+    public InvoiceServiceImpl(
+            InvoiceRepository invoiceRepository,
+            BranchService branchService,
+            RoomRepository roomRepository,
+            ContractRepository contractRepository,
+            ContractTenantRepository contractTenantRepository,
+            TenantRepository tenantRepository,
+            MongoTemplate mongoTemplate,
+            Clock clock
+    ) {
+        this.invoiceRepository = invoiceRepository;
+        this.branchService = branchService;
+        this.roomRepository = roomRepository;
+        this.contractRepository = contractRepository;
+        this.contractTenantRepository = contractTenantRepository;
+        this.tenantRepository = tenantRepository;
+        this.mongoTemplate = mongoTemplate;
+        this.clock = clock;
+    }
 
     public InvoiceServiceImpl(MongoTemplate mongoTemplate, InvoiceRepository invoiceRepository) {
         this(invoiceRepository, null, null, null, null, null, mongoTemplate, Clock.systemDefaultZone());
