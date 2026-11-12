@@ -139,9 +139,9 @@ export const invoiceSchema = z.object({
 })
 export type Invoice = z.infer<typeof invoiceSchema>
 export const tenantPaymentSchema = z.object({
-  id,
-  contractTenantId: id,
-  invoiceId: id.nullable(),
+  id: databaseId,
+  contractTenantId: databaseId,
+  invoiceId: databaseId.nullable(),
   reference: z.string(),
   amountReceived: money,
   allocatedAmount: money,
@@ -258,6 +258,7 @@ export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
   id: z.string(),
   contractTenantId: z.string(),
+  roomName: z.string().nullable().optional(),
   assetName: z.string(),
   status: z.enum([
     'OPEN',
@@ -270,15 +271,12 @@ export const reportSchema = reportInputSchema.extend({
     'WAITING_INFO',
     'RESOLVED',
     'CLOSED',
-    'ESCALATED_ADMIN',
   ]),
   createdAt: z.string(),
   assignedTo: z.string().nullable(),
   solutionResult: z.string().nullable().optional(),
   rejectReason: z.string().nullable().optional(),
   requestedInfoNote: z.string().nullable().optional(),
-  disputeReason: z.string().nullable().optional(),
-  adminConclusion: z.string().nullable().optional(),
   records: z.array(
     z.object({
       id: z.string(),

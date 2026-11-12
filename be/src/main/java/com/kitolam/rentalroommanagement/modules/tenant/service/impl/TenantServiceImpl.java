@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.tenant.service.impl;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ForbiddenException;
@@ -52,12 +53,15 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class TenantServiceImpl implements TenantService {
+
+    private final MongoTemplate overviewMongo;
 
     private final TenantRepository tenantRepository;
     private final ManagerRepository managerRepository;
@@ -255,6 +259,14 @@ public class TenantServiceImpl implements TenantService {
         Tenant saved = tenantRepository.save(tenant);
         String effectiveRole = (user != null && user.getRole() == Role.MANAGER) ? "MANAGER" : "TENANT";
         return buildResponse(saved, user, effectiveRole, tenantBranchesInScope, managedBranches, snapshot);
+    }
+    @Override
+    public List<OverviewTenant> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("_id", ids);
+        query.fields().include("fullName", "phone");
+        return overviewMongo.find(query, Tenant.class).stream()
+                .map(item -> new OverviewTenant(item.getId(), item.getFullName(), item.getPhone())).toList();
     }
 
     @Override

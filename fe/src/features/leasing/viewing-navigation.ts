@@ -7,7 +7,11 @@ export function viewingAppointmentsPath(
   options: { branchId?: string | null; appointmentId?: string; search?: URLSearchParams } = {},
 ) {
   const management = hasViewingManagementRole(roles)
-  const base = management ? '/manager/appointments' : '/user/appointments'
+  const base = roles.includes('OWNER')
+    ? '/owner/appointments'
+    : management
+      ? '/manager/appointments'
+      : '/tenant/appointments'
   const path = options.appointmentId ? `${base}/${options.appointmentId}` : base
   const search = new URLSearchParams(options.search)
   if (management && options.branchId) search.set('branchId', options.branchId)

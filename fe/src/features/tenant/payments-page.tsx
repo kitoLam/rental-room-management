@@ -1,6 +1,6 @@
 import { Field, InlineError, Modal, Pagination, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
-import { dateTime } from '@/lib/activity'
+import { dateTime, vnDateKey } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import { RefreshCw } from 'lucide-react'
@@ -15,13 +15,25 @@ export function PaymentsPage() {
     [params, setParams] = useSearchParams(),
     query = useTenantQuery('payments', tenantApi.payments, [], true),
     [state, setState] = useState(''),
-    [month, setMonth] = useState(''),
+    [date, setDate] = useState(''),
     [page, setPage] = useState(1)
   const id = params.get('paymentId'),
-    selected = query.data?.find((p) => p.id === id),
-    rows = (query.data || []).filter(
-      (p) => (!state || p.status === state) && (!month || p.createdAt.startsWith(month)),
+    detailQuery = useTenantQuery(
+      'payment-detail',
+      (tenancyId) => (id ? tenantApi.payment(tenancyId, id) : Promise.resolve(null)),
+      [id],
+      false,
     ),
+    selected = detailQuery.data || query.data?.find((p) => p.id === id),
+    rows = (query.data || []).filter((p) => {
+      if (state && p.status !== state) return false
+      if (date) {
+        const created = vnDateKey(p.createdAt)
+        const verified = vnDateKey(p.verifiedAt)
+        return created === date || verified === date
+      }
+      return true
+    }),
     pages = Math.ceil(rows.length / 6),
     current = Math.min(page, Math.max(1, pages))
   function show(paymentId: string | null) {
@@ -41,7 +53,7 @@ export function PaymentsPage() {
         </Button>
       }
     >
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <Field label="Trạng thái" id="payment-filter">
           <select
             id="payment-filter"
@@ -60,18 +72,30 @@ export function PaymentsPage() {
             ))}
           </select>
         </Field>
-        <Field label="Tháng nhận tiền" id="payment-month">
+        <Field label="Ngày thanh toán (dd/mm/yyyy)" id="payment-date">
           <input
             className="input"
-            id="payment-month"
-            type="month"
-            value={month}
+            id="payment-date"
+            type="date"
+            value={date}
             onChange={(e) => {
-              setMonth(e.target.value)
+              setDate(e.target.value)
               setPage(1)
             }}
           />
         </Field>
+        {date && (
+          <Button
+            variant="ghost"
+            className="h-10 px-3 text-xs text-muted-foreground"
+            onClick={() => {
+              setDate('')
+              setPage(1)
+            }}
+          >
+            Xóa lọc ngày
+          </Button>
+        )}
       </div>
       <QueryState
         pending={query.isPending}
@@ -148,10 +172,12 @@ export function PaymentsPage() {
               <p className="mt-5 text-xs text-muted-foreground">Chưa có chứng từ đính kèm.</p>
             )}
           </>
+        ) : detailQuery.isPending || query.isPending ? (
+          <p className="text-sm text-muted-foreground">Đang tải chi tiết thanh toán...</p>
         ) : (
           <InlineError
             error={
-              query.isPending ? null : new Error('Không tìm thấy thanh toán được phép truy cập.')
+              detailQuery.error || new Error('Không tìm thấy thanh toán được phép truy cập.')
             }
           />
         )}

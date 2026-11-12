@@ -5,8 +5,8 @@ import com.kitolam.rentalroommanagement.modules.slotservice.enums.SlotServiceSta
 
 /** Query parameters for search; all optional. */
 public record SlotServiceFilterRequest(
-        @ValidObjectId String roomSlotId,
-        @ValidObjectId String serviceId,
-        SlotServiceStatus status
+        @ValidObjectId String branchId,
+        SlotServiceStatus status,
+        String keyword
 ) {
 }

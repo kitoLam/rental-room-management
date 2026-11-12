@@ -14,4 +14,3 @@ public record TenantBranchStatusRequest(
         branchId = (branchId == null || branchId.isBlank()) ? null : branchId.strip();
     }
 }
-

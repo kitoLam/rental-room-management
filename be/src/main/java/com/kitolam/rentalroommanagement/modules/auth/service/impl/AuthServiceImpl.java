@@ -38,6 +38,29 @@ public class AuthServiceImpl implements AuthService {
     private final String dummyPasswordHash;
 
     @Override
+    public AdminAccountStatistics readStatisticsForAdmin(int year) {
+        var zone = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+        var from = java.time.LocalDate.of(year, 1, 1).atStartOfDay(zone).toInstant();
+        var to = java.time.LocalDate.of(year + 1, 1, 1).atStartOfDay(zone).toInstant();
+        long total = 0, active = 0, unverified = 0, inactive = 0;
+        var roles = new java.util.TreeMap<String, Long>();
+        for (var group : users.readAccountGroups()) {
+            total += group.count();
+            roles.merge(group.role() == null ? "UNKNOWN" : group.role(), group.count(), Long::sum);
+            if (!Boolean.TRUE.equals(group.emailVerified())) unverified += group.count();
+            else if (Boolean.TRUE.equals(group.enabled())) active += group.count();
+            else inactive += group.count();
+        }
+        var recent = users.readRecentForAdmin(org.springframework.data.domain.PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "_id")))
+                .stream().map(u -> new AdminAccountStatistics.RecentAccount(u.getId(), u.getFullName(),
+                        u.getRole() == null ? "UNKNOWN" : u.getRole().name(), u.getCreatedAt())).toList();
+        return new AdminAccountStatistics(total, active, unverified, inactive,
+                roles.entrySet().stream().map(e -> new AdminAccountStatistics.RoleCount(e.getKey(), e.getValue())).toList(),
+                users.readRegistrations(from, to), recent);
+    }
+
+    @Override
     public Optional<AccountIdentityResponse> findAccount(String id) {
         return users.findByIdAndIsDeletedFalse(id).map(this::identity);
     }
@@ -89,6 +112,13 @@ public class AuthServiceImpl implements AuthService {
         user.setEmail(request.email());
         user.setPhone(request.phone());
         user.setPasswordHash(passwords.encode(request.password()));
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPermanentAddress(request.permanentAddress());
+        user.setCccdNumber(request.cccdNumber());
+        user.setCccdIssueDate(request.cccdIssueDate());
+        user.setCccdIssuePlace(request.cccdIssuePlace());
+        user.setCccdFrontImageUrl(request.cccdFrontImageUrl());
+        user.setCccdBackImageUrl(request.cccdBackImageUrl());
         user.setRole(Role.TENANT);
         user.setEnabled(false);
         user.setEmailVerified(false);
@@ -416,6 +446,10 @@ public class AuthServiceImpl implements AuthService {
                 user.getPhone(),
                 user.getDateOfBirth(),
                 user.getGender(),
+                user.getPermanentAddress(),
+                user.getCccdNumber(),
+                user.getCccdIssueDate(),
+                user.getCccdIssuePlace(),
                 user.isEnabled() ? "ACTIVE" : "DISABLED"
         );
     }

@@ -1,7 +1,7 @@
 import { Modal } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
-import { dateOnly } from '@/lib/activity'
+import { dateOnly, vnDateKey } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import {
   branchTenantsService,
@@ -26,6 +26,16 @@ import {
 import { useMemo, useState } from 'react'
 import { ManagerPage } from './components'
 import { useManager } from './context'
+
+const DAY_MS = 86_400_000
+
+/** Backend value when present; otherwise derived from dueDate (mock data) in Vietnam time. */
+function overdueDays(invoice: { overdueDays?: number; dueDate: string; financialStatus: string }) {
+  if (invoice.overdueDays !== undefined) return invoice.overdueDays
+  if (invoice.financialStatus === 'PAID' || !invoice.dueDate) return 0
+  const diff = Date.parse(`${vnDateKey(new Date().toISOString())}T00:00:00Z`) - Date.parse(`${invoice.dueDate}T00:00:00Z`)
+  return Number.isNaN(diff) ? 0 : Math.max(0, Math.floor(diff / DAY_MS))
+}
 
 export function ManagerDebts() {
   const { branch } = useManager()

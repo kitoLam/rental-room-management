@@ -43,7 +43,22 @@ export const viewingEligibilitySchema = z.object({
     'TEMPORARY_HOLD',
     'OFFICIAL_HOLD',
     'NO_VACANCY',
+    'VIEWING_DISABLED',
   ]),
+  slots: z
+    .array(
+      z.object({
+        id: objectId,
+        slotCode: z.string(),
+        status: z.string().nullable(),
+        selectable: z.boolean(),
+        available: z.boolean(),
+        availableFrom: z.string().nullable(),
+        reason: z.string(),
+        message: nullableText,
+      }),
+    )
+    .default([]),
 })
 
 export type ViewingContext = z.infer<typeof viewingContextSchema>
@@ -62,6 +77,7 @@ export const viewingConfigurationSchema = z.object({
   roomNumber: z.string(),
   branchName: z.string(),
   version: z.number().int().nonnegative(),
+  viewingEnabled: z.boolean().default(true),
   periods: z.array(periodSchema).length(3),
   existingAppointments: z.array(
     z.object({
@@ -77,6 +93,7 @@ export const viewingConfigurationSchema = z.object({
 export const viewingConfigurationInputSchema = z
   .object({
     version: z.number().int().nonnegative(),
+    viewingEnabled: z.boolean().optional(),
     periods: z.array(periodSchema.omit({ id: true }).strict()).length(3),
   })
   .strict()
@@ -101,6 +118,8 @@ export const viewingAvailabilitySchema = z.object({
   checkedAt: z.iso.datetime(),
   configurationVersion: z.number().int().nonnegative(),
   room: viewingEligibilitySchema,
+  roomSlotIds: z.array(objectId).default([]),
+  selectionError: nullableText,
   periods: z
     .array(
       periodSchema.extend({
@@ -116,6 +135,8 @@ export const viewingAvailabilitySchema = z.object({
           'TENANT_ROOM_DAY',
           'TENANT_SAME_TYPE',
           'TENANT_TIME_OVERLAP',
+          'NO_SLOT_SELECTED',
+          'SLOT_UNAVAILABLE',
         ]),
       }),
     )
@@ -138,6 +159,7 @@ const appointmentStatus = z.enum(viewingAppointmentStatuses)
 export const viewingAppointmentInputSchema = z
   .object({
     roomId: objectId,
+    roomSlotIds: z.array(objectId).min(1, 'Chọn ít nhất một slot để xem phòng.').max(100),
     shiftId: objectId,
     appointmentDate: z.iso.date(),
     configurationVersion: z.number().int().nonnegative(),
@@ -156,6 +178,14 @@ export const viewingAppointmentSchema = z.object({
   requesterAccountId: nullableText,
   branchId: objectId.nullish(),
   roomId: objectId,
+  roomSlotIds: z
+    .array(objectId)
+    .nullish()
+    .transform((value) => value ?? []),
+  slotCodes: z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []),
   shiftId: objectId,
   shiftType: shiftType.nullish(),
   appointmentDate: z.iso.date(),
@@ -437,13 +467,12 @@ export const viewingDependenciesService = {
       body: JSON.stringify(body),
     })
   },
-  availability: (roomId: string, date: string) => {
+  availability: (roomId: string, date: string, roomSlotIds: string[] = []) => {
     objectId.parse(roomId)
     z.iso.date().parse(date)
-    return read(
-      `/api/v1/shifts/rooms/${roomId}/availability?${new URLSearchParams({ date })}`,
-      viewingAvailabilitySchema,
-    )
+    const params = new URLSearchParams({ date })
+    roomSlotIds.forEach((id) => params.append('roomSlotIds', objectId.parse(id)))
+    return read(`/api/v1/shifts/rooms/${roomId}/availability?${params}`, viewingAvailabilitySchema)
   },
   branchConfigurations: (branchId: string, page = 1, size = 20) => {
     objectId.parse(branchId)

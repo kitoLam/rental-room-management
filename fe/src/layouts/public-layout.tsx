@@ -27,8 +27,8 @@ export function SiteHeader() {
   const user = useSession((s) => s.user)
   const isStaffOnly = Boolean(
     user &&
-      !user.roles.includes('TENANT') &&
-      user.roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN'),
+    !user.roles.includes('TENANT') &&
+    user.roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN'),
   )
   const navigate = useNavigate()
   const tenancies = useQuery({
@@ -39,10 +39,11 @@ export function SiteHeader() {
   })
   const unread = useQuery({
     queryKey: ['viewing-notifications', 'unread', user?.id],
-    queryFn: async () => provider('viewing') === 'real'
-      ? { count: (await viewingDependenciesService.notifications(false)).totalElements }
-      : notificationService.unread(),
-    enabled: !!user,
+    queryFn: async () =>
+      provider('viewing') === 'real'
+        ? { count: (await viewingDependenciesService.notifications(false)).totalElements }
+        : notificationService.unread(),
+    enabled: !!user && !isStaffOnly,
     refetchInterval: 30000,
   })
   const assignments = useQuery({
@@ -89,15 +90,31 @@ export function SiteHeader() {
             </Link>
             {user ? (
               <>
-                {user.roles.includes('ADMIN') && <Link to="/admin/dashboard" className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex">Quản trị</Link>}
-                {(user.roles.includes('MANAGER') || !!assignments.data?.length) && (
+                {user.roles.includes('ADMIN') && (
                   <Link
-                    to="/manager/dashboard"
+                    to="/admin/dashboard"
                     className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex"
                   >
-                    Quản lý chi nhánh
+                    Quản trị
                   </Link>
                 )}
+                {user.roles.includes('OWNER') && (
+                  <Link
+                    to="/owner/dashboard"
+                    className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex"
+                  >
+                    Chủ trọ
+                  </Link>
+                )}
+                {!user.roles.includes('OWNER') &&
+                  (user.roles.includes('MANAGER') || !!assignments.data?.length) && (
+                    <Link
+                      to="/manager/dashboard"
+                      className="hidden min-h-11 items-center text-sm font-bold text-primary sm:inline-flex"
+                    >
+                      Quản lý chi nhánh
+                    </Link>
+                  )}
                 {!isStaffOnly && (user.roles.includes('TENANT') || !!tenancies.data?.length) && (
                   <Link
                     to="/tenant/dashboard"
@@ -106,18 +123,20 @@ export function SiteHeader() {
                     Không gian thuê
                   </Link>
                 )}
-                <Link
-                  to="/notifications"
-                  aria-label={`Thông báo${unread.data?.count ? `, ${unread.data.count} chưa đọc` : ''}`}
-                  className="relative flex size-11 items-center justify-center rounded-lg hover:bg-primary/10"
-                >
-                  <Bell size={20} />
-                  {(unread.data?.count || 0) > 0 && (
-                    <span className="absolute top-0 right-0 rounded-full bg-primary px-1.5 text-xs text-white">
-                      {unread.data!.count}
-                    </span>
-                  )}
-                </Link>
+                {!isStaffOnly && (
+                  <Link
+                    to="/notifications"
+                    aria-label={`Thông báo${unread.data?.count ? `, ${unread.data.count} chưa đọc` : ''}`}
+                    className="relative flex size-11 items-center justify-center rounded-lg hover:bg-primary/10"
+                  >
+                    <Bell size={20} />
+                    {(unread.data?.count || 0) > 0 && (
+                      <span className="absolute top-0 right-0 rounded-full bg-primary px-1.5 text-xs text-white">
+                        {unread.data!.count}
+                      </span>
+                    )}
+                  </Link>
+                )}
                 <Button
                   asChild
                   variant={overlay ? 'overlay' : 'outline'}
@@ -160,14 +179,28 @@ export function SiteHeader() {
           {(user
             ? [
                 ['Tổng quan', dashboardPath(user.roles)],
-                ...((user?.roles.includes('MANAGER') || assignments.data?.length) ? [['Quản lý chi nhánh', '/manager/dashboard']] : []),
-                ...(user?.roles.includes('ADMIN') ? [['Quản trị hệ thống', '/admin/dashboard']] : []),
-                ...(!isStaffOnly && (user?.roles.includes('TENANT') || tenancies.data?.length) ? [['Không gian thuê', '/tenant/dashboard']] : []),
+                ...(!user.roles.includes('OWNER') &&
+                (user.roles.includes('MANAGER') || assignments.data?.length)
+                  ? [['Quản lý chi nhánh', '/manager/dashboard']]
+                  : []),
+                ...(user?.roles.includes('OWNER')
+                  ? [['Không gian chủ trọ', '/owner/dashboard']]
+                  : []),
+                ...(user?.roles.includes('ADMIN')
+                  ? [['Quản trị hệ thống', '/admin/dashboard']]
+                  : []),
+                ...(!isStaffOnly && (user?.roles.includes('TENANT') || tenancies.data?.length)
+                  ? [['Không gian thuê', '/tenant/dashboard']]
+                  : []),
+
                 ['Tìm phòng', '/rooms'],
-                ['Lịch xem phòng', viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id })],
-                ['Yêu cầu giữ chỗ', '/user/bookings'],
-                ['Thông báo', '/notifications'],
-                ['Hồ sơ', '/profile'],
+                ...(!user.roles.includes('ADMIN') ? [[
+                  'Lịch xem phòng',
+                  viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id }),
+                ]] : []),
+                ...(!user.roles.includes('ADMIN') ? [['Yêu cầu giữ chỗ', '/tenant/bookings']] : []),
+                ...(!isStaffOnly ? [['Thông báo', '/notifications']] : []),
+                ['Hồ sơ', user.roles.includes('ADMIN') ? '/admin/profile' : '/profile'],
               ]
             : [
                 ['Trang chủ', '/'],

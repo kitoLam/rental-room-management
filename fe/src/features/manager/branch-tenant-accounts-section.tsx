@@ -543,7 +543,7 @@ export function BranchTenantAccountsSection({
             <Pagination
               page={page}
               totalPages={listQuery.data.totalPages}
-              onChange={(nextPage) => setPage(nextPage)}
+              onPage={(nextPage) => setPage(nextPage)}
             />
           )}
         </QueryState>

@@ -34,7 +34,6 @@ export function ManagerMaintenance() {
           <option value="RESOLVED">Đã giải quyết</option>
           <option value="CLOSED">Đã đóng</option>
           <option value="REJECTED">Từ chối</option>
-          <option value="ESCALATED_ADMIN">Chuyển Admin</option>
           <option value="CANCELLED">Đã hủy</option>
         </select>
       </div>

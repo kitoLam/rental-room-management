@@ -102,7 +102,6 @@ export function ManagerStatus({ value }: { value: string }) {
           'COMPLETED',
           'RESOLVED',
           'CLOSED',
-          'ADMIN_RESOLVED',
         ].includes(value)
           ? 'success'
           : ['IN_PROGRESS', 'ACCEPTED', 'PROGRESS_UPDATED'].includes(value)
@@ -120,7 +119,7 @@ export function ManagerStatus({ value }: { value: string }) {
                 'REQUESTED_INFO',
               ].includes(value)
               ? 'warning'
-              : ['REJECTED', 'FAILED', 'OVERDUE', 'ESCALATED_ADMIN'].includes(value)
+              : ['REJECTED', 'FAILED', 'OVERDUE'].includes(value)
                 ? 'danger'
                 : 'neutral'
       }

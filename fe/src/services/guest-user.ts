@@ -36,6 +36,13 @@ export const authService = {
     email: string
     password: string
     phone: string
+    dateOfBirth: string
+    permanentAddress: string
+    cccdNumber: string
+    cccdIssueDate: string
+    cccdIssuePlace: string
+    cccdFrontImageUrl: string
+    cccdBackImageUrl: string
     confirmPassword: string
     termsAccepted: boolean
   }) =>
@@ -101,16 +108,14 @@ const publicServiceSchema = z.object({
   name: z.string(),
   unit: z.string(),
   unitPrice: z.coerce.number(),
-  calculationType: z.string(),
-  quantityRule: z.enum(['FIXED_ONE', 'PER_SLOT', 'USER_INPUT', 'METERED']).nullable().optional(),
-  mandatory: z.boolean(),
+  description: z.string().nullish(),
 })
 const publicRoomSchema = z.object({
   utilityRates: utilityRatesSchema.nullish(),
   room: z.object({
     id: databaseIdSchema,
     branchId: databaseIdSchema,
-    roomTypeId: databaseIdSchema,
+    title: z.string().nullish(),
     code: z.string(),
     capacity: z.number(),
     areaSqm: z.number().nullable(),
@@ -124,8 +129,18 @@ const publicRoomSchema = z.object({
   branchId: databaseIdSchema,
   branchName: z.string(),
   address: z.string(),
-  roomTypeName: z.string(),
   ownerName: z.string().nullish(),
+  roomServices: z
+    .array(
+      z.object({
+        id: databaseIdSchema,
+        name: z.string(),
+        unit: z.string(),
+        unitPrice: z.coerce.number(),
+        calculationType: z.string().nullish(),
+      }),
+    )
+    .nullish(),
 })
 type RealRoom = z.infer<typeof publicRoomSchema>
 function adaptRoom(data: RealRoom) {
@@ -134,10 +149,11 @@ function adaptRoom(data: RealRoom) {
   const images = refs.flatMap((value: unknown) =>
     typeof value === 'string' && /^https?:\/\//.test(value) ? [value] : [],
   )
+  const title = r.title?.trim() || `Phòng ${r.code}`
   return roomSchema.parse({
     id: r.id,
     code: r.code,
-    title: `${data.roomTypeName} ${r.code}`,
+    title,
     branchId: data.branchId,
     branchName: data.branchName,
     address: data.address,
@@ -147,8 +163,6 @@ function adaptRoom(data: RealRoom) {
     sizeM2: r.areaSqm,
     floor: r.floorNumber,
     rentalMode: 'SLOT',
-    roomTypeId: r.roomTypeId,
-    roomTypeName: data.roomTypeName,
     operationalStatus:
       r.operationalStatus === 'MAINTENANCE'
         ? 'MAINTENANCE'
@@ -163,20 +177,20 @@ function adaptRoom(data: RealRoom) {
           : 'AVAILABLE',
     availableSlots: null,
     imageUrl: images[0] || '',
-    imageAlt: `${data.roomTypeName} ${r.code}`,
+    imageAlt: title,
     images,
     description: r.description || '',
     amenities: r.amenities || [],
     services: [],
     utilityRates: data.utilityRates,
     ownerName: data.ownerName || undefined,
+    roomServices: data.roomServices ?? undefined,
   })
 }
 export const defaultFilters: RoomFilters = {
   q: '',
   area: '',
   mode: 'ALL',
-  roomTypeId: '',
   availableOnly: false,
   sort: 'recommended',
   page: 1,
@@ -186,7 +200,7 @@ function query(filters: RoomFilters) {
   const keyword = filters.q.trim()
   if (keyword) params.set(provider('catalog') === 'mock' ? 'q' : 'keyword', keyword)
   if (filters.branchId) params.set('branchId', filters.branchId)
-  if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
+  if (filters.minCapacity) params.set('minCapacity', String(filters.minCapacity))
   for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea'] as const)
     if (filters[key] !== undefined) params.set(key, String(filters[key]))
   if (provider('catalog') === 'mock') {
@@ -220,12 +234,6 @@ export const catalogService = {
     provider('catalog') === 'mock'
       ? request('catalog', `/api/v1/public/rooms/${id}`, roomSchema)
       : adaptRoom(await request('catalog', `/api/v1/public/rooms/${id}`, publicRoomSchema)),
-  types: () =>
-    request(
-      'catalog',
-      '/api/v1/public/room-types',
-      z.array(z.object({ id: databaseIdSchema, name: z.string() })),
-    ),
   branches: () =>
     request(
       'catalog',
@@ -251,26 +259,34 @@ export const catalogService = {
         calculationType: s.calculationType ?? 'FIXED',
         quantityRule: 'FIXED_ONE',
       }))
+    // Dịch vụ theo phòng luôn áp dụng (bắt buộc); dịch vụ tự chọn của chi nhánh khách tích thêm,
+    // được kích hoạt khi hợp đồng có hiệu lực.
+    const included = (room.roomServices || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      unit: s.unit,
+      price: s.unitPrice,
+      mandatory: true,
+      calculationType: s.calculationType === 'PER_PERSON' ? 'PER_PERSON' : 'FIXED',
+      quantityRule: s.calculationType === 'PER_PERSON' ? ('PER_SLOT' as const) : ('FIXED_ONE' as const),
+    }))
     const items = await request(
       'catalog',
-      `/api/v1/public/services?${new URLSearchParams({ serviceScope: 'SLOT' })}`,
+      `/api/v1/public/branches/${encodeURIComponent(room.branchId)}/slot-services`,
       z.array(publicServiceSchema),
     )
-    return items.map((s) => {
-      const unit = s.unit.trim().toLocaleLowerCase('vi-VN') === 'người/tháng' ? 'slot/tháng' : s.unit
-      return {
+    return [
+      ...included,
+      ...items.map((s) => ({
         id: s.id,
         name: s.name,
-        unit,
+        unit: s.unit,
         price: s.unitPrice,
-        mandatory: s.mandatory,
-        calculationType: s.calculationType,
-        quantityRule: s.quantityRule ?? (s.calculationType === 'METERED' ? 'METERED'
-          : ['PER_SLOT', 'PER_PERSON'].includes(s.calculationType) ? 'PER_SLOT'
-            : ['xe/tháng', 'chỗ/tháng'].includes(unit.trim().toLocaleLowerCase('vi-VN')) ? 'USER_INPUT'
-              : 'FIXED_ONE'),
-      }
-    })
+        mandatory: false,
+        calculationType: 'FIXED',
+        quantityRule: 'USER_INPUT' as const,
+      })),
+    ]
   },
   policy: (id: string) => request('catalog', `/api/v1/public/branches/${id}/policy`, policySchema),
 }
@@ -326,6 +342,7 @@ const backendBookingSchema = z.object({
   holdExpiresAt: z.string().nullable(),
   checkInDeadline: z.string().nullable().optional(),
   contractId: databaseIdSchema.nullable().optional(),
+  contractIds: z.array(databaseIdSchema).nullish(),
   cancellationPolicy: z.string().nullable(),
   depositStatus: z.enum(['UNPAID', 'PROCESSING', 'PAID', 'REFUNDED', 'FORFEITED']),
   rejectReason: z.string().nullable(),
@@ -468,6 +485,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     createdAt,
     timeline: b.timeline,
     contractId: b.contractId || null,
+    contractIds: b.contractIds?.length ? b.contractIds : b.contractId ? [b.contractId] : [],
     selectedServices: b.selectedServices || [],
   })
 }

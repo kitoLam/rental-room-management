@@ -9,26 +9,18 @@ public record PublicRoomResponse(
         String branchId,
         String branchName,
         String address,
-        String roomTypeName,
         String ownerName,
-        UtilityRatesResponse utilityRates
+        UtilityRatesResponse utilityRates,
+        /** Services that come with the room (detail only). */
+        List<com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomServiceResponse> roomServices
 ) {
-    public PublicRoomResponse(
-            PublicRoom room,
-            String branchId,
-            String branchName,
-            String address,
-            String roomTypeName,
-            UtilityRatesResponse utilityRates
-    ) {
-        this(room, branchId, branchName, address, roomTypeName, null, utilityRates);
-    }
 
     public record PublicRoom(
             String id,
             String branchId,
-            String roomTypeId,
+            String title,
             String code,
+            /** Room.maxOccupants (number of slots). */
             Integer capacity,
             BigDecimal areaSqm,
             Integer floorNumber,

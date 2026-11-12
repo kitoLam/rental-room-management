@@ -29,12 +29,13 @@ export type ManagerBranch = z.infer<typeof branchAssignmentSchema>
 export const roomInputSchema = z.object({
   code: z.string().trim().min(2).max(30),
   title: z.string().trim().min(3).max(150),
-  roomTypeId: uuid,
   rentalMode: z.enum(['ROOM', 'SLOT']),
   capacity: z.number().int().min(1).max(30),
   sizeM2: z.number().positive().max(1000).nullable(),
   floor: z.number().int().min(0).max(100).nullable(),
   price: vnd,
+  deposit: vnd.nullable().optional(),
+  roomServiceIds: z.array(z.string()).optional(),
   description: z.string().max(3000),
   amenities: z.array(z.string().trim().min(1).max(80)).max(20),
   images: z.array(z.string().max(1400000)).max(6),
@@ -260,6 +261,8 @@ export const managerInvoiceSchema = invoiceSchema.extend({
   tenantName: z.string(),
   roomName: z.string(),
   roomId: uuid,
+  /** Days past dueDate while outstanding (debt list from the backend); absent elsewhere. */
+  overdueDays: z.number().int().nonnegative().optional(),
 })
 export const invoiceInputSchema = z.object({
   contractTenantId: uuid,
@@ -301,13 +304,13 @@ export const invoiceSourcesSchema = z.object({
 })
 export type InvoiceSources = z.infer<typeof invoiceSourcesSchema>
 export const managerPaymentSchema = z.object({
-  id: uuid,
-  branchId: uuid,
+  id: databaseIdSchema,
+  branchId: databaseIdSchema,
   reference: z.string(),
   targetType: z.enum(['BOOKING_HOLD', 'INVOICE', 'PREPAID_RENT']),
-  invoiceId: uuid.nullable(),
-  bookingId: uuid.nullable(),
-  contractTenantId: uuid.nullable(),
+  invoiceId: databaseIdSchema.nullable(),
+  bookingId: databaseIdSchema.nullable(),
+  contractTenantId: databaseIdSchema.nullable(),
   payerName: z.string(),
   tenantName: z.string(),
   amountReceived: vnd,

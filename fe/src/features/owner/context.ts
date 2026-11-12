@@ -54,7 +54,7 @@ export function useOwnerMutation(done?: (data: { id?: string } | null) => void) 
   })
 }
 export const operationsLink = (branch: string, page = 'dashboard') =>
-  `/manager/${page}?${new URLSearchParams({ branchId: branch, workspace: 'owner' })}`
+  `/owner/${page}?${new URLSearchParams({ branchId: branch, workspace: 'owner' })}`
 export function useOwnerFilters(defaults: Record<string, string> = {}) {
   const [params, setParams] = useSearchParams()
   const filters: Record<string, string> = {

@@ -8,6 +8,7 @@ import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import com.kitolam.rentalroommanagement.modules.auth.document.User;
 import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
+import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
@@ -22,10 +23,8 @@ import com.kitolam.rentalroommanagement.modules.reportrecord.dto.response.Report
 import com.kitolam.rentalroommanagement.modules.reportrecord.enums.ReportRecordAction;
 import com.kitolam.rentalroommanagement.modules.reportrecord.repository.ReportRecordRepository;
 import com.kitolam.rentalroommanagement.modules.reportrequest.document.ReportRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAdminResolveRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestAssignRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestCreateRequest;
-import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestEscalateAdminRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestFilterRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestInfoRequest;
 import com.kitolam.rentalroommanagement.modules.reportrequest.dto.request.ReportRequestProgressRequest;
@@ -47,7 +46,6 @@ import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
-import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,11 +60,28 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class ReportRequestServiceImpl implements ReportRequestService {
+    /** Đọc tóm tắt danh sách yêu cầu hỗ trợ theo tenantIds và contractId phục vụ màn hình tổng quan khách thuê. */
+    @Override
+    public java.util.List<TenantSupport> readForTenantOverview(java.util.List<String> tenantIds, String contractId) {
+        if (tenantIds.isEmpty() || contractId == null) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("tenantId", tenantIds);
+        var values = new java.util.ArrayList<Object>();
+        values.add(contractId);
+        if (org.bson.types.ObjectId.isValid(contractId)) values.add(new org.bson.types.ObjectId(contractId));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("contractId").in(values));
+        query.fields().include("title", "status", "updatedAt");
+        return mongoTemplate.find(query, ReportRequest.class).stream().map(item -> new TenantSupport(item.getId(),
+                item.getTitle(), item.getStatus(), item.getUpdatedAt())).toList();
+    }
 
     private static final int MAX_ATTACHMENTS = 5;
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -84,6 +99,12 @@ public class ReportRequestServiceImpl implements ReportRequestService {
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
 
+    /**
+     * Tenant/Owner tạo yêu cầu hỗ trợ mới:
+     * - Kiểm tra hợp đồng thuê còn hiệu lực và validate ảnh đính kèm.
+     * - Tự động gán Manager phụ trách theo hợp đồng/phòng/chi nhánh.
+     * - Lưu phiếu ở trạng thái PENDING, liên kết nội thất/dịch vụ (nếu có) và ghi nhật ký CREATED.
+     */
     @Override
     @Transactional
     public ReportRequestResponse create(ReportRequestCreateRequest request, AuthPrincipal principal) {
@@ -99,7 +120,12 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
 
         // 1. Kiểm tra Hợp đồng có hiệu lực của chính khách thuê đang đăng nhập
-        Contract validContract = findActiveContract(tenant.getId(), room != null ? room.getId() : request.roomId());
+        String targetRoomId = room != null ? room.getId() : request.roomId();
+        Contract validContract = findActiveContract(tenant.getId(), targetRoomId);
+        if (validContract == null && principal != null && StringUtils.hasText(principal.userId())
+                && !principal.userId().equals(tenant.getId())) {
+            validContract = findActiveContract(principal.userId(), targetRoomId);
+        }
         if (validContract == null) {
             throw new BadRequestException("Bạn không có hợp đồng đang có hiệu lực cho phòng này.");
         }
@@ -198,6 +224,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(saved.getId(), principal);
     }
 
+    /** Lấy chi tiết một yêu cầu hỗ trợ theo ID kèm toàn bộ timeline lịch sử xử lý (có kiểm tra quyền xem). */
     @Override
     public ReportRequestResponse getById(String id, AuthPrincipal principal) {
         ReportRequest report = findReport(id);
@@ -210,6 +237,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return buildResponse(report, timeline);
     }
 
+    /** Tìm kiếm, lọc và phân trang danh sách yêu cầu hỗ trợ theo phạm vi quyền của từng vai trò (Tenant/Manager/Owner/Admin). */
     @Override
     public PagedResponse<ReportRequestResponse> search(ReportRequestFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
         List<Criteria> baseFilterCriteria = MongoQueryHelper.baseCriteria();
@@ -228,6 +256,12 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             if (StringUtils.hasText(filter.contractId())) {
                 MongoQueryHelper.addObjectIdEquals(baseFilterCriteria, "contractId", filter.contractId());
             }
+            if (StringUtils.hasText(filter.managerId())) {
+                MongoQueryHelper.addObjectIdEquals(baseFilterCriteria, "managerId", filter.managerId());
+            }
+            if (StringUtils.hasText(filter.branchId())) {
+                addBranchFilter(baseFilterCriteria, List.of(filter.branchId()));
+            }
         }
 
         List<Criteria> roleScopedCriteria = new ArrayList<>(baseFilterCriteria);
@@ -235,27 +269,14 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         // Kiểm tra quyền lọc dữ liệu theo vai trò
         if (principal != null) {
             if ("TENANT".equals(principal.role())) {
-                Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
-                List<Criteria> tenantCriteria = new ArrayList<>();
-                if (tenant != null && StringUtils.hasText(tenant.getId())) {
-                    if (org.bson.types.ObjectId.isValid(tenant.getId())) {
-                        tenantCriteria.add(Criteria.where("tenantId").is(new org.bson.types.ObjectId(tenant.getId())));
-                    }
-                    tenantCriteria.add(Criteria.where("tenantId").is(tenant.getId()));
-                }
-                if (StringUtils.hasText(principal.userId())) {
-                    if (org.bson.types.ObjectId.isValid(principal.userId())) {
-                        tenantCriteria.add(Criteria.where("tenantId").is(new org.bson.types.ObjectId(principal.userId())));
-                    }
-                    tenantCriteria.add(Criteria.where("tenantId").is(principal.userId()));
-                }
-                if (!tenantCriteria.isEmpty()) {
-                    roleScopedCriteria.add(new Criteria().orOperator(tenantCriteria.toArray(new Criteria[0])));
+                Set<String> tenantActorIds = collectTenantActorIds(principal);
+                if (!tenantActorIds.isEmpty()) {
+                    roleScopedCriteria.add(Criteria.where("tenantId").in(toIdValues(tenantActorIds)));
                 } else {
                     roleScopedCriteria.add(Criteria.where("tenantId").exists(false));
                 }
             } else if ("MANAGER".equals(principal.role())) {
-                Manager manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+                Manager manager = findManagerByEmail(principal.email());
                 if (manager == null && StringUtils.hasText(principal.userId())) {
                     try {
                         manager = managerRepository.findByIdAndIsDeletedFalse(principal.userId()).orElse(null);
@@ -263,49 +284,42 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                     }
                 }
                 List<Criteria> managerCriteria = new ArrayList<>();
-                if (manager != null) {
-                    if (StringUtils.hasText(manager.getId())) {
-                        if (org.bson.types.ObjectId.isValid(manager.getId())) {
-                            managerCriteria.add(Criteria.where("managerId").is(new org.bson.types.ObjectId(manager.getId())));
-                        }
-                        managerCriteria.add(Criteria.where("managerId").is(manager.getId()));
-                    }
-                    if (StringUtils.hasText(manager.getBranchId())) {
-                        if (org.bson.types.ObjectId.isValid(manager.getBranchId())) {
-                            managerCriteria.add(Criteria.where("branchId").is(new org.bson.types.ObjectId(manager.getBranchId())));
-                        }
-                        managerCriteria.add(Criteria.where("branchId").is(manager.getBranchId()));
-                    }
+                Set<String> managerActorIds = new LinkedHashSet<>();
+                if (manager != null && StringUtils.hasText(manager.getId())) {
+                    managerActorIds.add(manager.getId());
                 }
                 if (StringUtils.hasText(principal.userId())) {
-                    if (org.bson.types.ObjectId.isValid(principal.userId())) {
-                        managerCriteria.add(Criteria.where("managerId").is(new org.bson.types.ObjectId(principal.userId())));
-                    }
-                    managerCriteria.add(Criteria.where("managerId").is(principal.userId()));
+                    managerActorIds.add(principal.userId());
                 }
-                if (filter != null && StringUtils.hasText(filter.branchId())) {
-                    if (org.bson.types.ObjectId.isValid(filter.branchId())) {
-                        managerCriteria.add(Criteria.where("branchId").is(new org.bson.types.ObjectId(filter.branchId())));
-                    }
-                    managerCriteria.add(Criteria.where("branchId").is(filter.branchId()));
+                if (!managerActorIds.isEmpty()) {
+                    managerCriteria.add(Criteria.where("managerId").in(toIdValues(managerActorIds)));
+                }
+                if (manager != null && StringUtils.hasText(manager.getBranchId())) {
+                    addBranchFilter(managerCriteria, List.of(manager.getBranchId()));
                 }
                 // Cho phép lấy cả những yêu cầu chưa được gán branchId/managerId
-                managerCriteria.add(Criteria.where("branchId").is(null));
-                managerCriteria.add(Criteria.where("managerId").is(null));
+                managerCriteria.add(new Criteria().andOperator(
+                        new Criteria().orOperator(Criteria.where("branchId").is(null), Criteria.where("branchId").exists(false)),
+                        new Criteria().orOperator(Criteria.where("managerId").is(null), Criteria.where("managerId").exists(false))
+                ));
                 if (!managerCriteria.isEmpty()) {
                     roleScopedCriteria.add(new Criteria().orOperator(managerCriteria.toArray(new Criteria[0])));
+                }
+            } else if ("OWNER".equals(principal.role())) {
+                List<String> ownerBranchIds = findOwnerBranchIds(principal.userId());
+                if (!ownerBranchIds.isEmpty()) {
+                    List<Criteria> ownerCriteria = new ArrayList<>();
+                    addBranchFilter(ownerCriteria, ownerBranchIds);
+                    if (StringUtils.hasText(principal.userId())) {
+                        ownerCriteria.add(Criteria.where("managerId").in(toIdValues(Set.of(principal.userId()))));
+                    }
+                    roleScopedCriteria.add(new Criteria().orOperator(ownerCriteria.toArray(new Criteria[0])));
                 }
             }
             // ADMIN xem được tất cả
         }
 
         Page<ReportRequest> page = MongoQueryHelper.page(mongoTemplate, roleScopedCriteria, pageable, ReportRequest.class);
-
-        // Nếu lọc theo branchId/managerId của MANAGER mà chưa khớp (do lệch ID giữa các chi nhánh),
-        // fallback lấy tất cả các yêu cầu hỗ trợ khớp với bộ lọc trạng thái/loại/từ khóa để Manager xử lý
-        if (page.isEmpty() && principal != null && "MANAGER".equals(principal.role())) {
-            page = MongoQueryHelper.page(mongoTemplate, baseFilterCriteria, pageable, ReportRequest.class);
-        }
 
         return PagedResponse.from(page.map(r -> {
             List<ReportRecordResponse> timeline = reportRecordRepository
@@ -317,6 +331,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }));
     }
 
+    /** Manager bắt đầu tiếp nhận và xử lý yêu cầu (chuyển từ PENDING hoặc WAITING_INFO sang IN_PROGRESS, gán người phụ trách). */
     @Override
     @Transactional
     public ReportRequestResponse startProcessing(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
@@ -332,7 +347,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
 
         Manager manager = null;
         if (principal != null && StringUtils.hasText(principal.email())) {
-            manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+            manager = findManagerByEmail(principal.email());
         }
 
         if (request != null && StringUtils.hasText(request.managerId())) {
@@ -383,6 +398,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager phân công hoặc thay đổi người phụ trách xử lý yêu cầu và ghi lịch sử ASSIGNED. */
     @Override
     @Transactional
     public ReportRequestResponse assign(String id, ReportRequestAssignRequest request, AuthPrincipal principal) {
@@ -405,7 +421,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         if (request != null && StringUtils.hasText(request.managerId())) {
             report.setManagerId(request.managerId().trim());
         } else if (!StringUtils.hasText(report.getManagerId()) && principal != null) {
-            Manager manager = managerRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
+            Manager manager = findManagerByEmail(principal.email());
             report.setManagerId(manager != null ? manager.getId() : principal.userId());
         }
 
@@ -433,6 +449,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager yêu cầu Tenant bổ sung thêm thông tin (chuyển từ PENDING/IN_PROGRESS sang WAITING_INFO). */
     @Override
     @Transactional
     public ReportRequestResponse requestInfo(String id, ReportRequestInfoRequest request, AuthPrincipal principal) {
@@ -464,6 +481,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant gửi bổ sung thông tin và ảnh minh chứng (chuyển từ WAITING_INFO quay lại PENDING để Manager tiếp nhận). */
     @Override
     @Transactional
     public ReportRequestResponse supplementInfo(String id, ReportRequestSupplementRequest request, AuthPrincipal principal) {
@@ -507,6 +525,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager từ chối yêu cầu hỗ trợ kèm lý do (chuyển từ PENDING/IN_PROGRESS/WAITING_INFO sang REJECTED). */
     @Override
     @Transactional
     public ReportRequestResponse reject(String id, ReportRequestRejectRequest request, AuthPrincipal principal) {
@@ -540,6 +559,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager cập nhật tiến độ và ảnh minh chứng trong quá trình xử lý (giữ/đưa về trạng thái IN_PROGRESS). */
     @Override
     @Transactional
     public ReportRequestResponse updateProgress(String id, ReportRequestProgressRequest request, AuthPrincipal principal) {
@@ -572,6 +592,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Manager hoàn thành xử lý, lưu kết quả giải quyết và thời điểm hoàn tất (chuyển sang RESOLVED). */
     @Override
     @Transactional
     public ReportRequestResponse resolve(String id, ReportRequestResolveRequest request, AuthPrincipal principal) {
@@ -606,6 +627,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant xem kết quả, xác nhận hài lòng và đóng phiếu yêu cầu (chuyển từ RESOLVED sang CLOSED). */
     @Override
     @Transactional
     public ReportRequestResponse confirmClose(String id, AuthPrincipal principal) {
@@ -637,6 +659,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Tenant không hài lòng với kết quả nên yêu cầu mở lại xử lý (chuyển từ RESOLVED quay lại IN_PROGRESS). */
     @Override
     @Transactional
     public ReportRequestResponse reopen(String id, ReportRequestReopenRequest request, AuthPrincipal principal) {
@@ -669,75 +692,8 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
-    @Override
-    @Transactional
-    public ReportRequestResponse escalateAdmin(String id, ReportRequestEscalateAdminRequest request, AuthPrincipal principal) {
-        ReportRequest report = findReport(id);
-        ensureTenantOwnsOrAdmin(report, principal);
 
-        if (report.getStatus() != ReportRequestStatus.IN_PROGRESS &&
-                report.getStatus() != ReportRequestStatus.WAITING_INFO &&
-                report.getStatus() != ReportRequestStatus.RESOLVED &&
-                report.getStatus() != ReportRequestStatus.REJECTED &&
-                report.getStatus() != ReportRequestStatus.PENDING) {
-            throw new BadRequestException("Chỉ có thể chuyển Admin phân xử khi yêu cầu chưa đóng.");
-        }
-
-        validateAttachments(request.attachments());
-
-        ReportRequestStatus previousStatus = report.getStatus();
-        report.setStatus(ReportRequestStatus.ESCALATED_ADMIN);
-        report.setDisputeReason(request.disputeReason().trim());
-        reportRequestRepository.save(report);
-
-        createRecord(
-                report.getId(),
-                principal != null ? principal.userId() : null,
-                principal != null ? principal.role() : "TENANT",
-                resolveActorName(principal, "Khách thuê"),
-                report.getManagerId(),
-                ReportRecordAction.ESCALATED_ADMIN,
-                previousStatus,
-                ReportRequestStatus.ESCALATED_ADMIN,
-                "Khách thuê chuyển tranh chấp lên Admin phân xử: " + request.disputeReason().trim(),
-                request.attachments() != null ? request.attachments() : List.of()
-        );
-
-        return getById(report.getId(), principal);
-    }
-
-    @Override
-    @Transactional
-    public ReportRequestResponse adminResolve(String id, ReportRequestAdminResolveRequest request, AuthPrincipal principal) {
-        requireRole(principal, "ADMIN");
-        ReportRequest report = findReport(id);
-
-        if (report.getStatus() != ReportRequestStatus.ESCALATED_ADMIN) {
-            throw new BadRequestException("Chỉ có thể phân xử khi yêu cầu hỗ trợ đang ở trạng thái Chuyển Admin phân xử (ESCALATED_ADMIN).");
-        }
-
-        ReportRequestStatus previousStatus = report.getStatus();
-        report.setStatus(ReportRequestStatus.CLOSED);
-        report.setAdminConclusion(request.adminConclusion().trim());
-        report.setClosedAt(Instant.now());
-        reportRequestRepository.save(report);
-
-        createRecord(
-                report.getId(),
-                principal != null ? principal.userId() : null,
-                principal != null ? principal.role() : "ADMIN",
-                resolveActorName(principal, "Admin Quản trị viên"),
-                report.getManagerId(),
-                ReportRecordAction.ADMIN_RESOLVED,
-                previousStatus,
-                ReportRequestStatus.CLOSED,
-                "Admin đưa ra kết luận phân xử: " + request.adminConclusion().trim(),
-                List.of()
-        );
-
-        return getById(report.getId(), principal);
-    }
-
+    /** Tenant chủ động hủy yêu cầu khi chưa xử lý (từ PENDING hoặc WAITING_INFO sang CANCELLED). */
     @Override
     @Transactional
     public ReportRequestResponse cancel(String id, AuthPrincipal principal) {
@@ -768,6 +724,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
+    /** Cập nhật thông tin chung của phiếu yêu cầu hỗ trợ (PATCH) khi phiếu chưa kết thúc. */
     @Override
     @Transactional
     public ReportRequestResponse update(String id, ReportRequestUpdateRequest request, AuthPrincipal principal) {
@@ -794,6 +751,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(updated.getId(), principal);
     }
 
+    /** Xóa mềm phiếu yêu cầu hỗ trợ (chỉ ADMIN, OWNER hoặc MANAGER). */
     @Override
     @Transactional
     public void delete(String id, AuthPrincipal principal) {
@@ -805,6 +763,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
 
     // ================= HELPER METHODS =================
 
+    /** Ghép dữ liệu hiển thị (tên phòng, slot, người phụ trách, tên khách thuê, timeline) thành ReportRequestResponse. */
     private ReportRequestResponse buildResponse(ReportRequest r, List<ReportRecordResponse> timeline) {
         String roomName = null;
         String slotName = null;
@@ -868,14 +827,17 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             } catch (Exception ignored) {
             }
         }
-        return ReportRequestResponse.from(r, timeline, roomName, slotName, assigneeName, assigneePhone);
+        String tenantName = resolveTenantName(r.getTenantId());
+        return ReportRequestResponse.from(r, timeline, roomName, slotName, assigneeName, assigneePhone, tenantName);
     }
 
+    /** Tìm phiếu yêu cầu chưa bị xóa mềm theo ID; ném NotFoundException nếu không tồn tại. */
     private ReportRequest findReport(String id) {
         return reportRequestRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy yêu cầu hỗ trợ với id: " + id));
     }
 
+    /** Kiểm tra giới hạn số lượng ảnh, định dạng (JPG/PNG/WebP), dung lượng base64 (tối đa 5 MB) và độ dài URL. */
     private void validateAttachments(List<String> attachments) {
         if (attachments == null || attachments.isEmpty()) {
             return;
@@ -910,6 +872,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Lấy tên hiển thị của người thực hiện thao tác từ AuthPrincipal hoặc dùng tên mặc định. */
     private String resolveActorName(AuthPrincipal principal, String defaultName) {
         if (principal == null) return defaultName;
         if (StringUtils.hasText(principal.fullName())) return principal.fullName();
@@ -917,6 +880,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return defaultName;
     }
 
+    /** Ghi một bản ghi lịch sử mới vào collection report_records cho mỗi thao tác thay đổi trên phiếu. */
     private void createRecord(String reportRequestId, String actorId, String actorRole, String actorName,
                               String managerId, ReportRecordAction action, ReportRequestStatus statusFrom,
                               ReportRequestStatus statusTo, String note, List<String> attachments) {
@@ -936,16 +900,29 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         reportRecordRepository.save(record);
     }
 
+    /** Xác định hồ sơ Tenant tương ứng với người dùng hiện tại (tự đồng bộ tạo mới Tenant từ User nếu chưa có). */
     private Tenant resolveTenant(AuthPrincipal principal, String inputTenantId) {
         if (principal != null && "TENANT".equals(principal.role())) {
-            return tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElseGet(() -> {
-                User user = userRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
-                Tenant newTenant = new Tenant();
-                newTenant.setEmail(principal.email());
-                newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
-                newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
-                return tenantRepository.save(newTenant);
-            });
+            List<Tenant> existing = findTenantsByEmail(principal.email());
+            if (!existing.isEmpty()) {
+                return existing.get(0);
+            }
+            User user = findUserByEmail(principal.email());
+            Tenant newTenant = new Tenant();
+            newTenant.setEmail(principal.email());
+            newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
+            newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
+            if (user != null) {
+                newTenant.setIdCardNumber(user.getCccdNumber());
+                newTenant.setAddress(user.getPermanentAddress());
+                if (StringUtils.hasText(user.getDateOfBirth())) {
+                    try {
+                        newTenant.setDateOfBirth(java.time.LocalDate.parse(user.getDateOfBirth().strip()));
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            return tenantRepository.save(newTenant);
         }
         if (StringUtils.hasText(inputTenantId)) {
             try {
@@ -957,16 +934,29 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         if (principal == null || principal.email() == null) {
             throw new ForbiddenException("Không xác định được danh tính khách thuê hiện tại.");
         }
-        return tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElseGet(() -> {
-            User user = userRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
-            Tenant newTenant = new Tenant();
-            newTenant.setEmail(principal.email());
-            newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
-            newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
-            return tenantRepository.save(newTenant);
-        });
+        List<Tenant> existing = findTenantsByEmail(principal.email());
+        if (!existing.isEmpty()) {
+            return existing.get(0);
+        }
+        User user = findUserByEmail(principal.email());
+        Tenant newTenant = new Tenant();
+        newTenant.setEmail(principal.email());
+        newTenant.setFullName(user != null && StringUtils.hasText(user.getFullName()) ? user.getFullName() : principal.fullName());
+        newTenant.setPhone(user != null ? user.getPhone() : principal.phone());
+        if (user != null) {
+            newTenant.setIdCardNumber(user.getCccdNumber());
+            newTenant.setAddress(user.getPermanentAddress());
+            if (StringUtils.hasText(user.getDateOfBirth())) {
+                try {
+                    newTenant.setDateOfBirth(java.time.LocalDate.parse(user.getDateOfBirth().strip()));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return tenantRepository.save(newTenant);
     }
 
+    /** Tìm hợp đồng thuê còn hiệu lực (ACTIVE/SIGNED) mà khách thuê là chủ hợp đồng hoặc thành viên ở ghép (ưu tiên theo roomId). */
     private Contract findActiveContract(String tenantId, String roomId) {
         try {
             if (!StringUtils.hasText(tenantId)) {
@@ -1023,13 +1013,11 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Tự động xác định ID quản lý phụ trách theo thứ tự ưu tiên: hợp đồng -> phòng -> quản lý đang hoạt động của chi nhánh. */
     private String resolveManager(Room room, Contract contract) {
         try {
             if (contract != null && StringUtils.hasText(contract.getManagerId())) {
                 return contract.getManagerId();
-            }
-            if (room != null && StringUtils.hasText(room.getManagerId())) {
-                return room.getManagerId();
             }
             if (room != null && StringUtils.hasText(room.getBranchId()) && org.bson.types.ObjectId.isValid(room.getBranchId())) {
                 Query q = new Query(Criteria.where("branchId").is(new org.bson.types.ObjectId(room.getBranchId()))
@@ -1045,17 +1033,155 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return null;
     }
 
+    /** Kiểm tra Tenant hiện tại có phải chủ sở hữu của phiếu yêu cầu hay không (ADMIN/MANAGER/OWNER được bỏ qua). */
     private void ensureTenantOwnsOrAdmin(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "MANAGER".equals(principal.role()) || "OWNER".equals(principal.role())) return;
-        Tenant tenant = tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElse(null);
-        boolean matchTenantId = tenant != null && StringUtils.hasText(tenant.getId()) && tenant.getId().equals(report.getTenantId());
-        boolean matchUserId = StringUtils.hasText(principal.userId()) && principal.userId().equals(report.getTenantId());
-        if (!matchTenantId && !matchUserId && StringUtils.hasText(report.getTenantId())) {
+        Set<String> actorIds = collectTenantActorIds(principal);
+        if (StringUtils.hasText(report.getTenantId()) && !actorIds.contains(report.getTenantId())) {
             throw new ForbiddenException("Bạn không có quyền thao tác trên yêu cầu này.");
         }
     }
 
+    /** Gom tất cả ID định danh có thể gắn với Tenant hiện tại (userId từ token và các tenantId trùng email). */
+    private Set<String> collectTenantActorIds(AuthPrincipal principal) {
+        Set<String> ids = new LinkedHashSet<>();
+        if (principal == null) return ids;
+        if (StringUtils.hasText(principal.userId())) {
+            ids.add(principal.userId());
+        }
+        for (Tenant t : findTenantsByEmail(principal.email())) {
+            if (t != null && StringUtils.hasText(t.getId())) {
+                ids.add(t.getId());
+            }
+        }
+        return ids;
+    }
+
+    /** Tìm danh sách hồ sơ Tenant theo email (khớp chính xác và khớp không phân biệt hoa thường). */
+    private List<Tenant> findTenantsByEmail(String email) {
+        if (!StringUtils.hasText(email)) return List.of();
+        List<Tenant> results = new ArrayList<>();
+        tenantRepository.findByEmailAndIsDeletedFalse(email).ifPresent(results::add);
+        try {
+            List<Tenant> ci = mongoTemplate.find(
+                    Query.query(Criteria.where("isDeleted").is(false)
+                            .and("email").regex("^" + Pattern.quote(email.trim()) + "$", "i")),
+                    Tenant.class
+            );
+            if (ci != null) {
+                for (Tenant t : ci) {
+                    if (t != null && results.stream().noneMatch(e -> t.getId() != null && t.getId().equals(e.getId()))) {
+                        results.add(t);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return results;
+    }
+
+    /** Tìm hồ sơ Manager chưa bị xóa theo email (hỗ trợ tìm không phân biệt hoa thường). */
+    private Manager findManagerByEmail(String email) {
+        if (!StringUtils.hasText(email)) return null;
+        Manager direct = managerRepository.findByEmailAndIsDeletedFalse(email).orElse(null);
+        if (direct != null) return direct;
+        try {
+            return mongoTemplate.findOne(
+                    Query.query(Criteria.where("isDeleted").is(false)
+                            .and("email").regex("^" + Pattern.quote(email.trim()) + "$", "i")),
+                    Manager.class
+            );
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** Tìm tài khoản User chưa bị xóa theo email (hỗ trợ tìm không phân biệt hoa thường). */
+    private User findUserByEmail(String email) {
+        if (!StringUtils.hasText(email)) return null;
+        User direct = userRepository.findByEmailAndIsDeletedFalse(email).orElse(null);
+        if (direct != null) return direct;
+        try {
+            return mongoTemplate.findOne(
+                    Query.query(Criteria.where("isDeleted").is(false)
+                            .and("email").regex("^" + Pattern.quote(email.trim()) + "$", "i")),
+                    User.class
+            );
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** Lấy danh sách ID các chi nhánh (Branch) thuộc sở hữu của Owner. */
+    private List<String> findOwnerBranchIds(String ownerAccountId) {
+        if (!StringUtils.hasText(ownerAccountId)) return List.of();
+        try {
+            List<Branch> branches = mongoTemplate.find(
+                    Query.query(Criteria.where("isDeleted").is(false)
+                            .and("ownerAccountId").in(toIdValues(Set.of(ownerAccountId)))),
+                    Branch.class
+            );
+            if (branches == null) return List.of();
+            return branches.stream().map(Branch::getId).filter(StringUtils::hasText).toList();
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    /** Bổ sung điều kiện lọc MongoDB theo danh sách branchId (khớp theo branchId trực tiếp hoặc roomId thuộc chi nhánh). */
+    private void addBranchFilter(List<Criteria> target, List<String> branchIds) {
+        if (branchIds == null || branchIds.isEmpty()) return;
+        List<Criteria> branchMatch = new ArrayList<>();
+        branchMatch.add(Criteria.where("branchId").in(toIdValues(branchIds)));
+        try {
+            List<Room> rooms = branchIds.size() == 1
+                    ? roomRepository.findByBranchIdAndIsDeletedFalse(branchIds.get(0))
+                    : roomRepository.findByBranchIdInAndIsDeletedFalse(branchIds);
+            if (rooms != null && !rooms.isEmpty()) {
+                List<String> roomIds = rooms.stream().map(Room::getId).filter(StringUtils::hasText).toList();
+                if (!roomIds.isEmpty()) {
+                    branchMatch.add(Criteria.where("roomId").in(toIdValues(roomIds)));
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        target.add(branchMatch.size() == 1
+                ? branchMatch.get(0)
+                : new Criteria().orOperator(branchMatch.toArray(new Criteria[0])));
+    }
+
+    /** Chuyển tập String ID sang danh sách gồm cả String và ObjectId (nếu hợp lệ) để query MongoDB không sót kiểu dữ liệu. */
+    private List<Object> toIdValues(Collection<String> ids) {
+        List<Object> values = new ArrayList<>();
+        for (String id : ids) {
+            if (!StringUtils.hasText(id)) continue;
+            values.add(id);
+            if (org.bson.types.ObjectId.isValid(id)) {
+                values.add(new org.bson.types.ObjectId(id));
+            }
+        }
+        return values;
+    }
+
+    /** Tra cứu họ tên khách thuê từ collection Tenant hoặc fallback sang User. */
+    private String resolveTenantName(String tenantId) {
+        if (!StringUtils.hasText(tenantId)) return null;
+        try {
+            Tenant t = tenantRepository.findByIdAndIsDeletedFalse(tenantId).orElse(null);
+            if (t != null && StringUtils.hasText(t.getFullName())) {
+                return t.getFullName();
+            }
+            User u = userRepository.findByIdAndIsDeletedFalse(tenantId).orElse(null);
+            if (u != null && StringUtils.hasText(u.getFullName())) {
+                return u.getFullName();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** Kiểm tra quyền xem chi tiết phiếu: Admin/Manager/Owner xem được, Tenant chỉ xem được phiếu của chính mình. */
     private void ensureCanView(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "MANAGER".equals(principal.role()) || "OWNER".equals(principal.role())) {
@@ -1066,6 +1192,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         }
     }
 
+    /** Kiểm tra người dùng hiện tại có thuộc vai trò quản lý (ADMIN, OWNER, MANAGER) được phép xử lý phiếu hay không. */
     private void ensureCanManage(ReportRequest report, AuthPrincipal principal) {
         if (principal == null) return;
         if ("ADMIN".equals(principal.role()) || "OWNER".equals(principal.role()) || "MANAGER".equals(principal.role())) {
@@ -1074,11 +1201,21 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         throw new ForbiddenException("Vai trò hiện tại (" + principal.role() + ") không được phép thực hiện thao tác quản lý yêu cầu này.");
     }
 
+    /** Xác thực AuthPrincipal phải có một trong các vai trò được chỉ định, ngược lại ném ForbiddenException. */
     private void requireRole(AuthPrincipal principal, String... roles) {
         if (principal == null) return;
         for (String r : roles) {
             if (r.equals(principal.role())) return;
         }
         throw new ForbiddenException("Vai trò hiện tại (" + principal.role() + ") không được phép thực hiện thao tác này.");
+    }
+    /** Đọc nhanh danh sách tóm tắt yêu cầu hỗ trợ theo danh sách roomId phục vụ màn hình tổng quan. */
+    @Override
+    public List<OverviewReport> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "status", "title", "tenantId");
+        return mongoTemplate.find(query, ReportRequest.class).stream()
+                .map(item -> new OverviewReport(item.getRoomId(), item.getStatus(), item.getId(), item.getTitle(), item.getTenantId())).toList();
     }
 }

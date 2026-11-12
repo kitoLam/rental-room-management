@@ -4,4 +4,3 @@ public enum TokenPurpose {
     EMAIL_VERIFICATION,
     PASSWORD_SETUP
 }
-

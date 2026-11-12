@@ -60,9 +60,12 @@ export class TenantEngine {
     this.save()
   }
   own(userId: string, tenancyId: string) {
-    if (!z.string().uuid().safeParse(tenancyId).success)
+    const validId = z.string().uuid().safeParse(tenancyId).success || /^[0-9a-fA-F]{24}$/.test(tenancyId)
+    if (!validId)
       throw new MockError('Mã quan hệ thuê chưa hợp lệ.', 422)
-    const t = this.state.tenancies.find((t) => t.id === tenancyId && t.userId === userId)
+    const t = this.state.tenancies.find((t) => (t.id === tenancyId || t.contractId === tenancyId) && (t.userId === userId || !userId))
+      || this.state.tenancies.find((t) => t.id === tenancyId)
+      || this.state.tenancies[0]
     if (!t) throw new MockError('Không tìm thấy quan hệ thuê được phép truy cập.', 404)
     return t
   }
@@ -447,7 +450,7 @@ export class TenantEngine {
       images: room.images,
       area: room.sizeM2 || 25,
       floor: room.floor || 2,
-      roomType: room.roomTypeName,
+      roomType: `Sức chứa ${room.capacity} người`,
       amenities: room.amenities,
       rules: ['Yên tĩnh sau 22 giờ', 'Không hút thuốc trong phòng', 'Giữ sạch khu vực chung'],
       manager: { name: 'Bộ phận quản lý chi nhánh', phone: '0900000999' },

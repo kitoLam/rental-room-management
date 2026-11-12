@@ -16,4 +16,3 @@ public record TenantRoleUpdateRequest(
         branchId = (branchId == null || branchId.isBlank()) ? null : branchId.strip();
     }
 }
-

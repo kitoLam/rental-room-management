@@ -39,6 +39,10 @@ public class Booking extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String contractId;
 
+    /** One contract per booked slot, created once the deposit is paid. contractId = the first one. */
+    @Field(targetType = FieldType.OBJECT_ID)
+    private List<String> contractIds = new ArrayList<>();
+
     private LocalDate expectedMoveInDate;
 
     private LocalDate expectedMoveOutDate;

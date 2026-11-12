@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.reportrecord.service.impl;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
@@ -25,6 +27,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
     private final ReportRecordRepository reportRecordRepository;
     private final MongoTemplate mongoTemplate;
 
+    /** Tạo mới một bản ghi nhật ký / tiến độ xử lý cho phiếu yêu cầu hỗ trợ. */
     @Override
     public ReportRecordResponse create(ReportRecordCreateRequest request) {
         ReportRecord record = new ReportRecord();
@@ -45,6 +48,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return ReportRecordResponse.from(saved);
     }
 
+    /** Lấy chi tiết một bản ghi nhật ký xử lý báo cáo theo ID. */
     @Override
     public ReportRecordResponse getById(String id) {
         ReportRecord record = reportRecordRepository.findByIdAndIsDeletedFalse(id)
@@ -52,6 +56,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return ReportRecordResponse.from(record);
     }
 
+    /** Lấy toàn bộ dòng thời gian (timeline) lịch sử xử lý của một phiếu yêu cầu theo thứ tự thời gian tăng dần. */
     @Override
     public List<ReportRecordResponse> getByReportRequestId(String reportRequestId) {
         List<ReportRecord> records = reportRecordRepository
@@ -59,6 +64,7 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return records.stream().map(ReportRecordResponse::from).toList();
     }
 
+    /** Tìm kiếm và phân trang nhật ký xử lý theo phiếu, quản lý, người thao tác, hành động hoặc trạng thái. */
     @Override
     public PagedResponse<ReportRecordResponse> search(ReportRecordFilterRequest filter, Pageable pageable) {
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
@@ -75,11 +81,24 @@ public class ReportRecordServiceImpl implements ReportRecordService {
         return PagedResponse.from(page.map(ReportRecordResponse::from));
     }
 
+    /** Xóa mềm một bản ghi nhật ký xử lý báo cáo theo ID. */
     @Override
     public void delete(String id) {
         ReportRecord record = reportRecordRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy nhật ký xử lý với id: " + id));
         record.markDeleted();
         reportRecordRepository.save(record);
+    }
+
+    /** Đọc nhanh các sự kiện nhật ký theo danh sách reportRequestId trong khoảng [from, to) cho màn hình tổng quan. */
+    @Override
+    public java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to) {
+        if (ids.isEmpty()) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("reportRequestId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("createdAt").gte(from).lt(to));
+        query.fields().include("reportRequestId", "action", "createdAt", "actorId", "actorName", "note");
+        return mongoTemplate.find(query, ReportRecord.class).stream().map(item -> new ActivitySnapshot(
+                item.getId(), item.getReportRequestId(), item.getAction() == null ? null : item.getAction().name(),
+                item.getCreatedAt(), item.getActorId(), item.getActorName(), item.getNote())).toList();
     }
 }

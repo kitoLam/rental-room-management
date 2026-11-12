@@ -57,9 +57,6 @@ public class ReportRequest extends BaseDocument {
 
     private String solutionResult;
 
-    private String disputeReason;
-
-    private String adminConclusion;
 
     private ReportRequestStatus status = ReportRequestStatus.PENDING;
 

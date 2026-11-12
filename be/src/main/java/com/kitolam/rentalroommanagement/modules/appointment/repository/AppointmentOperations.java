@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public interface AppointmentOperations {
+    List<Appointment> overviewCandidates(List<String> roomIds);
+    List<Appointment> overviewActivities(List<String> ids, Instant from, Instant to);
     <T> T withCreationGuards(String accountId, String roomId, String date, Supplier<T> action);
     @FunctionalInterface
     interface ExpiryNotifications { void append(Appointment appointment, String eventId, Update update); }

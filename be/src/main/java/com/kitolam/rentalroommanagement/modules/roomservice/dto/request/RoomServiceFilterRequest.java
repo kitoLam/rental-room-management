@@ -5,8 +5,8 @@ import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceSta
 
 /** Query parameters for search; all optional. */
 public record RoomServiceFilterRequest(
-        @ValidObjectId String roomId,
-        @ValidObjectId String serviceId,
-        RoomServiceStatus status
+        @ValidObjectId String branchId,
+        RoomServiceStatus status,
+        String keyword
 ) {
 }

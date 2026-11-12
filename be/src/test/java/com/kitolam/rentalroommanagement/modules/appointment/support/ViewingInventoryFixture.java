@@ -15,6 +15,16 @@ import org.springframework.data.domain.Pageable;
 public class ViewingInventoryFixture implements ViewingInventoryGateway {
     public static final String BRANCH_ID = "700000000000000000000001";
     @Override
+    public List<com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingSlotSnapshot> slotsForViewing(String roomId, java.time.LocalDate date) {
+        var room = getRoom(roomId);
+        boolean available = room.availableUnits() > 0;
+        String reason = available ? "AVAILABLE" : room.temporarilyHeldUnits() > 0 ? "SLOT_TEMPORARY_HOLD"
+                : room.officiallyHeldUnits() > 0 ? "SLOT_OFFICIAL_HOLD" : "SLOT_OCCUPIED";
+        return List.of(new com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingSlotSnapshot(
+                "74" + roomId.substring(2), "S01", com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus.AVAILABLE,
+                true, available, null, reason, available ? null : "Slot chưa khả dụng vào ngày này"));
+    }
+    @Override
     public Page<ViewingRoomSnapshot> roomsInBranch(String branchId, Pageable pageable) {
         if (!BRANCH_ID.equals(branchId)) return Page.empty(pageable);
         List<ViewingRoomSnapshot> rooms = java.util.stream.IntStream.rangeClosed(1, 7)

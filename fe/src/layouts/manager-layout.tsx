@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { Outlet, NavLink, Link, useNavigate, useLocation, useSearchParams } from 'react-router'
+import {
+  Outlet,
+  NavLink,
+  Link,
+  Navigate,
+  useNavigate,
+  useLocation,
+  useSearchParams,
+} from 'react-router'
 import { useQuery, useMutation, useIsMutating } from '@tanstack/react-query'
 import {
   LayoutDashboard,
@@ -10,15 +18,13 @@ import {
   FileText,
   Plug,
   Droplets,
-  Scale,
   ReceiptText,
+  CalendarRange,
   Wallet,
   CircleDollarSign,
   Armchair,
   Wrench,
   ChartColumn,
-  Settings,
-  Bell,
 } from 'lucide-react'
 import { Container } from '@/components/common/container'
 import { Button } from '@/components/ui/button'
@@ -34,7 +40,6 @@ const groups = [
     label: 'Phòng & người thuê',
     items: [
       ['rooms', 'Phòng', House],
-      ['room-types', 'Loại phòng', House],
       ['tenants', 'Quản lý tài khoản', Users],
     ],
   },
@@ -49,17 +54,17 @@ const groups = [
   {
     label: 'Dịch vụ & vận hành',
     items: [
-      ['services', 'Dịch vụ', Plug],
-      ['room-services', 'Dịch vụ phòng', Plug],
+      ['room-services', 'Dịch vụ theo phòng', Plug],
+      ['slot-services', 'Dịch vụ tự chọn', Plug],
       ['service-requests', 'Yêu cầu dịch vụ', Plug],
-      ['utility-charges', 'Điện nước', Droplets],
-      ['cost-allocations', 'Phân bổ phí', Scale],
+      ['meter-readings', 'Chỉ số điện', Droplets],
       ['maintenance', 'Yêu cầu hỗ trợ', Wrench],
     ],
   },
   {
     label: 'Tài chính',
     items: [
+      ['billing', 'Billing theo tháng', CalendarRange],
       ['invoices', 'Hóa đơn', ReceiptText],
       ['payments', 'Thanh toán', Wallet],
       ['debts', 'Công nợ', CircleDollarSign],
@@ -70,7 +75,6 @@ const groups = [
     items: [
       ['furnitures', 'Cơ sở vật chất', Armchair],
       ['reports', 'Báo cáo', ChartColumn],
-      ['settings/zalo', 'Cài đặt Zalo', Settings],
     ],
   },
 ] as const
@@ -85,6 +89,9 @@ export function ManagerLayout() {
     navigate = useNavigate(),
     location = useLocation(),
     [demoMessage, setDemoMessage] = useState('')
+  const owner = user.roles.includes('OWNER')
+  const root = owner ? '/owner' : '/manager'
+  const ownerOverview = owner && /^\/owner(?:\/(dashboard|reports))?\/?$/.test(location.pathname)
   const list = useQuery({
       queryKey: ['manager-branches', user.id, params.get('demo'), params.get('workspace')],
       queryFn: managerApi.branches,
@@ -120,8 +127,22 @@ export function ManagerLayout() {
   const route =
     groups
       .reduce<string[]>((paths, g) => [...paths, ...g.items.map((item) => item[0])], [])
-      .find((path) => location.pathname.startsWith(`/manager/${path}`)) || 'dashboard'
+      .find((path) => location.pathname.startsWith(`${root}/${path}`)) || 'dashboard'
   const allowed = branch && !denied.includes(`${user.id}:${branch.id}`)
+  if (owner && /^\/manager(?:\/|$)/.test(location.pathname)) {
+    const ownerParams = new URLSearchParams(params)
+    ownerParams.delete('workspace')
+    const target = location.pathname.replace(/^\/manager(?=\/|$)/, '/owner')
+    return <Navigate replace to={`${target}${ownerParams.size ? `?${ownerParams}` : ''}`} />
+  }
+  if (!owner && location.pathname.startsWith('/owner/')) {
+    return (
+      <Navigate
+        replace
+        to={location.pathname.replace(/^\/owner\//, '/manager/') + location.search}
+      />
+    )
+  }
   return (
     <Container wide className="py-7 sm:py-10">
       <QueryState
@@ -129,7 +150,9 @@ export function ManagerLayout() {
         error={list.error}
         retry={list.refetch}
         empty={list.data?.length === 0}
-        emptyMessage="Bạn chưa có chi nhánh được phân công quản lý."
+        emptyMessage={
+          owner ? 'Bạn chưa có chi nhánh sở hữu.' : 'Bạn chưa có chi nhánh được phân công quản lý.'
+        }
         emptyAction={
           <Button asChild>
             <Link to="/profile">Xem hồ sơ</Link>
@@ -139,7 +162,7 @@ export function ManagerLayout() {
         {!allowed && branches.length > 0 && (
           <Notice tone="warning">
             Bạn không còn quyền quản lý chi nhánh trong liên kết này.{' '}
-            <Link className="underline" to="/manager/dashboard">
+            <Link className="underline" to={`${root}/dashboard`}>
               Chọn lại chi nhánh được phép
             </Link>
           </Notice>
@@ -160,20 +183,19 @@ export function ManagerLayout() {
                   htmlFor="manager-branch"
                   className="mb-2 block text-xs font-bold text-muted-foreground"
                 >
-                  {params.get('workspace') === 'owner'
-                    ? 'CHI NHÁNH SỞ HỮU'
-                    : 'CHI NHÁNH ĐƯỢC PHÂN CÔNG'}
+                  {owner ? 'CHI NHÁNH SỞ HỮU' : 'CHI NHÁNH ĐƯỢC PHÂN CÔNG'}
                 </label>
                 <select
                   id="manager-branch"
                   className="input w-full"
-                  value={branch.id}
+                  value={ownerOverview ? requested || '' : branch.id}
                   disabled={busy}
                   onChange={(e) => {
                     select(user.id, e.target.value)
                     navigate(managerLink(`/manager/${route}`, e.target.value))
                   }}
                 >
+                  {ownerOverview && <option value="">Tất cả chi nhánh</option>}
                   {branches.map((b) => (
                     <option value={b.id} key={b.id}>
                       {b.name}
@@ -185,8 +207,16 @@ export function ManagerLayout() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{branch.address}</p>
-                {branch.managerName && <p className="mt-1 text-xs text-muted-foreground">Quản lý: {branch.managerName}</p>}
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {ownerOverview && !requested
+                    ? 'Đang tổng hợp tất cả chi nhánh sở hữu.'
+                    : branch.address}
+                </p>
+                {branch.managerName && !(ownerOverview && !requested) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Quản lý: {branch.managerName}
+                  </p>
+                )}
               </div>
               <nav aria-label="Điều hướng quản lý" className="hidden lg:grid">
                 {groups.map((g) => (
@@ -229,13 +259,6 @@ export function ManagerLayout() {
               </nav>
               <div className="mt-4 flex flex-wrap gap-4 lg:grid lg:gap-1">
                 <Link
-                  to="/notifications"
-                  className="inline-flex min-h-11 items-center gap-2 text-xs text-muted-foreground"
-                >
-                  <Bell size={15} />
-                  Thông báo
-                </Link>
-                <Link
                   to="/profile"
                   className="inline-flex min-h-11 items-center text-xs text-muted-foreground"
                 >
@@ -252,7 +275,10 @@ export function ManagerLayout() {
               {branch.status !== 'ACTIVE' && (
                 <Notice>Chi nhánh ngừng hoạt động. Chỉ xem hồ sơ lịch sử.</Notice>
               )}
-              <Outlet key={`${user.id}-${branch.id}`} context={{ branch, branches }} />
+              <Outlet
+                key={`${user.id}-${branch.id}`}
+                context={{ branch, branches, overviewBranchId: requested || undefined }}
+              />
             </div>
           </div>
         )}

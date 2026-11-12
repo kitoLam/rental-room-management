@@ -5,8 +5,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.FieldType;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.QuantityRule;
 
 import java.math.BigDecimal;
 
@@ -20,8 +18,9 @@ public class SelectedServiceSnapshot {
     private String unit;
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal unitPrice;
-    private CalculationType calculationType;
-    private QuantityRule quantityRule;
+    /** Kept as text for older bookings; new bookings store "FIXED". */
+    private String calculationType;
+    private String quantityRule;
     private boolean mandatory;
     private Integer quantity;
 }

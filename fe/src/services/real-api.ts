@@ -8,6 +8,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   const verb = method.toUpperCase()
   const id = '(?:[0-9a-fA-F-]{36}|[0-9a-fA-F]{24})'
   const matches = (pattern: string) => new RegExp(`^${pattern}$`).test(pathname)
+  if (feature === 'admin' && pathname === '/api/v1/admin/dashboard' && verb === 'GET') return null
+  if (feature === 'tenant' && verb === 'GET' && ['/api/v1/dashboard/tenant', '/api/v1/dashboard/tenant/tenancies'].includes(pathname)) return null
+  if ((feature === 'manager' || feature === 'owner') && ['/api/v1/dashboard/management', '/api/v1/dashboard/reports'].includes(pathname) && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && (matches(`/api/v1/branches(/${id})?`) || pathname === '/api/v1/branches/managed') && verb === 'GET') return null
+  if (['admin', 'manager', 'tenant'].includes(feature) && matches(`/api/v1/payments(/${id})?`) && verb === 'GET') return null
   if (feature === 'manager' && matches(`/api/v1/(rooms|branches)/${id}/utility-rates`) && ['GET', 'PUT'].includes(verb)) return null
   if (feature === 'manager' && pathname === '/api/v1/branches/managed' && verb === 'GET') return null
   // Đăng ký / ngừng dịch vụ (BE module servicerequest).
@@ -65,8 +70,8 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/auth/login' && verb === 'POST') ||
       (pathname === '/api/v1/auth/refresh' && verb === 'POST') ||
       (pathname === '/api/v1/auth/logout' && verb === 'POST') ||
-      (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
       (pathname === '/api/v1/auth/setup-password' && verb === 'POST') ||
+      (pathname === '/api/v1/auth/change-password' && verb === 'POST') ||
       (pathname === '/api/v1/auth/me' && ['GET', 'PATCH'].includes(verb)) ||
       (pathname === '/api/v1/auth/resend-verification' && verb === 'POST') ||
       (pathname === '/api/v1/auth/verify-email' && ['GET', 'POST'].includes(verb)))
@@ -143,7 +148,63 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
 
+  // Chỉ số điện từng phòng theo tháng.
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/meter-readings/board' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings' && verb === 'PUT') ||
+      (matches(`/api/v1/meter-readings/${id}/(confirm|reopen)`) && verb === 'POST'))
+  )
+    return null
+  // Danh mục dịch vụ theo phòng / tự chọn + yêu cầu dịch vụ tự chọn.
+  if (
+    feature === 'manager' &&
+    ((matches('/api/v1/(room-services|slot-services)') && ['GET', 'POST'].includes(verb)) ||
+      (matches(`/api/v1/(room-services|slot-services)/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (pathname === '/api/v1/slot-service-requests' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/(approve|reject)`) && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
+      (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
+      (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
+      (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
+  )
+    return null
+  if (feature === 'catalog' && verb === 'GET' && matches(`/api/v1/public/branches/${id}/(room-services|slot-services)`))
+    return null
+
+  // Hoá đơn hàng tháng theo hợp đồng (BE module invoice) + thanh toán VNPay.
+  if (
+    feature === 'tenant' &&
+    ((pathname === '/api/v1/invoices/my' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && verb === 'GET') ||
+      (pathname === '/api/v1/contracts' && verb === 'GET') ||
+      (pathname === '/api/v1/vnpay/create-payment' && verb === 'POST'))
+  )
+    return null
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/invoices' && verb === 'GET') ||
+      (matches(`/api/v1/invoices/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/invoices/${id}/issue`) && verb === 'PATCH') ||
+      (matches(`/api/v1/invoices/contracts/${id}`) && verb === 'POST') ||
+      (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
+  )
+    return null
+  if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')
+    return null
+
   if (feature === 'adminUsers') {
+    if (
+      (pathname === '/api/v1/admin/users' && verb === 'GET') ||
+      (pathname === '/api/v1/admin/roles' && verb === 'GET') ||
+      (matches(`/api/v1/admin/users/${id}/role`) && verb === 'PATCH')
+    )
+      return null
     if (pathname === '/api/users' && ['GET', 'POST'].includes(verb)) return null
     if (matches(`/api/users/${id}`) && verb === 'GET') return null
     if (matches(`/api/users/${id}/active-status`) && verb === 'PATCH') return null
@@ -185,11 +246,11 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   }
 
   if (
-    (feature === 'tenant' || feature === 'manager' || feature === 'admin') &&
+    (feature === 'tenant' || feature === 'manager' || feature === 'owner' || feature === 'admin') &&
     ((matches('/api/v1/report-requests') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/report-requests/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
       (matches(
-        `/api/v1/report-requests/${id}/(start|request-info|supplement|reject|progress|resolve|confirm-close|reopen|escalate-admin|admin-resolve|cancel)`,
+        `/api/v1/report-requests/${id}/(start|assign|request-info|supplement|reject|progress|resolve|confirm-close|reopen|cancel)`,
       ) &&
         verb === 'POST') ||
       (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||

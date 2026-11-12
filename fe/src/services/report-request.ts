@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { provider, type Feature } from './config'
 import { request, write } from './http'
 import { pageSchema, type Page } from '@/interfaces/domain'
 import type { Tenancy, MaintenanceReport } from '@/interfaces/tenant'
@@ -55,8 +56,6 @@ function toItem(r: MockReportLike, tenancy?: Tenancy): ReportRequestItem {
     solutionResult: r.solutionResult || null,
     rejectReason: r.rejectReason || null,
     requestedInfoNote: r.requestedInfoNote || null,
-    disputeReason: r.disputeReason || null,
-    adminConclusion: r.adminConclusion || null,
     createdAt: r.createdAt || new Date().toISOString(),
     timeline: (r.records || []).map((rec: MockReportRecord, idx: number): ReportRecordItem => ({
       id: rec.id || `rec-${idx}`,
@@ -186,8 +185,6 @@ async function upsertMockFromItem(item: ReportRequestItem, fromMutation = false)
       solutionResult: item.solutionResult || null,
       rejectReason: item.rejectReason || null,
       requestedInfoNote: item.requestedInfoNote || null,
-      disputeReason: item.disputeReason || null,
-      adminConclusion: item.adminConclusion || null,
       locallyModified: false,
       workflowAt: 0,
       records: (item.timeline || []).map((rec) => ({
@@ -239,6 +236,14 @@ function filterItems(items: ReportRequestItem[], filter: ReportRequestFilter): R
 
 export const reportRequestService = {
   create: async (input: CreateReportRequestInput): Promise<ReportRequestItem> => {
+    if (provider('tenant') === 'real') {
+      return request(
+        'tenant',
+        '/api/v1/report-requests',
+        reportRequestResponseSchema,
+        write('POST', input),
+      )
+    }
     try {
       const created = await request(
         'tenant',
@@ -249,7 +254,6 @@ export const reportRequestService = {
       await upsertMockFromItem(created, true)
       return created
     } catch (err) {
-      console.warn('Real report-requests create failed, falling back to mock:', err)
       const tenantDb = await syncMockReports()
       const tenancy =
         tenantDb.state.tenancies.find((t) => t.roomId === input.roomId) ||
@@ -276,10 +280,17 @@ export const reportRequestService = {
 
   getById: async (
     id: string,
-    feature: 'tenant' | 'manager' | 'admin' = 'tenant',
+    feature: Feature = 'tenant',
   ): Promise<ReportRequestItem> => {
+    if (provider(feature) === 'real') {
+      return request(
+        feature,
+        `/api/v1/report-requests/${encodeURIComponent(id)}`,
+        reportRequestResponseSchema,
+      )
+    }
     const { r: mockR, tenancy: mockTenancy } = await findMockReport(id)
-    // If local state has a locally modified update (e.g. escalated to admin, rejected, resolved),
+    // If local state has a locally modified update (e.g. rejected, resolved),
     // return it immediately so stale backend GET responses cannot overwrite it.
     if (mockR?.locallyModified) {
       return toItem(mockR, mockTenancy)
@@ -311,8 +322,38 @@ export const reportRequestService = {
 
   search: async (
     filter: ReportRequestFilter = {},
-    feature: 'tenant' | 'manager' | 'admin' = 'tenant',
+    feature: Feature = 'tenant',
   ): Promise<Page<ReportRequestItem>> => {
+    if (provider(feature) === 'real') {
+      const page = filter.page ?? 0
+      const size = filter.size ?? 20
+      const params = new URLSearchParams()
+      if (filter.tenantId) params.set('tenantId', filter.tenantId)
+      if (filter.roomId) params.set('roomId', filter.roomId)
+      if (filter.branchId) params.set('branchId', filter.branchId)
+      if (filter.contractId) params.set('contractId', filter.contractId)
+      if (filter.managerId) params.set('managerId', filter.managerId)
+      if (filter.type) params.set('type', filter.type)
+      if (filter.priority) params.set('priority', filter.priority)
+      if (filter.status) params.set('status', filter.status)
+      if (filter.keyword) params.set('keyword', filter.keyword)
+      params.set('page', String(page + 1))
+      params.set('size', String(size))
+
+      const p = await request(
+        feature,
+        `/api/v1/report-requests?${params.toString()}`,
+        pageSchema(reportRequestResponseSchema),
+      )
+      return {
+        content: p.content || [],
+        number: Math.max(0, (p.number ?? 1) - 1),
+        size: p.size || size,
+        totalElements: p.totalElements ?? (p.content?.length || 0),
+        totalPages: p.totalPages || 1,
+      }
+    }
+
     const tenantDb = await syncMockReports()
     const getLocalItems = (): { item: ReportRequestItem; locallyModified?: boolean }[] =>
       tenantDb.state.reports.map((rawReport) => {
@@ -400,6 +441,14 @@ export const reportRequestService = {
   },
 
   requestInfo: async (id: string, note: string): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/request-info`,
+        reportRequestResponseSchema,
+        write('POST', { note }),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -437,6 +486,14 @@ export const reportRequestService = {
     additionalInfo: string,
     additionalAttachments: string[] = [],
   ): Promise<ReportRequestItem> => {
+    if (provider('tenant') === 'real') {
+      return request(
+        'tenant',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/supplement`,
+        reportRequestResponseSchema,
+        write('POST', { additionalInfo, additionalAttachments }),
+      )
+    }
     try {
       const item = await request(
         'tenant',
@@ -469,6 +526,14 @@ export const reportRequestService = {
   },
 
   reject: async (id: string, reason: string): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/reject`,
+        reportRequestResponseSchema,
+        write('POST', { reason }),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -505,6 +570,14 @@ export const reportRequestService = {
     id: string,
     payload?: { assigneeName?: string; assigneePhone?: string; managerId?: string },
   ): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/start`,
+        reportRequestResponseSchema,
+        write('POST', payload || {}),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -546,6 +619,14 @@ export const reportRequestService = {
     id: string,
     payload: { assigneeName: string; assigneePhone?: string; managerId?: string },
   ): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/assign`,
+        reportRequestResponseSchema,
+        write('POST', payload),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -585,6 +666,14 @@ export const reportRequestService = {
     progressNote: string,
     attachments: string[] = [],
   ): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/progress`,
+        reportRequestResponseSchema,
+        write('POST', { progressNote, attachments }),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -621,6 +710,14 @@ export const reportRequestService = {
     solutionResult: string,
     attachments: string[] = [],
   ): Promise<ReportRequestItem> => {
+    if (provider('manager') === 'real') {
+      return request(
+        'manager',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/resolve`,
+        reportRequestResponseSchema,
+        write('POST', { solutionResult, attachments }),
+      )
+    }
     try {
       const item = await request(
         'manager',
@@ -654,6 +751,14 @@ export const reportRequestService = {
   },
 
   confirmClose: async (id: string): Promise<ReportRequestItem> => {
+    if (provider('tenant') === 'real') {
+      return request(
+        'tenant',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/confirm-close`,
+        reportRequestResponseSchema,
+        write('POST'),
+      )
+    }
     try {
       const item = await request(
         'tenant',
@@ -689,7 +794,16 @@ export const reportRequestService = {
     id: string,
     reason: string,
     attachments: string[] = [],
+    feature: Feature = 'tenant',
   ): Promise<ReportRequestItem> => {
+    if (provider(feature) === 'real') {
+      return request(
+        feature,
+        `/api/v1/report-requests/${encodeURIComponent(id)}/reopen`,
+        reportRequestResponseSchema,
+        write('POST', { reason, attachments }),
+      )
+    }
     try {
       const item = await request(
         'tenant',
@@ -721,77 +835,16 @@ export const reportRequestService = {
     }
   },
 
-  escalateAdmin: async (
-    id: string,
-    disputeReason: string,
-    attachments: string[] = [],
-  ): Promise<ReportRequestItem> => {
-    try {
-      const item = await request(
-        'tenant',
-        `/api/v1/report-requests/${encodeURIComponent(id)}/escalate-admin`,
-        reportRequestResponseSchema,
-        write('POST', { disputeReason, attachments }),
-      )
-      await upsertMockFromItem(item, true)
-      return item
-    } catch (err) {
-      console.warn('Real report-requests escalateAdmin failed, falling back to mock:', err)
-      const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
-      r.status = 'ESCALATED_ADMIN'
-      r.disputeReason = disputeReason
-      r.locallyModified = true
-      r.records.push({
-        id: crypto.randomUUID(),
-        at: new Date().toISOString(),
-        status: 'ESCALATED_ADMIN',
-        description: `Chuyển lên Admin giải quyết: ${disputeReason}`,
-        performedBy: 'Khách thuê',
-        evidence: attachments,
-        cost: 0,
-        responsibleParty: null,
-        approvalStatus: null,
-      })
-      saveSharedReports(tenantDb)
-      return toItem(r, tenancy)
-    }
-  },
-
-  adminResolve: async (id: string, adminConclusion: string): Promise<ReportRequestItem> => {
-    try {
-      const item = await request(
-        'admin',
-        `/api/v1/report-requests/${encodeURIComponent(id)}/admin-resolve`,
-        reportRequestResponseSchema,
-        write('POST', { adminConclusion }),
-      )
-      await upsertMockFromItem(item, true)
-      return item
-    } catch (err) {
-      console.warn('Real report-requests adminResolve failed, falling back to mock:', err)
-      const { tenantDb, r, tenancy } = await findMockReport(id)
-      if (!r) throw new Error('Không tìm thấy yêu cầu hỗ trợ.', { cause: err })
-      r.status = 'CLOSED'
-      r.adminConclusion = adminConclusion
-      r.locallyModified = true
-      r.records.push({
-        id: crypto.randomUUID(),
-        at: new Date().toISOString(),
-        status: 'CLOSED',
-        description: `Admin đưa ra kết luận phân xử: ${adminConclusion}`,
-        performedBy: 'Admin',
-        evidence: [],
-        cost: 0,
-        responsibleParty: null,
-        approvalStatus: null,
-      })
-      saveSharedReports(tenantDb)
-      return toItem(r, tenancy)
-    }
-  },
 
   cancel: async (id: string): Promise<ReportRequestItem> => {
+    if (provider('tenant') === 'real') {
+      return request(
+        'tenant',
+        `/api/v1/report-requests/${encodeURIComponent(id)}/cancel`,
+        reportRequestResponseSchema,
+        write('POST'),
+      )
+    }
     try {
       const item = await request(
         'tenant',
@@ -823,7 +876,14 @@ export const reportRequestService = {
     }
   },
 
-  timeline: async (id: string): Promise<ReportRecordItem[]> => {
+  timeline: async (id: string, feature: Feature = 'tenant'): Promise<ReportRecordItem[]> => {
+    if (provider(feature) === 'real') {
+      return request(
+        feature,
+        `/api/v1/report-records/by-report/${encodeURIComponent(id)}`,
+        z.array(reportRecordResponseSchema),
+      )
+    }
     try {
       return await request(
         'tenant',

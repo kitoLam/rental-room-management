@@ -33,4 +33,3 @@ public record SetupPasswordRequest(
         return "SetupPasswordRequest[REDACTED]";
     }
 }
-

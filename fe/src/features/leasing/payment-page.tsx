@@ -67,7 +67,7 @@ export default function PaymentPage() {
   }
   if (!uuid(bookingId))
     return (
-      <Page title="Liên kết thanh toán không hợp lệ" back="/user/bookings">
+      <Page title="Liên kết thanh toán không hợp lệ" back="/tenant/bookings">
         <Notice>Chọn một yêu cầu giữ chỗ từ danh sách.</Notice>
       </Page>
     )
@@ -91,7 +91,7 @@ export default function PaymentPage() {
     <Page
       title="Khoản giữ chỗ của bạn."
       eyebrow={mock ? 'THANH TOÁN DEMO · KHÔNG CHUYỂN TIỀN THẬT' : 'THANH TOÁN GIỮ CHỖ'}
-      back={`/user/bookings/${bookingId}`}
+      back={`/tenant/bookings/${bookingId}`}
       description="Việc bắt đầu thanh toán chưa xác nhận giữ chỗ. Trạng thái được cập nhật sau khi giao dịch được xác minh."
     >
       <QueryState
@@ -295,7 +295,7 @@ export default function PaymentPage() {
                   </p>
                 )}
                 <Button asChild variant="link" className="mt-4 px-0">
-                  <Link to={`/user/bookings/${bookingId}`}>Về chi tiết giữ chỗ</Link>
+                  <Link to={`/tenant/bookings/${bookingId}`}>Về chi tiết giữ chỗ</Link>
                 </Button>
               </Panel>
             </div>

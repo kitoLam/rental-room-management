@@ -14,7 +14,9 @@ import com.kitolam.rentalroommanagement.modules.branch.repository.BranchReposito
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.manager.enums.ManagerStatus;
 import com.kitolam.rentalroommanagement.modules.manager.service.ManagerService;
+import java.util.ArrayList;
 import java.util.List;
+import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,16 @@ public class BranchServiceImpl implements BranchService {
     private final ManagerService managers;
     private final MongoTemplate mongo;
     private final Clock clock;
+
+    @Override
+    public com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics readStatisticsForAdmin() {
+        var recent = branchRepository.readRecentForAdmin(PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "_id")))
+                .stream().map(b -> new com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics.RecentBranch(
+                        b.getId(), b.getName(), b.getStatus() == null ? "UNKNOWN" : b.getStatus().name(), b.getCreatedAt())).toList();
+        return new com.kitolam.rentalroommanagement.modules.branch.dto.response.AdminBranchStatistics(
+                branchRepository.readStatusTotalsForAdmin(), recent);
+    }
 
     @Override
     public void requireManagementAccess(String branchId, AuthPrincipal principal) {
@@ -86,8 +98,15 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     public BranchResponse create(BranchCreateRequest request) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
+        Branch branch = new Branch();
+        branch.setName(request.name().trim());
+        branch.setAddress(request.address().trim());
+        branch.setPhone(request.phone());
+        branch.setEmail(request.email());
+        branch.setDescription(request.description());
+        branch.setStatus(BranchStatus.ACTIVE);
+        branchRepository.insert(branch);
+        return mapper.toResponse(branch);
     }
 
     @Override
@@ -98,19 +117,47 @@ public class BranchServiceImpl implements BranchService {
 
     @Override
     public PagedResponse<BranchResponse> search(BranchFilterRequest filter, Pageable pageable) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
+        Criteria criteria = null;
+        List<Criteria> list = new ArrayList<>();
+        if (filter != null) {
+            if (filter.status() != null) {
+                list.add(Criteria.where("status").is(filter.status()));
+            }
+            if (filter.keyword() != null && !filter.keyword().isBlank()) {
+                String kw = filter.keyword().trim();
+                list.add(new Criteria().orOperator(
+                        Criteria.where("name").regex(kw, "i"),
+                        Criteria.where("address").regex(kw, "i"),
+                        Criteria.where("phone").regex(kw, "i")
+                ));
+            }
+        }
+        if (!list.isEmpty()) {
+            criteria = new Criteria().andOperator(list.toArray(new Criteria[0]));
+        }
+        var page = branchRepository.findWithPagination(criteria, pageable);
+        return PagedResponse.from(page, mapper::toResponse);
     }
 
     @Override
     public BranchResponse update(String id, BranchUpdateRequest request) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
+        Branch branch = branchRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chi nhánh"));
+        if (request.name() != null && !request.name().isBlank()) branch.setName(request.name().trim());
+        if (request.address() != null && !request.address().isBlank()) branch.setAddress(request.address().trim());
+        if (request.phone() != null) branch.setPhone(request.phone());
+        if (request.email() != null) branch.setEmail(request.email());
+        if (request.description() != null) branch.setDescription(request.description());
+        if (request.status() != null) branch.setStatus(request.status());
+        branchRepository.save(branch);
+        return mapper.toResponse(branch);
     }
 
     @Override
     public void delete(String id) {
-        // TODO: implement
-        throw new UnsupportedOperationException("Not implemented yet");
+        Branch branch = branchRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chi nhánh"));
+        branch.markDeleted();
+        branchRepository.save(branch);
     }
 }

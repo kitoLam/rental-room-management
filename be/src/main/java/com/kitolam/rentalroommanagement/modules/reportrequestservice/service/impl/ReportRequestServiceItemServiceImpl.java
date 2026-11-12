@@ -27,6 +27,7 @@ public class ReportRequestServiceItemServiceImpl implements ReportRequestService
     private final ReportRequestServiceItemRepository reportRequestServiceItemRepository;
     private final MongoTemplate mongoTemplate;
 
+    /** Tạo mới bản ghi liên kết dịch vụ phòng vào phiếu yêu cầu hỗ trợ. */
     @Override
     public ReportRequestServiceItemResponse create(ReportRequestServiceItemCreateRequest request) {
         ReportRequestServiceItem entity = new ReportRequestServiceItem();
@@ -38,6 +39,7 @@ public class ReportRequestServiceItemServiceImpl implements ReportRequestService
         return ReportRequestServiceItemResponse.from(saved);
     }
 
+    /** Lấy chi tiết một bản ghi liên kết dịch vụ phòng trong yêu cầu hỗ trợ theo ID. */
     @Override
     public ReportRequestServiceItemResponse getById(String id) {
         ReportRequestServiceItem entity = reportRequestServiceItemRepository.findByIdAndIsDeletedFalse(id)
@@ -45,6 +47,7 @@ public class ReportRequestServiceItemServiceImpl implements ReportRequestService
         return ReportRequestServiceItemResponse.from(entity);
     }
 
+    /** Tìm kiếm và phân trang danh sách liên kết dịch vụ phòng theo reportRequestId hoặc roomServiceId. */
     @Override
     public PagedResponse<ReportRequestServiceItemResponse> search(ReportRequestServiceItemFilterRequest filter, Pageable pageable) {
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
@@ -57,6 +60,7 @@ public class ReportRequestServiceItemServiceImpl implements ReportRequestService
         return PagedResponse.from(page.map(ReportRequestServiceItemResponse::from));
     }
 
+    /** Cập nhật ghi chú (note) về sự cố của dịch vụ phòng gắn trong yêu cầu hỗ trợ. */
     @Override
     public ReportRequestServiceItemResponse update(String id, ReportRequestServiceItemUpdateRequest request) {
         ReportRequestServiceItem entity = reportRequestServiceItemRepository.findByIdAndIsDeletedFalse(id)
@@ -70,6 +74,7 @@ public class ReportRequestServiceItemServiceImpl implements ReportRequestService
         return ReportRequestServiceItemResponse.from(updated);
     }
 
+    /** Xóa mềm bản ghi liên kết dịch vụ phòng khỏi yêu cầu hỗ trợ theo ID. */
     @Override
     public void delete(String id) {
         ReportRequestServiceItem entity = reportRequestServiceItemRepository.findByIdAndIsDeletedFalse(id)

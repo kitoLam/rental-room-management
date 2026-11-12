@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { vnDateKey } from '@/lib/activity'
 import { request, write } from './http'
 import { provider } from './config'
 import { databaseIdSchema, pageSchema, type Page } from '@/interfaces/domain'
@@ -22,15 +23,16 @@ const result = z.object({ id: z.string().uuid().optional() }).passthrough().null
 const roomDto = z.object({
   id: databaseIdSchema,
   branchId: databaseIdSchema,
-  roomTypeId: databaseIdSchema,
-  managerId: databaseIdSchema.nullable().optional(),
+  title: z.string().nullable().optional(),
   roomNumber: z.string(),
   floor: z.number().nullable(),
   area: z.number().nullable(),
+  maxOccupants: z.number().nullable().optional(),
   listedRentPrice: z.number(),
   listedDepositAmount: z.number().nullable(),
   amenities: z.array(z.string()).nullable(),
   images: z.array(z.string()).nullable(),
+  roomServiceIds: z.array(z.string()).nullish(),
   rules: z.string().nullable(),
   status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
 })
@@ -69,15 +71,6 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
 }
-const roomTypeDto = z.object({
-  id: databaseIdSchema,
-  branchId: databaseIdSchema,
-  code: z.string(),
-  name: z.string(),
-  defaultCapacity: z.number(),
-  description: z.string().nullable(),
-  active: z.boolean(),
-})
 const slotDto = z.object({
   id: databaseIdSchema,
   roomId: databaseIdSchema,
@@ -101,26 +94,26 @@ const normalizePage = <T>(page: {
   totalPages: number
 }) => ({ ...page, number: page.number - 1 })
 const roomImageRefs = (images: unknown) => (Array.isArray(images) ? images : [])
-function roomView(r: z.infer<typeof roomDto>, typeName: string) {
+function roomView(r: z.infer<typeof roomDto>) {
   const images = roomImageRefs(r.images).filter(
     (x): x is string => typeof x === 'string' && /^https?:\/\//.test(x),
   )
+  const title = r.title?.trim() || `Phòng ${r.roomNumber}`
   return {
     id: r.id,
     code: r.roomNumber,
-    title: `${typeName} ${r.roomNumber}`,
+    title,
     branchId: r.branchId,
     branchName: '',
     address: '',
     areaKey: '',
     price: r.listedRentPrice,
-    capacity: 0,
+    deposit: r.listedDepositAmount,
+    capacity: r.maxOccupants ?? 0,
     sizeM2: r.area,
     availableSlots: null,
     floor: r.floor,
     rentalMode: 'SLOT',
-    roomTypeId: r.roomTypeId,
-    roomTypeName: typeName,
     operationalStatus: r.status === 'MAINTENANCE' ? 'MAINTENANCE' : r.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
     status:
       r.status === 'MAINTENANCE'
@@ -133,15 +126,13 @@ function roomView(r: z.infer<typeof roomDto>, typeName: string) {
     occupiedResources: null,
     heldResources: null,
     imageUrl: images[0] || '',
-    imageAlt: `${typeName} ${r.roomNumber}`,
+    imageAlt: title,
     images,
     description: r.rules || '',
     amenities: r.amenities || [],
+    roomServiceIds: r.roomServiceIds || [],
     services: [],
   }
-}
-function typeView(t: z.infer<typeof roomTypeDto>) {
-  return { ...t, name: t.name, description: t.description || '' }
 }
 function slotView(s: z.infer<typeof slotDto>) {
   return {
@@ -158,14 +149,17 @@ function slotView(s: z.infer<typeof slotDto>) {
 function roomPayload(value: Record<string, unknown>, branchId: string) {
   return {
     branchId,
-    roomTypeId: value.roomTypeId,
+    title: value.title,
     roomNumber: value.code,
     area: value.sizeM2,
     floor: value.floor,
+    maxOccupants: value.capacity,
     listedRentPrice: value.price,
+    listedDepositAmount: value.deposit ?? value.price,
     rules: value.description,
     amenities: value.amenities,
-    imageRefs: value.images,
+    images: value.images,
+    roomServiceIds: value.roomServiceIds ?? [],
     status: value.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : value.operationalStatus,
   }
 }
@@ -211,10 +205,11 @@ export const managerApi = {
   branches: async () => {
     if (provider('manager') === 'mock') return request('manager', '/api/manager/branches', z.array(branchAssignmentSchema))
     const branches = await request('manager', '/api/v1/branches/managed', z.array(z.object({
-      id: z.string(), ownerAccountId: z.string(), name: z.string(), address: z.string().nullable(), status: z.enum(['ACTIVE','INACTIVE']),
+      id: z.string(), ownerAccountId: z.string().nullable().optional(), name: z.string(), address: z.string().nullable(), status: z.string(),
     })))
     return branches.map(branch => branchAssignmentSchema.parse({
-      id: branch.id, ownerId: branch.ownerAccountId, name: branch.name, address: branch.address ?? '', status: branch.status,
+      id: branch.id, ownerId: branch.ownerAccountId || branch.id, name: branch.name || 'Chi nhánh', address: branch.address ?? '',
+      status: (['DRAFT', 'ACTIVE', 'INACTIVE'].includes(branch.status) ? branch.status : 'ACTIVE') as any,
       managerId: null, managerName: '', zaloUrl: null, zaloEnabled: false,
     }))
   },
@@ -223,6 +218,55 @@ export const managerApi = {
     resource: K,
     filters: Record<string, string> = {},
   ): Promise<Page<ManagerRecord<K>>> => {
+    if (resource === 'invoices' && filters.debtOnly === 'true' && provider('manager') === 'real') {
+      const query = new URLSearchParams({
+        branchId,
+        page: String(Number(filters.page || 0) + 1),
+        size: filters.size || '8',
+      })
+      if (filters.q) query.set('keyword', filters.q)
+      if (filters.roomId) query.set('roomId', filters.roomId)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.financialStatus === 'OVERDUE') query.set('overdueOnly', 'true')
+      const page = await request(
+        'manager',
+        `/api/v1/dashboard/debts?${query}`,
+        pageSchema(
+          z.object({
+            invoiceId: z.string(),
+            contractTenantId: z.string(),
+            tenantName: z.string(),
+            roomId: z.string(),
+            roomNumber: z.string().nullable(),
+            invoiceNumber: z.string().nullable(),
+            period: z.string().nullable(),
+            dueDate: z.string().nullable(),
+            totalAmount: z.number(),
+            remainingAmount: z.number(),
+            status: z.enum(['UNPAID', 'PARTIAL', 'OVERDUE']),
+            overdueDays: z.number().int().nonnegative(),
+          }),
+        ),
+      )
+      return {
+        ...page,
+        number: Math.max(0, page.number - 1),
+        content: page.content.map((d) => ({
+          id: d.invoiceId,
+          contractTenantId: d.contractTenantId,
+          tenantName: d.tenantName,
+          roomId: d.roomId,
+          roomName: d.roomNumber ? `Phòng ${d.roomNumber}` : '',
+          code: d.invoiceNumber ?? '',
+          billingMonth: d.period ?? '',
+          dueDate: d.dueDate ?? '',
+          totalAmount: d.totalAmount,
+          outstanding: d.remainingAmount,
+          financialStatus: d.status,
+          overdueDays: d.overdueDays,
+        })),
+      } as unknown as Page<ManagerRecord<K>>
+    }
     if (resource === 'bookings' && provider('manager') === 'real') {
       const result = await bookingService.managerList(filters.status || '', Number(filters.page || 0) + 1, filters)
       return result as unknown as Page<ManagerRecord<K>>
@@ -338,51 +382,22 @@ export const managerApi = {
         totalPages: Math.ceil(filtered.length / size) || (filtered.length ? 1 : 0),
       }
     }
-    if (provider('manager') === 'real' && ['rooms', 'room-types', 'slots'].includes(resource)) {
+    if (provider('manager') === 'real' && ['rooms', 'slots'].includes(resource)) {
       const page = Number(filters.page || 0),
         size = Number(filters.size || 8)
       if (resource === 'rooms') {
         const params = new URLSearchParams({ branchId, page: String(page), size: String(size) })
-        if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
         if (filters.minPrice) params.set('minPrice', filters.minPrice)
         if (filters.maxPrice) params.set('maxPrice', filters.maxPrice)
         if (filters.capacity) params.set('minCapacity', filters.capacity)
+        if (filters.q) params.set('keyword', filters.q)
         if (filters.operationalStatus)
           params.set(
             'status',
             filters.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : filters.operationalStatus,
           )
-        return request('manager', `/api/v1/rooms?${params}`, apiPage(roomDto)).then(async (p) => {
-          const types = await request(
-            'manager',
-            `/api/v1/room-types?${new URLSearchParams({ page: '0', size: '100' })}`,
-            apiPage(roomTypeDto),
-          )
-          const names = new Map(types.content.map((t) => [t.id, t.name]))
-          return normalizePage({
-            ...p,
-            content: p.content.map((r) => roomView(r, names.get(r.roomTypeId) || 'Phòng')),
-          })
-        }) as Promise<Page<ManagerRecord<K>>>
-      }
-      if (resource === 'room-types') {
-        const params = new URLSearchParams({ page: '0', size: '1000' })
-        return request('manager', `/api/v1/room-types?${params}`, apiPage(roomTypeDto)).then(
-          (p) => {
-            const filtered = p.content.filter(
-              (t) =>
-                t.branchId === branchId &&
-                (!filters.q ||
-                  `${t.code} ${t.name}`.toLowerCase().includes(filters.q.toLowerCase())),
-            )
-            return {
-              content: filtered.slice(page * size, (page + 1) * size).map(typeView),
-              number: page,
-              size,
-              totalElements: filtered.length,
-              totalPages: Math.ceil(filtered.length / size),
-            }
-          },
+        return request('manager', `/api/v1/rooms?${params}`, apiPage(roomDto)).then((p) =>
+          normalizePage({ ...p, content: p.content.map(roomView) }),
         ) as Promise<Page<ManagerRecord<K>>>
       }
       const roomId = filters.roomId
@@ -393,33 +408,99 @@ export const managerApi = {
         z.array(slotDto),
       ).then(slotListPage) as Promise<Page<ManagerRecord<K>>>
     }
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const query = new URLSearchParams({ page: String(Number(filters.page || 0) + 1), size: filters.size || '8' })
+      if (filters.status) {
+        const backendStatus =
+          filters.status === 'VERIFIED'
+            ? 'SUCCESS'
+            : filters.status === 'REVIEW'
+              ? 'LATE_PAID'
+              : filters.status
+        query.set('status', backendStatus)
+      }
+      if (filters.keyword || filters.q) query.set('keyword', filters.keyword || filters.q)
+      if (filters.contractTenantId) query.set('contractTenantId', filters.contractTenantId)
+      if (filters.invoiceId) query.set('invoiceId', filters.invoiceId)
+      if (filters.method) query.set('method', filters.method)
+      if (filters.date) query.set('date', filters.date)
+      const paymentPageSchema = z.object({
+        content: z.array(z.object({
+          id: z.string(),
+          invoiceId: z.string().nullable(),
+          contractTenantId: z.string().nullable(),
+          amount: z.number(),
+          method: z.string().nullable(),
+          transactionCode: z.string().nullable(),
+          paidAt: z.string().nullable(),
+          status: z.string(),
+          createdAt: z.string().nullable(),
+          updatedAt: z.string().nullable(),
+        })),
+        number: z.number(),
+        size: z.number(),
+        totalElements: z.number(),
+        totalPages: z.number(),
+      })
+      const page = await request('manager', `/api/v1/payments?${query}`, paymentPageSchema)
+      let content = page.content.map((p) => ({
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      }))
+      if (filters.date) {
+        content = content.filter((p) => vnDateKey(p.createdAt) === filters.date || vnDateKey(p.verifiedAt) === filters.date)
+      }
+      return {
+        content,
+        number: Math.max(0, page.number - 1),
+        size: page.size,
+        totalElements: page.totalElements,
+        totalPages: page.totalPages,
+      } as unknown as Page<ManagerRecord<K>>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const pageIndex = Number(filters.page || 0)
-          const p = await reportRequestService.search(
-            {
-              branchId,
-              status: (filters.status || undefined) as any,
-              keyword: filters.q || undefined,
-              page: pageIndex,
-              size: 8,
-            },
-            'manager',
-          )
-          if (p && Array.isArray(p.content)) {
-            const seen = new Set<string>()
-            const deduped = p.content.filter((item) => {
-              if (!item.id || seen.has(item.id)) return false
-              seen.add(item.id)
-              return true
-            })
-            const content = deduped.map((item) => ({
-              id: item.id,
-              contractTenantId: item.tenantId,
-              roomId: item.roomId,
-              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
-              tenantName: 'Khách thuê',
+        const pageIndex = Number(filters.page || 0)
+        const p = await reportRequestService.search(
+          {
+            branchId,
+            status: (filters.status || undefined) as any,
+            keyword: filters.q || undefined,
+            page: pageIndex,
+            size: 8,
+          },
+          'manager',
+        )
+        const seen = new Set<string>()
+        const deduped = (p.content || []).filter((item) => {
+          if (!item.id || seen.has(item.id)) return false
+          seen.add(item.id)
+          return true
+        })
+        const content = deduped.map((item) => ({
+          id: item.id,
+          contractTenantId: item.tenantId,
+          roomId: item.roomId,
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
               assetId: item.roomId,
               category: item.type as any,
               title: item.title,
@@ -458,8 +539,6 @@ export const managerApi = {
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -472,17 +551,13 @@ export const managerApi = {
                 approvalStatus: null,
               })),
             }))
-            return {
-              content,
-              number: p.number,
-              size: p.size,
-              totalElements: p.totalElements,
-              totalPages: p.totalPages,
-            } as unknown as Page<ManagerRecord<K>>
-          }
-        } catch (err) {
-          console.warn('Real report-requests list failed, falling back to mock:', err)
-        }
+        return {
+          content,
+          number: p.number,
+          size: p.size,
+          totalElements: p.totalElements,
+          totalPages: p.totalPages,
+        } as unknown as Page<ManagerRecord<K>>
       }
       // Mock fallback: read directly from tenantDb to avoid scope/permission
       // checks in managerDb.list() which fail when actor is a real backend user
@@ -537,8 +612,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -598,22 +671,55 @@ export const managerApi = {
     resource: K,
     id: string,
   ): Promise<ManagerRecord<K>> => {
-    if (resource === 'maintenance') {
+    if (resource === 'payments' && provider('manager') === 'real') {
+      const paymentDetailSchema = z.object({
+        id: z.string(),
+        invoiceId: z.string().nullable(),
+        contractTenantId: z.string().nullable(),
+        bookingId: z.string().nullable().optional(),
+        amount: z.number(),
+        method: z.string().nullable(),
+        transactionCode: z.string().nullable(),
+        gatewayTransactionNo: z.string().nullable().optional(),
+        paidAt: z.string().nullable(),
+        status: z.string(),
+        createdAt: z.string().nullable(),
+        updatedAt: z.string().nullable(),
+      })
+      const p = await request('manager', `/api/v1/payments/${encodeURIComponent(id)}`, paymentDetailSchema)
+      return {
+        id: p.id,
+        branchId,
+        reference: p.transactionCode || p.id.slice(0, 8),
+        targetType: 'INVOICE' as const,
+        invoiceId: p.invoiceId,
+        bookingId: p.bookingId || null,
+        contractTenantId: p.contractTenantId,
+        payerName: 'Người thanh toán',
+        tenantName: 'Người thuê',
+        amountReceived: p.amount,
+        allocatedAmount: p.amount,
+        environment: 'PRODUCTION' as const,
+        method: p.method || 'VNPAY',
+        status: p.status === 'SUCCESS' ? 'VERIFIED' as const : p.status === 'FAILED' ? 'FAILED' as const : p.status === 'LATE_PAID' ? 'REVIEW' as const : 'PENDING' as const,
+        createdAt: p.createdAt || new Date(0).toISOString(),
+        verifiedAt: p.paidAt,
+        providerTransactionId: p.gatewayTransactionNo || p.transactionCode,
+        evidence: [],
+        note: '',
+        history: [],
+      } as unknown as ManagerRecord<K>
+    }
+        if (resource === 'maintenance') {
       if (provider('manager') === 'real') {
-        try {
-          const item = await reportRequestService.getById(id, 'manager')
-          if (item) {
-            const { tenantDb } = await import('@/mocks/tenant-engine')
-            const t =
-              tenantDb.state.tenancies.find((x) => x.roomId === item.roomId || x.id === item.tenantId) ||
-              tenantDb.state.tenancies[0]
-            return {
-              id: item.id,
-              contractTenantId: item.tenantId || t?.id || '',
-              roomId: item.roomId || t?.roomId || '',
-              roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : (t?.roomName || `P.${(item.roomId || '').slice(-4).toUpperCase()}`),
-              tenantName: 'Khách thuê',
-              assetId: item.roomId || t?.roomId || '',
+        const item = await reportRequestService.getById(id, 'manager')
+        return {
+          id: item.id,
+          contractTenantId: item.tenantId || '',
+          roomId: item.roomId || '',
+          roomName: item.roomName ? `${item.roomName}${item.slotName ? ` - ${item.slotName}` : ''}` : `P.${(item.roomId || '').slice(-4).toUpperCase()}`,
+          tenantName: item.tenantName || 'Khách thuê',
+          assetId: item.roomId || '',
               category: item.type as any,
               title: item.title,
               description: item.content,
@@ -651,8 +757,6 @@ export const managerApi = {
               solutionResult: item.solutionResult,
               rejectReason: item.rejectReason,
               requestedInfoNote: item.requestedInfoNote,
-              disputeReason: item.disputeReason,
-              adminConclusion: item.adminConclusion,
               records: (item.timeline || []).map((rec) => ({
                 id: rec.id,
                 at: rec.createdAt,
@@ -664,11 +768,7 @@ export const managerApi = {
                 responsibleParty: null,
                 approvalStatus: null,
               })),
-            } as unknown as ManagerRecord<K>
-          }
-        } catch (err) {
-          console.warn('Real report-request getById failed, falling back to mock:', err)
-        }
+        } as unknown as ManagerRecord<K>
       }
       const { tenantDb } = await import('@/mocks/tenant-engine')
       const r: any = tenantDb.state.reports.find((x) => x.id === id)
@@ -714,8 +814,6 @@ export const managerApi = {
           solutionResult: r.solutionResult || null,
           rejectReason: r.rejectReason || null,
           requestedInfoNote: r.requestedInfoNote || null,
-          disputeReason: r.disputeReason || null,
-          adminConclusion: r.adminConclusion || null,
           records: (r.records || []).map((rec: any) => ({
             id: rec.id || crypto.randomUUID(),
             at: rec.at || new Date().toISOString(),
@@ -760,18 +858,7 @@ export const managerApi = {
     }
     if (provider('manager') === 'real' && resource === 'rooms')
       return request('manager', `/api/v1/rooms/${encodeURIComponent(id)}`, roomDto).then(
-        async (r) => {
-          const type = await request(
-            'manager',
-            `/api/v1/room-types/${encodeURIComponent(r.roomTypeId)}`,
-            roomTypeDto,
-          )
-          return roomView(r, type.name)
-        },
-      ) as Promise<ManagerRecord<K>>
-    if (provider('manager') === 'real' && resource === 'room-types')
-      return request('manager', `/api/v1/room-types/${encodeURIComponent(id)}`, roomTypeDto).then(
-        typeView,
+        roomView,
       ) as Promise<ManagerRecord<K>>
     if (provider('manager') === 'real' && resource === 'slots')
       return request('manager', `/api/v1/room-slots/${encodeURIComponent(id)}`, slotDto).then(
@@ -798,8 +885,7 @@ export const managerApi = {
       return request('manager', path, contractTenantSchema, write(method, value))
     }
     if (resource === 'maintenance' && provider('manager') === 'real' && id) {
-      try {
-        const v = (value || {}) as Record<string, any>
+      const v = (value || {}) as Record<string, any>
         const extractAttachments = (val: any): string[] => {
           if (!val) return []
           if (Array.isArray(val.attachments))
@@ -852,30 +938,16 @@ export const managerApi = {
           const item = await reportRequestService.resolve(id, solutionResult, atts)
           return { id: item.id }
         }
-        if (action === 'reopen') {
-          const item = await reportRequestService.reopen(
-            id,
-            v.reason || 'Mở lại yêu cầu để xử lý thêm',
-          )
-          return { id: item.id }
-        }
-        if (action === 'escalate-admin') {
-          const item = await reportRequestService.escalateAdmin(
-            id,
-            v.disputeReason || v.reason || 'Chuyển Admin phân xử tranh chấp',
-          )
-          return { id: item.id }
-        }
-        if (action === 'admin-resolve') {
-          const item = await reportRequestService.adminResolve(
-            id,
-            v.adminConclusion || v.resolutionNote || 'Admin đã giải quyết tranh chấp',
-          )
-          return { id: item.id }
-        }
-      } catch (err) {
-        console.warn('Real report-request manager action failed, falling back to mock:', err)
+      if (action === 'reopen') {
+        const item = await reportRequestService.reopen(
+          id,
+          v.reason || 'Mở lại yêu cầu để xử lý thêm',
+          [],
+          'manager',
+        )
+        return { id: item.id }
       }
+      throw new Error('Thao tác yêu cầu hỗ trợ không được hỗ trợ.')
     }
     if (resource === 'maintenance' && id) {
       // Mock fallback for all maintenance actions (when real API is unavailable)
@@ -1038,51 +1110,23 @@ export const managerApi = {
       const updated = await utilitiesService.costAllocation.process(id, v)
       return { id: updated.id }
     }
-    if (provider('manager') === 'real' && ['rooms', 'room-types', 'slots'].includes(resource)) {
-      const isRoom = resource === 'rooms',
-        isType = resource === 'room-types'
+    if (provider('manager') === 'real' && ['rooms', 'slots'].includes(resource)) {
+      const isRoom = resource === 'rooms'
       const path = isRoom
         ? `/api/v1/rooms${id ? `/${encodeURIComponent(id)}` : ''}`
-        : isType
-          ? `/api/v1/room-types${id ? `/${encodeURIComponent(id)}` : ''}`
-          : `/api/v1/room-slots${id ? `/${encodeURIComponent(id)}` : ''}`
+        : `/api/v1/room-slots${id ? `/${encodeURIComponent(id)}` : ''}`
       if (method === 'DELETE') return request('manager', path, z.null(), write('DELETE'))
       const input = value as Record<string, unknown>
       const payload = isRoom
         ? roomPayload(input, branchId)
-        : isType
-          ? {
-              branchId,
-              code: input.code,
-              typeName: input.name,
-              defaultCapacity: input.defaultCapacity,
-              description: input.description,
-              active: input.active,
-            }
-          : {
+        : {
               roomId: input.roomId,
               slotCode: input.code,
               slotName: input.name,
               status: input.operationalStatus === 'ACTIVE' ? 'AVAILABLE' : input.operationalStatus,
             }
       if (isRoom)
-        return request('manager', path, roomDto, write(id ? 'PUT' : 'POST', payload)).then(
-          async (r) =>
-            roomView(
-              r,
-              (
-                await request(
-                  'manager',
-                  `/api/v1/room-types/${encodeURIComponent(r.roomTypeId)}`,
-                  roomTypeDto,
-                )
-              ).name,
-            ),
-        )
-      if (isType)
-        return request('manager', path, roomTypeDto, write(id ? 'PUT' : 'POST', payload)).then(
-          typeView,
-        )
+        return request('manager', path, roomDto, write(id ? 'PATCH' : 'POST', payload)).then(roomView)
       return request('manager', path, slotDto, write(id ? 'PUT' : 'POST', payload)).then(slotView)
     }
     return request(

@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.tenant.service;
 
+import java.util.List;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.MessageResponse;
@@ -23,6 +25,11 @@ public interface TenantService {
     PagedResponse<TenantResponse> search(TenantFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
     TenantBranchStatsResponse stats(String branchId, AuthPrincipal principal);
+
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewTenant> readForOverview(List<String> ids);
+
+    record OverviewTenant(String id, String fullName, String phone) { }
 
     TenantResponse update(String id, TenantUpdateRequest request, AuthPrincipal principal);
 

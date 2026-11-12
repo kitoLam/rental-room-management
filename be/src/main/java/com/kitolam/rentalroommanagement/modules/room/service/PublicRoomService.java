@@ -18,9 +18,6 @@ import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.support.RoomSlotAvailabilityRoller;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
-import com.kitolam.rentalroommanagement.modules.roomtype.document.RoomType;
-import com.kitolam.rentalroommanagement.modules.roomtype.dto.response.RoomTypeResponse;
-import com.kitolam.rentalroommanagement.modules.roomtype.repository.RoomTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.data.domain.Sort;
@@ -43,16 +40,17 @@ public class PublicRoomService {
 
     private final RoomRepository rooms;
     private final BranchRepository branches;
-    private final RoomTypeRepository roomTypes;
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
     private final RoomService roomService;
+    private final com.kitolam.rentalroommanagement.modules.roomservice.repository.RoomServiceRepository roomServiceRepository;
+    private final com.kitolam.rentalroommanagement.modules.roomservice.service.RoomServiceCatalogService roomServiceCatalog;
     private final Clock clock;
 
     public PagedResponse<PublicRoomResponse> search(
             String keyword,
             String branchId,
-            String roomTypeId,
+            Integer minCapacity,
             String address,
             BigDecimal minPrice,
             BigDecimal maxPrice,
@@ -87,11 +85,7 @@ public class PublicRoomService {
             return PagedResponse.of(List.of(), page + 1, size, 0);
         }
 
-        // Lấy danh sách loại phòng và chủ phòng để phục vụ map và tìm kiếm
-        List<RoomType> allRoomTypes = roomTypes.findAll().stream()
-                .filter(rt -> !Boolean.TRUE.equals(rt.getIsDeleted()))
-                .toList();
-
+        // Lấy chủ phòng để phục vụ map và tìm kiếm
         Set<String> ownerIds = activeBranches.stream()
                 .map(Branch::getOwnerAccountId)
                 .filter(StringUtils::hasText)
@@ -128,29 +122,22 @@ public class PublicRoomService {
                         .map(b -> MongoQueryHelper.toObjectId(b.getId()))
                         .collect(Collectors.toSet());
 
-                // Loại phòng có tên khớp từ khóa
-                Set<ObjectId> matchingRoomTypeIds = allRoomTypes.stream()
-                        .filter(rt -> rt.getName() != null && compiled.matcher(rt.getName()).find())
-                        .map(rt -> MongoQueryHelper.toObjectId(rt.getId()))
-                        .collect(Collectors.toSet());
-
                 List<Criteria> tokenMatches = new ArrayList<>();
                 // Khớp mã số phòng
                 tokenMatches.add(Criteria.where("roomNumber").regex(regexPattern, "i"));
+                // Khớp tiêu đề phòng
+                tokenMatches.add(Criteria.where("title").regex(regexPattern, "i"));
                 if (!matchingBranchIds.isEmpty()) {
                     tokenMatches.add(Criteria.where("branchId").in(matchingBranchIds));
-                }
-                if (!matchingRoomTypeIds.isEmpty()) {
-                    tokenMatches.add(Criteria.where("roomTypeId").in(matchingRoomTypeIds));
                 }
 
                 roomFilters.add(new Criteria().orOperator(tokenMatches));
             }
         }
 
-        // 2. Lọc theo Loại phòng
-        if (StringUtils.hasText(roomTypeId)) {
-            roomFilters.add(Criteria.where("roomTypeId").is(MongoQueryHelper.toObjectId(roomTypeId)));
+        // 2. Lọc theo sức chứa tối thiểu
+        if (minCapacity != null) {
+            roomFilters.add(Criteria.where("maxOccupants").gte(minCapacity));
         }
 
         // 4. Lọc kéo khoảng giá (500.000 - 20.000.000)
@@ -224,13 +211,6 @@ public class PublicRoomService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng công khai"));
         User owner = branch.getOwnerAccountId() != null ? userRepository.findByIdAndIsDeletedFalse(branch.getOwnerAccountId()).orElse(null) : null;
         return toResponse(room, branch, owner, true);
-    }
-
-    public List<RoomTypeResponse> getPublicRoomTypes() {
-        return roomTypes.findAll().stream()
-                .filter(rt -> !Boolean.TRUE.equals(rt.getIsDeleted()))
-                .map(rt -> new RoomTypeResponse(rt.getId(), rt.getName(), rt.getDescription(), rt.getCreatedAt(), rt.getUpdatedAt()))
-                .toList();
     }
 
     public List<BranchResponse> getPublicBranches() {
@@ -308,20 +288,28 @@ public class PublicRoomService {
         return mongoTemplate.find(query, Room.class);
     }
 
+    private List<com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomServiceResponse> roomServices(Room room) {
+        if (room.getRoomServiceIds() == null || room.getRoomServiceIds().isEmpty()) return List.of();
+        return roomServiceRepository.findByIdInAndIsDeletedFalse(room.getRoomServiceIds()).stream()
+                .filter(s -> s.getStatus() == com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus.ACTIVE)
+                .map(roomServiceCatalog::toResponse)
+                .toList();
+    }
+
     private PublicRoomResponse toResponse(Room room, Branch branch, User owner, boolean includeRates) {
-        RoomType type = roomTypes.findByIdAndIsDeletedFalse(room.getRoomTypeId()).orElse(null);
         PublicRoomResponse.PublicRoom publicRoom = new PublicRoomResponse.PublicRoom(
                 room.getId(),
                 room.getBranchId(),
-                room.getRoomTypeId(),
+                room.getTitle(),
                 room.getRoomNumber(),
-                (int) mongoTemplate.count(Query.query(new Criteria().andOperator(
-                        Criteria.where("roomId").is(MongoQueryHelper.toObjectId(room.getId())),
-                        Criteria.where("isDeleted").is(false))), RoomSlot.class),
+                room.getMaxOccupants() != null ? room.getMaxOccupants()
+                        : (int) mongoTemplate.count(Query.query(new Criteria().andOperator(
+                                Criteria.where("roomId").is(MongoQueryHelper.toObjectId(room.getId())),
+                                Criteria.where("isDeleted").is(false))), RoomSlot.class),
                 room.getArea(),
                 room.getFloor(),
                 room.getListedRentPrice() == null ? BigDecimal.ZERO : room.getListedRentPrice(),
-                null,
+                room.getRules(),
                 room.getAmenities() == null ? List.of() : room.getAmenities(),
                 room.getImages() == null ? List.of() : room.getImages(),
                 "ACTIVE"
@@ -331,9 +319,9 @@ public class PublicRoomService {
                 branch != null ? branch.getId() : "",
                 branch != null ? branch.getName() : "",
                 branch != null && branch.getAddress() != null ? branch.getAddress() : "",
-                type == null ? "Phòng" : type.getName(),
                 owner != null ? owner.getFullName() : "",
-                includeRates ? roomService.publicUtilityRates(room.getId()) : null
+                includeRates ? roomService.publicUtilityRates(room.getId()) : null,
+                includeRates ? roomServices(room) : null
         );
     }
 

@@ -20,6 +20,18 @@ export const dateTime = (value: string) =>
   })
 export const dateOnly = (value: string) =>
   new Date(`${value}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+export const vnDateKey = (value?: string | null) => {
+  if (!value) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value.slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
 /** Cộng tháng theo đúng quy tắc LocalDate.plusMonths của Java: giữ ngày, kẹp về cuối tháng nếu tháng đích ngắn hơn. */
 export const addMonths = (date: string, months: number) => {
   const [year, month, day] = date.split('-').map(Number)
@@ -98,8 +110,8 @@ export function referenceLink(type: string | null, id: string | null, tenancyId?
   if (id && type && routes[type] && tenancyId)
     return `${routes[type]}?tenancyId=${encodeURIComponent(tenancyId)}${type === 'TENANT_PAYMENT' ? `&paymentId=${encodeURIComponent(id)}` : ''}`
   return id && type === 'APPOINTMENT'
-    ? `/user/appointments/${id}`
+    ? `/tenant/appointments/${id}`
     : id && type === 'BOOKING'
-      ? `/user/bookings/${id}`
+      ? `/tenant/bookings/${id}`
       : null
 }

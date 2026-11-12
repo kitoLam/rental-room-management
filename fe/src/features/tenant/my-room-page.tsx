@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { Facts, TenantLink, TenantPage, TenantStatus } from './components'
 import { isActive, useTenant, useTenantQuery } from './context'
+import { MonthlyInvoices } from './monthly-invoices'
 
 export function MyRoomPage() {
   const { tenancy: t } = useTenant(),
@@ -26,7 +27,7 @@ export function MyRoomPage() {
   const zalo = isActive(t) ? safeZalo(room.data?.zaloUrl || null) : null
   return (
     <TenantPage
-      title="Chỗ ở của tôi"
+      title="Phòng của tôi"
       description={`${t.roomName}${t.slotName ? ` · ${t.slotName}` : ''}`}
     >
       <QueryState pending={room.isPending} error={room.error} retry={room.refetch}>
@@ -148,6 +149,7 @@ export function MyRoomPage() {
           </>
         )}
       </QueryState>
+      <MonthlyInvoices />
       <Modal title="Ảnh phòng" open={!!image} onOpenChange={() => setImage(null)}>
         {image && <img src={image} alt={`Không gian ${t.roomName}`} className="w-full rounded-lg" />}
       </Modal>

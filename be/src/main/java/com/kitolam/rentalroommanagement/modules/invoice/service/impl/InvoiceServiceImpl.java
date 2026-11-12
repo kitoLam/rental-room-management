@@ -5,6 +5,7 @@ import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import com.kitolam.rentalroommanagement.modules.branch.dto.response.BranchResponse;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
+import com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.document.ContractServiceSnapshot;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
@@ -29,8 +30,6 @@ import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService;
 import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus;
 import com.kitolam.rentalroommanagement.modules.roomservicecharge.document.RoomServiceCharge;
-import com.kitolam.rentalroommanagement.modules.serviceitem.document.ServiceItem;
-import com.kitolam.rentalroommanagement.modules.serviceitem.enums.CalculationType;
 import com.kitolam.rentalroommanagement.modules.slotservice.document.SlotService;
 import com.kitolam.rentalroommanagement.modules.slotservice.enums.SlotServiceStatus;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
@@ -74,6 +73,10 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final TenantRepository tenantRepository;
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
+
+    public InvoiceServiceImpl(MongoTemplate mongoTemplate, InvoiceRepository invoiceRepository) {
+        this(invoiceRepository, null, null, null, null, null, mongoTemplate, Clock.systemDefaultZone());
+    }
 
     @Override
     public PagedResponse<TenantDebtResponse> listDebts(
@@ -119,29 +122,14 @@ public class InvoiceServiceImpl implements InvoiceService {
             return PagedResponse.from(new PageImpl<>(List.of(), pageable, 0));
         }
 
-        Map<String, ServiceItem> serviceById = mongoTemplate.find(
-                        new Query(Criteria.where("isDeleted").is(false)),
-                        ServiceItem.class)
-                .stream()
-                .collect(Collectors.toMap(ServiceItem::getId, s -> s, (a, b) -> a));
-
         List<RoomService> activeRoomServices = mongoTemplate.find(
                 new Query(Criteria.where("isDeleted").is(false)
                         .and("status").is(RoomServiceStatus.ACTIVE.name())),
                 RoomService.class
         );
-        Map<String, List<RoomService>> roomServicesByRoomId = activeRoomServices.stream()
-                .filter(rs -> rs.getRoomId() != null)
-                .collect(Collectors.groupingBy(RoomService::getRoomId));
-
-        List<SlotService> activeSlotServices = mongoTemplate.find(
-                new Query(Criteria.where("isDeleted").is(false)
-                        .and("status").is(SlotServiceStatus.ACTIVE.name())),
-                SlotService.class
-        );
-        Map<String, List<SlotService>> slotServicesBySlotId = activeSlotServices.stream()
-                .filter(ss -> ss.getRoomSlotId() != null)
-                .collect(Collectors.groupingBy(SlotService::getRoomSlotId));
+        Map<String, List<RoomService>> roomServicesByBranchId = activeRoomServices.stream()
+                .filter(rs -> rs.getBranchId() != null)
+                .collect(Collectors.groupingBy(RoomService::getBranchId));
 
         List<RoomServiceCharge> roomCharges = mongoTemplate.find(
                 new Query(Criteria.where("isDeleted").is(false)),
@@ -281,9 +269,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                     contract,
                     ct,
                     room,
-                    roomServicesByRoomId.getOrDefault(room.getId(), List.of()),
-                    slotServicesBySlotId,
-                    serviceById
+                    roomServicesByBranchId.getOrDefault(room.getBranchId(), List.of())
             );
             BigDecimal registeredServicesAmount = registeredServices.stream()
                     .map(TenantDebtServiceItemResponse::amount)
@@ -295,9 +281,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                     contract,
                     room,
                     branch,
-                    roomServicesByRoomId.getOrDefault(room.getId(), List.of()),
-                    chargesByRoomServiceId,
-                    serviceById
+                    roomServicesByBranchId.getOrDefault(room.getBranchId(), List.of()),
+                    chargesByRoomServiceId
             );
 
             // 4. Hạn thanh toán & Đã trễ hẹn từ ngày nào
@@ -443,9 +428,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             Contract contract,
             ContractTenant ct,
             Room room,
-            List<RoomService> roomServices,
-            Map<String, List<SlotService>> slotServicesBySlotId,
-            Map<String, ServiceItem> serviceById
+            List<RoomService> roomServices
     ) {
         Map<String, TenantDebtServiceItemResponse> byKey = new LinkedHashMap<>();
 
@@ -471,76 +454,42 @@ public class InvoiceServiceImpl implements InvoiceService {
             ));
         }
 
-        for (RoomService rs : roomServices) {
-            ServiceItem catalog = serviceById.get(rs.getServiceId());
-            String name = catalog != null ? catalog.getName() : "Dịch vụ phòng";
-            String calcType = catalog != null && catalog.getCalculationType() != null
-                    ? catalog.getCalculationType().name()
-                    : "";
-            if (isElectricityOrWater(name, calcType)) continue;
-            BigDecimal unitPrice = rs.getUnitPrice() != null
-                    ? rs.getUnitPrice()
-                    : (catalog != null && catalog.getUnitPrice() != null ? catalog.getUnitPrice() : BigDecimal.ZERO);
-            String key = rs.getServiceId() != null ? rs.getServiceId() : rs.getId();
-            byKey.putIfAbsent(key, new TenantDebtServiceItemResponse(
-                    rs.getServiceId(),
-                    name,
-                    catalog != null && catalog.getUnit() != null ? catalog.getUnit() : "tháng",
-                    unitPrice,
-                    1,
-                    unitPrice,
-                    catalog != null && catalog.isMandatory()
-            ));
-        }
-
-        List<String> slotIds = ct.getRoomSlotIds() != null && !ct.getRoomSlotIds().isEmpty()
-                ? ct.getRoomSlotIds()
-                : (contract.getRoomSlotIds() != null ? contract.getRoomSlotIds() : List.of());
-        for (String slotId : slotIds) {
-            for (SlotService ss : slotServicesBySlotId.getOrDefault(slotId, List.of())) {
-                ServiceItem catalog = serviceById.get(ss.getServiceId());
-                String name = catalog != null ? catalog.getName() : "Dịch vụ chỗ ở";
-                String calcType = catalog != null && catalog.getCalculationType() != null
-                        ? catalog.getCalculationType().name()
-                        : "";
-                if (isElectricityOrWater(name, calcType)) continue;
-                BigDecimal unitPrice = ss.getUnitPrice() != null
-                        ? ss.getUnitPrice()
-                        : (catalog != null && catalog.getUnitPrice() != null ? catalog.getUnitPrice() : BigDecimal.ZERO);
-                int qty = ss.getQuantity() != null && ss.getQuantity() > 0 ? ss.getQuantity() : 1;
+        if (contract.getActiveSlotServices() != null) {
+            LocalDate today = LocalDate.now(clock.withZone(VIETNAM_ZONE));
+            for (ActiveSlotService as : contract.getActiveSlotServices()) {
+                if (!as.isActiveOn(today)) continue;
+                if (isElectricityOrWater(as.getName(), "")) continue;
+                BigDecimal unitPrice = as.getUnitPrice() != null ? as.getUnitPrice() : BigDecimal.ZERO;
+                int qty = as.getQuantity() != null && as.getQuantity() > 0 ? as.getQuantity() : 1;
                 BigDecimal amount = unitPrice.multiply(BigDecimal.valueOf(qty));
-                String key = ss.getServiceId() != null ? ss.getServiceId() : ss.getId();
+                String key = as.getSlotServiceId() != null ? as.getSlotServiceId() : as.getName();
                 byKey.putIfAbsent(key, new TenantDebtServiceItemResponse(
-                        ss.getServiceId(),
-                        name,
-                        catalog != null && catalog.getUnit() != null ? catalog.getUnit() : "tháng",
+                        as.getSlotServiceId(),
+                        as.getName() != null ? as.getName() : "Dịch vụ tự chọn",
+                        as.getUnit() != null ? as.getUnit() : "tháng",
                         unitPrice,
                         qty,
                         amount,
-                        catalog != null && catalog.isMandatory()
+                        false
                 ));
             }
         }
 
-        // Also include mandatory non-metered catalog services if none were snapshotted yet
-        if (byKey.isEmpty()) {
-            for (ServiceItem item : serviceById.values()) {
-                if (item.isMandatory() && item.getCalculationType() != CalculationType.METERED) {
-                    if (isElectricityOrWater(item.getName(), item.getCalculationType() != null ? item.getCalculationType().name() : "")) {
-                        continue;
-                    }
-                    BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
-                    byKey.putIfAbsent(item.getId(), new TenantDebtServiceItemResponse(
-                            item.getId(),
-                            item.getName(),
-                            item.getUnit() != null ? item.getUnit() : "tháng",
-                            unitPrice,
-                            1,
-                            unitPrice,
-                            true
-                    ));
-                }
-            }
+        for (RoomService rs : roomServices) {
+            String name = rs.getName() != null ? rs.getName() : "Dịch vụ phòng";
+            String calcType = rs.getCalculationType() != null ? rs.getCalculationType().name() : "";
+            if (isElectricityOrWater(name, calcType)) continue;
+            BigDecimal unitPrice = rs.getUnitPrice() != null ? rs.getUnitPrice() : BigDecimal.ZERO;
+            String key = rs.getId() != null ? rs.getId() : name;
+            byKey.putIfAbsent(key, new TenantDebtServiceItemResponse(
+                    rs.getId(),
+                    name,
+                    rs.getUnit() != null ? rs.getUnit() : "tháng",
+                    unitPrice,
+                    1,
+                    unitPrice,
+                    true
+            ));
         }
 
         // Sample fallback registered services when room/contract has no service records yet
@@ -583,8 +532,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             Room room,
             BranchResponse branch,
             List<RoomService> roomServices,
-            Map<String, List<RoomServiceCharge>> chargesByRoomServiceId,
-            Map<String, ServiceItem> serviceById
+            Map<String, List<RoomServiceCharge>> chargesByRoomServiceId
     ) {
         BigDecimal electricity = BigDecimal.ZERO;
         BigDecimal water = BigDecimal.ZERO;
@@ -603,10 +551,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         if (electricity.compareTo(BigDecimal.ZERO) == 0 && water.compareTo(BigDecimal.ZERO) == 0) {
             for (RoomService rs : roomServices) {
-                ServiceItem catalog = serviceById.get(rs.getServiceId());
-                String name = catalog != null && catalog.getName() != null
-                        ? catalog.getName().toLowerCase(Locale.ROOT)
-                        : "";
+                String name = rs.getName() != null ? rs.getName().toLowerCase(Locale.ROOT) : "";
                 List<RoomServiceCharge> charges = chargesByRoomServiceId.getOrDefault(rs.getId(), List.of());
                 BigDecimal latestCharge = charges.stream()
                         .filter(c -> c.getTotalAmount() != null && c.getTotalAmount().compareTo(BigDecimal.ZERO) > 0)
@@ -946,5 +891,51 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     public void delete(String id) {
         throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public List<OverviewInvoice> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", ids);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("contractTenantId");
+        return mongoTemplate.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
+    }
+
+    @Override
+    public List<TenantInvoice> readForTenantOverview(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        query.fields().include("invoiceNumber", "period", "dueDate", "totalAmount", "remainingAmount", "status");
+        return mongoTemplate.find(query, Invoice.class).stream().map(item -> new TenantInvoice(item.getId(),
+                item.getInvoiceNumber(), item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount(), item.getStatus())).toList();
+    }
+
+    @Override
+    public List<DebtInvoice> readDebts(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status")
+                .in("ISSUED", "PARTIALLY_PAID", "OVERDUE"));
+        query.fields().include("contractTenantId", "invoiceNumber", "period", "dueDate", "totalAmount", "remainingAmount");
+        return mongoTemplate.find(query, Invoice.class).stream()
+                .filter(item -> item.getRemainingAmount() != null && item.getRemainingAmount().signum() > 0)
+                .map(item -> new DebtInvoice(item.getId(), item.getContractTenantId(), item.getInvoiceNumber(),
+                        item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount()))
+                .toList();
+    }
+
+    @Override
+    public List<OverviewInvoice> readForReports(List<String> contractTenantIds) {
+        if (contractTenantIds.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractTenantId", contractTenantIds);
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("status").nin("DRAFT", "CANCELLED"));
+        // A partial receipt cannot be split between rent and deposit without allocation data.
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("items.type").ne("DEPOSIT"));
+        query.fields().include("contractTenantId");
+        return mongoTemplate.find(query, Invoice.class).stream()
+                .map(item -> new OverviewInvoice(item.getId(), item.getContractTenantId())).toList();
     }
 }

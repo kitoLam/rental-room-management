@@ -564,11 +564,9 @@ export function operationsAction(
             ? raw.note.trim()
             : typeof raw.solutionResult === 'string' && raw.solutionResult.trim()
               ? raw.solutionResult.trim()
-              : typeof raw.adminConclusion === 'string' && raw.adminConclusion.trim()
-                ? raw.adminConclusion.trim()
-                : typeof raw.description === 'string' && raw.description.trim()
-                  ? raw.description.trim()
-                  : 'Cập nhật yêu cầu hỗ trợ',
+              : typeof raw.description === 'string' && raw.description.trim()
+                ? raw.description.trim()
+                : 'Cập nhật yêu cầu hỗ trợ',
       handler: typeof raw.handler === 'string' ? raw.handler.trim() : undefined,
       recordId: typeof raw.recordId === 'string' ? raw.recordId : undefined,
     }
@@ -653,14 +651,6 @@ export function operationsAction(
     } else if (action === 'reopen') {
       r.status = 'IN_PROGRESS'
       append('IN_PROGRESS', `Mở lại yêu cầu: ${data.reason}`)
-    } else if (action === 'escalate-admin') {
-      r.status = 'ESCALATED_ADMIN' as any
-      ;(r as any).disputeReason = data.reason
-      append('ESCALATED_ADMIN', `Chuyển Admin: ${data.reason}`)
-    } else if (action === 'admin-resolve') {
-      r.status = 'CLOSED' as any
-      ;(r as any).adminConclusion = data.reason
-      append('CLOSED', `Admin phân xử: ${data.reason}`)
     } else throw new MockError('Thao tác sửa chữa không được hỗ trợ.', 404)
     r.workflowAt = 0
     e.notifyTenant(t, 'Yêu cầu sửa chữa đã được cập nhật', 'TENANT_MAINTENANCE', r.id)

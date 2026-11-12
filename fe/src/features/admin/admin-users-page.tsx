@@ -1,4 +1,3 @@
-import { Notice } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Records } from '@/features/manager/components'
 import { dateTime } from '@/lib/activity'
@@ -23,33 +22,27 @@ export function AdminUsers() {
         </Button>
       }
     >
-      {real && (
-        <Notice>
-          API hiện hỗ trợ phân trang. Tìm kiếm, lọc vai trò và ngày trên toàn bộ dữ liệu chưa được
-          Backend cung cấp.
-        </Notice>
-      )}
       <AdminFilters
         state={state}
-        search={!real}
         statuses={real ? [] : ['INVITED', 'PENDING_VERIFICATION', 'ACTIVE', 'LOCKED', 'DISABLED']}
         dates={!real}
       >
-        {!real && (
-          <select
-            className="input w-auto"
-            aria-label="Lọc vai trò"
-            value={state.filters.role}
-            onChange={(e) => state.change('role', e.target.value)}
-          >
-            <option value="">Mọi vai trò</option>
-            {['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN'].map((r) => (
-              <option value={r} key={r}>
-                {roleNames[r]}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          className="input w-auto"
+          aria-label="Lọc vai trò"
+          value={state.filters.role}
+          onChange={(e) => state.change('role', e.target.value)}
+        >
+          <option value="">Mọi vai trò</option>
+          {(real
+            ? ['TENANT', 'OWNER', 'MANAGER']
+            : ['USER', 'TENANT', 'MANAGER', 'OWNER', 'ADMIN']
+          ).map((r) => (
+            <option value={r} key={r}>
+              {roleNames[r]}
+            </option>
+          ))}
+        </select>
       </AdminFilters>
       <Records
         query={query}
@@ -59,7 +52,12 @@ export function AdminUsers() {
         columns={[
           {
             label: 'Người dùng',
-            render: (u) => <AdminLink to={`/admin/users/${u.id}`}>{u.fullName}</AdminLink>,
+            render: (u) =>
+              real ? (
+                <strong>{u.fullName}</strong>
+              ) : (
+                <AdminLink to={`/admin/users/${u.id}`}>{u.fullName}</AdminLink>
+              ),
           },
           {
             label: 'Liên hệ',

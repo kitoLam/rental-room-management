@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.booking.service;
 
+import com.kitolam.rentalroommanagement.common.dto.ActivitySnapshot;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.booking.dto.request.BookingCreateRequest;
@@ -50,4 +52,11 @@ public interface BookingService {
     BookingResponse update(String id, BookingUpdateRequest request);
 
     void delete(String id);
+    /** Internal read-only projection. Callers must supply an already-authorized scope. */
+    List<OverviewBooking> readForOverview(List<String> ids);
+
+    record OverviewBooking(String id, String tenantId, String roomSlotId, List<String> roomSlotIds, String contractId, java.time.LocalDate expectedMoveInDate, java.time.Instant holdExpiresAt, java.time.Instant paymentDeadline, java.time.Instant checkInDeadline, com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus status) { }
+
+    /** Read audit events for already-authorized subject IDs, in [from, to). */
+    java.util.List<ActivitySnapshot> readActivitiesForOverview(java.util.List<String> ids, java.time.Instant from, java.time.Instant to);
 }
