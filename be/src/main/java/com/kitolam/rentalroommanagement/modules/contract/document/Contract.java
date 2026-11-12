@@ -106,7 +106,10 @@ public class Contract extends BaseDocument {
 
     private String evidenceNote;
 
-    private String templateDownloadUrl;
+    private List<ContractEvidenceHistoryEntry> evidenceHistory = new ArrayList<>();
+
+    @Field("contractUrl")
+    private String contractUrl;
 
     private Instant terminatedAt;
 

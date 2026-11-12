@@ -4,10 +4,13 @@ import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 
+import java.time.LocalDate;
+
 /** PATCH semantics: null fields are left unchanged. */
 public record RoomSlotUpdateRequest(
         @Pattern(regexp = ".*\\S.*", message = "không được để trống") String slotCode,
         @Min(1) Integer slotNumber,
-        RoomSlotStatus status
+        RoomSlotStatus status,
+        LocalDate availableFrom
 ) {
 }

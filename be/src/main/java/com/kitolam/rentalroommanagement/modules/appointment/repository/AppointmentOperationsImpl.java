@@ -25,6 +25,25 @@ public class AppointmentOperationsImpl implements AppointmentOperations {
     private final MongoTemplate mongo;
     private final TransactionTemplate transactions;
 
+    @Override
+    public List<Appointment> overviewCandidates(List<String> roomIds) {
+        if (roomIds.isEmpty()) return List.of();
+        var query = com.kitolam.rentalroommanagement.common.util.MongoQueryHelper.byReferenceIds("roomId", roomIds);
+        query.fields().include("roomId", "appointmentDate", "startAt", "endAt", "shiftType", "status",
+                "contactName", "contactPhone", "approvedAt", "approvedBy", "approvedByName");
+        return mongo.find(query, Appointment.class);
+    }
+
+    @Override
+    public List<Appointment> overviewActivities(List<String> ids, Instant from, Instant to) {
+        if (ids.isEmpty()) return List.of();
+        var query = com.kitolam.rentalroommanagement.common.util.MongoQueryHelper.byReferenceIds("_id", ids);
+        query.addCriteria(new Criteria().orOperator(Criteria.where("history.at").gte(from).lt(to),
+                Criteria.where("approvedAt").gte(from).lt(to)));
+        query.fields().include("history", "approvedAt", "approvedBy", "approvedByName");
+        return mongo.find(query, Appointment.class);
+    }
+
     public AppointmentOperationsImpl(MongoTemplate mongo, MongoTransactionManager transactionManager) {
         this.mongo = mongo;
         this.transactions = new TransactionTemplate(transactionManager);

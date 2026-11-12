@@ -29,18 +29,22 @@ function ConfigurationForm({
     })),
   )
   const [error, setError] = useState('')
+  const [viewingEnabled, setViewingEnabled] = useState(configuration.viewingEnabled)
   const original = configuration.periods.map(({ type, startTime, endTime, isActive }) => ({
     type,
     startTime,
     endTime,
     isActive,
   }))
-  const dirty = JSON.stringify(original) !== JSON.stringify(periods)
+  const dirty =
+    JSON.stringify(original) !== JSON.stringify(periods) ||
+    viewingEnabled !== configuration.viewingEnabled
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const parsed = viewingConfigurationInputSchema.safeParse({
       version: configuration.version,
       periods,
+      viewingEnabled,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0].message)
@@ -51,6 +55,21 @@ function ConfigurationForm({
   }
   return (
     <form onSubmit={submit} className="grid gap-6">
+      <Field id="room-viewing-enabled" label="Đặt lịch xem phòng">
+        <select
+          id="room-viewing-enabled"
+          className="input"
+          disabled={pending}
+          value={viewingEnabled ? 'enabled' : 'disabled'}
+          onChange={(e) => setViewingEnabled(e.target.value === 'enabled')}
+        >
+          <option value="enabled">Cho phép đặt lịch xem phòng</option>
+          <option value="disabled">Không cho phép đặt lịch xem phòng</option>
+        </select>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Áp dụng cho yêu cầu mới và duyệt mới; các lịch đã xác nhận được giữ nguyên.
+        </p>
+      </Field>
       <fieldset disabled={pending} className="grid gap-0 divide-y divide-border">
         <legend className="sr-only">Giờ hoạt động của ba ca</legend>
         {periods.map((period, index) => (
@@ -143,6 +162,7 @@ export function ViewingShiftSettingsPage() {
     onSuccess: async (saved) => {
       client.setQueryData(key, saved)
       await client.invalidateQueries({ queryKey: ['viewing-availability', roomId] })
+      await client.invalidateQueries({ queryKey: ['viewing-eligibility', roomId] })
     },
   })
   return (

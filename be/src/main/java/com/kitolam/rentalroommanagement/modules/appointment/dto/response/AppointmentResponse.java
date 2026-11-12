@@ -34,7 +34,9 @@ public record AppointmentResponse(
         Instant approvedAt,
         String cancellationReason,
         com.kitolam.rentalroommanagement.modules.appointment.document.Appointment.CancellationCause cancellationCause,
-        List<String> allowedActions
+        List<String> allowedActions,
+        List<String> roomSlotIds,
+        List<String> slotCodes
 ) {
     public record HistoryItem(String id, String action, String actorName, Instant at,
                               AppointmentStatus before, AppointmentStatus status, String reason,

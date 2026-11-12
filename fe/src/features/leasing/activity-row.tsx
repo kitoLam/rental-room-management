@@ -17,7 +17,7 @@ export function ActivityRow({
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex flex-wrap items-center gap-3">
           <Link
-            to={`/user/${kind}/${record.id}`}
+            to={`/tenant/${kind}/${record.id}`}
             className="text-sm font-bold hover:text-primary hover:underline"
           >
             {record.roomTitle}
@@ -33,7 +33,9 @@ export function ActivityRow({
           )}
           {'startAt' in record
             ? dateTime(record.startAt)
-            : `${dateOnly(record.startDate)} → ${dateOnly(record.endDate)}`}
+            : record.hasRentalDates
+              ? `${dateOnly(record.startDate)} → ${dateOnly(record.endDate)}`
+              : `Từ ${dateOnly(record.startDate)}`}
         </p>
         {'paymentDueAt' in record && record.status === 'AWAITING_PAYMENT' && (
           <p className="mt-2 flex items-center gap-2 text-xs text-warning">
@@ -43,7 +45,7 @@ export function ActivityRow({
         )}
       </div>
       <Button asChild variant="outline">
-        <Link to={`/user/${kind}/${record.id}`}>
+        <Link to={`/tenant/${kind}/${record.id}`}>
           Chi tiết
           <ArrowUpRight />
         </Link>

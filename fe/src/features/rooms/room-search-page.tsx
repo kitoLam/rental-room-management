@@ -367,7 +367,8 @@ export default function RoomSearchPage() {
               const next = new URLSearchParams(params)
               next.set('q', e.target.value)
               next.delete('page')
-              setParams(next, { replace: true })
+              // The input is controlled by the URL: commit before the next keystroke.
+              setParams(next, { replace: true, flushSync: true })
             }}
           />
         </label>

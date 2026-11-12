@@ -67,6 +67,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ReportRequestServiceImpl implements ReportRequestService {
+    @Override
+    public java.util.List<TenantSupport> readForTenantOverview(java.util.List<String> tenantIds, String contractId) {
+        if (tenantIds.isEmpty() || contractId == null) return java.util.List.of();
+        var query = MongoQueryHelper.byReferenceIds("tenantId", tenantIds);
+        var values = new java.util.ArrayList<Object>();
+        values.add(contractId);
+        if (org.bson.types.ObjectId.isValid(contractId)) values.add(new org.bson.types.ObjectId(contractId));
+        query.addCriteria(org.springframework.data.mongodb.core.query.Criteria.where("contractId").in(values));
+        query.fields().include("title", "status", "updatedAt");
+        return mongoTemplate.find(query, ReportRequest.class).stream().map(item -> new TenantSupport(item.getId(),
+                item.getTitle(), item.getStatus(), item.getUpdatedAt())).toList();
+    }
 
     private static final int MAX_ATTACHMENTS = 5;
     private static final long MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -1080,5 +1092,13 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             if (r.equals(principal.role())) return;
         }
         throw new ForbiddenException("Vai trò hiện tại (" + principal.role() + ") không được phép thực hiện thao tác này.");
+    }
+    @Override
+    public List<OverviewReport> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "status", "title", "tenantId");
+        return mongoTemplate.find(query, ReportRequest.class).stream()
+                .map(item -> new OverviewReport(item.getRoomId(), item.getStatus(), item.getId(), item.getTitle(), item.getTenantId())).toList();
     }
 }

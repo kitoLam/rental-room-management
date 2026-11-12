@@ -1,4 +1,4 @@
-import { Link, Navigate, useParams, useSearchParams } from 'react-router'
+import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Field, Notice, Page, Panel, QueryState } from '@/components/common/page'
@@ -48,6 +48,7 @@ function LoginNotice({ redirect }: { redirect: string }) {
 }
 
 export function AppointmentsPage({ management = false }: { management?: boolean }) {
+  const location = useLocation()
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? ''
   const fromDate = params.get('fromDate') ?? ''
@@ -55,7 +56,7 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
   const branchId = management ? (params.get('branchId') ?? '') : ''
   const roomId = management ? (params.get('roomId') ?? '') : ''
   const needsResult = management && params.get('needsResult') === 'true'
-  const basePath = management ? '/manager/appointments' : '/user/appointments'
+  const basePath = location.pathname
   const [roomPage, setRoomPage] = useState(1)
   const rawPage = Number(params.get('page') ?? 1)
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
@@ -115,11 +116,16 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
     setParams(next)
   }
   const guest = context.error instanceof ApiError && context.error.status === 401
-  if (redirectToManagement && context.data) {
+  if (
+    context.data &&
+    (redirectToManagement ||
+      (management && location.pathname !== viewingAppointmentsPath(context.data.roles)))
+  ) {
     const requestedBranch = params.get('branchId')
-    const targetBranch = requestedBranch && context.data.manageableBranchIds.includes(requestedBranch)
-      ? requestedBranch
-      : context.data.manageableBranchIds[0]
+    const targetBranch =
+      requestedBranch && context.data.manageableBranchIds.includes(requestedBranch)
+        ? requestedBranch
+        : context.data.manageableBranchIds[0]
     return (
       <Navigate
         replace
@@ -341,6 +347,11 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     {record.branchName}
                                   </p>
+                                  {record.slotCodes.length > 0 && (
+                                    <p className="mt-1 text-sm">
+                                      Slot: {record.slotCodes.join(', ')}
+                                    </p>
+                                  )}
                                   <p className="mt-3 text-sm">
                                     {record.shiftType && `${shiftLabels[record.shiftType]} · `}
                                     {viewingDateTime(record.startAt)}
@@ -359,10 +370,14 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
                                 <div className="flex flex-wrap items-center gap-3">
                                   <ViewingAppointmentBadge status={record.status} />
                                   <Button asChild variant="outline">
-                                    <Link to={viewingAppointmentsPath(context.data.roles, {
-                                      appointmentId: record.id,
-                                      branchId: record.branchId,
-                                    })}>Chi tiết</Link>
+                                    <Link
+                                      to={viewingAppointmentsPath(context.data.roles, {
+                                        appointmentId: record.id,
+                                        branchId: record.branchId,
+                                      })}
+                                    >
+                                      Chi tiết
+                                    </Link>
                                   </Button>
                                 </div>
                               </li>
@@ -412,6 +427,7 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
 }
 
 export function AppointmentDetailPage({ management = false }: { management?: boolean }) {
+  const location = useLocation()
   const { appointmentId = '' } = useParams()
   const valid = /^[0-9a-fA-F]{24}$/.test(appointmentId)
   const context = useQuery({
@@ -433,14 +449,24 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
   })
   const guest = context.error instanceof ApiError && context.error.status === 401
   const record = query.data
-  const basePath = management ? '/manager/appointments' : '/user/appointments'
   const canManage =
-    management && !!record?.branchId && !!context.data?.manageableBranchIds.includes(record.branchId)
-  if (!management && context.data && hasViewingManagementRole(context.data.roles)) {
+    management &&
+    !!record?.branchId &&
+    !!context.data?.manageableBranchIds.includes(record.branchId)
+  if (
+    context.data &&
+    ((!management && hasViewingManagementRole(context.data.roles)) ||
+      (management &&
+        location.pathname !== viewingAppointmentsPath(context.data.roles, { appointmentId })))
+  ) {
     return (
       <Navigate
         replace
-        to={viewingAppointmentsPath(context.data.roles, { appointmentId, branchId: record?.branchId })}
+        to={viewingAppointmentsPath(context.data.roles, {
+          appointmentId,
+          branchId: record?.branchId,
+          search: new URLSearchParams(location.search),
+        })}
       />
     )
   }
@@ -454,7 +480,7 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
       {!valid ? (
         <Notice>Liên kết lịch hẹn không hợp lệ.</Notice>
       ) : guest ? (
-        <LoginNotice redirect={`${basePath}/${appointmentId}`} />
+        <LoginNotice redirect={location.pathname + location.search} />
       ) : (
         <QueryState
           pending={context.isPending || context.isFetching}
@@ -496,6 +522,14 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
                         <dt className="text-muted-foreground">Ca đã chọn</dt>
                         <dd className="mt-2 font-bold">
                           {record.shiftType ? shiftLabels[record.shiftType] : 'Chưa xác định'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Slot đã chọn</dt>
+                        <dd className="mt-2 font-bold">
+                          {record.slotCodes.length
+                            ? record.slotCodes.join(', ')
+                            : 'Lịch cũ theo phòng'}
                         </dd>
                       </div>
                       <div>
@@ -549,29 +583,6 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
                     {record.result && (
                       <p className="mt-5 whitespace-pre-line text-sm">Kết quả: {record.result}</p>
                     )}
-                    <div className="mt-6 flex flex-wrap gap-3">
-                      <Button
-                        variant="outline"
-                        onClick={() => void query.refetch()}
-                        disabled={query.isFetching}
-                      >
-                        Kiểm tra trạng thái
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link to={`/rooms/${record.roomId}/viewing`}>Xem ca khác</Link>
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link to="/notifications/viewing">Thông báo lịch xem</Link>
-                      </Button>
-                      {record.publicContactPhone && (
-                        <a
-                          className="inline-flex min-h-11 items-center text-sm font-bold text-primary"
-                          href={`tel:${record.publicContactPhone}`}
-                        >
-                          Liên hệ chi nhánh
-                        </a>
-                      )}
-                    </div>
                   </Panel>
                   <ViewingAppointmentActions key={record.id} record={record} manager={canManage} />
                   <Panel className="mt-6">

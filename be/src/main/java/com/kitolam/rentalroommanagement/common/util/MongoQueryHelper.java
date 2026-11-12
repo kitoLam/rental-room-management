@@ -93,4 +93,14 @@ public final class MongoQueryHelper {
         }
         return mongoTemplate.exists(new Query(new Criteria().andOperator(criteria)), type);
     }
+    /** Read-only scope query supporting both ObjectId references and legacy string references. */
+    public static Query byReferenceIds(String field, java.util.Collection<String> ids) {
+        java.util.List<Object> values = new java.util.ArrayList<>();
+        for (String id : ids) {
+            if (id == null) continue;
+            values.add(id);
+            if (ObjectId.isValid(id)) values.add(new ObjectId(id));
+        }
+        return Query.query(notDeleted()).addCriteria(Criteria.where(field).in(values));
+    }
 }

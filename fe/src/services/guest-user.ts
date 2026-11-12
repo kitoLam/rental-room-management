@@ -59,6 +59,14 @@ export const authService = {
           false,
         )
       : request('auth', '/api/v1/auth/verify-email', nullable, write('POST', { token }), false),
+  setupPassword: (input: { token: string; password: string; confirmPassword: string }) =>
+    request(
+      'auth',
+      '/api/v1/auth/setup-password',
+      nullable,
+      write('POST', input),
+      false,
+    ),
   logout: () =>
     request(
       'auth',
@@ -178,11 +186,8 @@ export const defaultFilters: RoomFilters = {
 }
 function query(filters: RoomFilters) {
   const params = new URLSearchParams({ page: String(filters.page - 1), size: '6' })
-  if (filters.q) {
-    params.set('q', filters.q)
-    params.set('keyword', filters.q)
-    params.set('address', filters.q)
-  }
+  const keyword = filters.q.trim()
+  if (keyword) params.set(provider('catalog') === 'mock' ? 'q' : 'keyword', keyword)
   if (filters.branchId) params.set('branchId', filters.branchId)
   if (filters.roomTypeId) params.set('roomTypeId', filters.roomTypeId)
   for (const key of ['minPrice', 'maxPrice', 'minArea', 'maxArea'] as const)
@@ -193,7 +198,8 @@ function query(filters: RoomFilters) {
     params.set('area', filters.area)
     params.set('sort', filters.sort)
   } else {
-    if (filters.area && !filters.q) params.set('address', filters.area)
+    // Area keys come from the URL; the public API searches human-readable addresses.
+    if (filters.area) params.set('address', filters.area.replaceAll('-', ' '))
     const sorts: Record<string, string> = {
       recommended: 'roomNumber,asc',
       'price-asc': 'referencePrice,asc',
@@ -346,6 +352,7 @@ const backendSlotAvailabilitySchema = z.object({
   endDate: z.string(),
   available: z.boolean(),
   reason: z.string().nullable(),
+  availableFrom: z.string().nullable().optional(),
 })
 const backendRoomSlotSchema = z.object({
   id: databaseIdSchema,
@@ -353,6 +360,7 @@ const backendRoomSlotSchema = z.object({
   slotCode: z.string(),
   slotNumber: z.number().nullable(),
   status: z.enum(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'INACTIVE']),
+  availableFrom: z.string().nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 })
@@ -401,10 +409,14 @@ const backendContractSchema = z.object({
   signedDate: z.string().nullable().optional(),
   firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
+  evidenceHistory: z.array(z.object({
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    at: z.string().nullable(), note: z.string().nullable(),
+  })).optional(),
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   services: z.array(z.object({
     serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
@@ -430,6 +442,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     slotLabel: b.slotCode,
     slotLabels: b.slotCodes || [b.slotCode],
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
+    expectedMoveInDate: b.expectedMoveInDate,
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
@@ -536,7 +549,14 @@ export const bookingService = {
     const checked = slots.content.length
       ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
       : []
-    const slotAvailability = checked.map((slot) => ({ id: slot.roomSlotId, label: slot.slotCode, available: slot.available }))
+    const availableFromById = new Map(slots.content.map((slot) => [slot.id, slot.availableFrom]))
+    const slotAvailability = checked.map((slot) => ({
+      id: slot.roomSlotId,
+      label: slot.slotCode,
+      available: slot.available,
+      // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
+      availableFrom: slot.availableFrom ?? availableFromById.get(slot.roomSlotId) ?? null,
+    }))
     const available = slotAvailability.some((slot) => slot.available)
     return {
       roomId,
@@ -590,9 +610,9 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>
     request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
-  submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number; signedDate?: string }) =>
+  submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number }) =>
     request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
-  reviewEvidence: (id: string, value: { approved: boolean; note?: string; adjustedSignedDate?: string; firstBillingStartDate?: string }) =>
+  reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
 }
 export const profileService = {

@@ -52,8 +52,9 @@ public class ShiftController {
     @Operation(summary = "Guest hoặc người tìm thuê tra cứu ca khả dụng theo ngày Việt Nam")
     public StandardResponse<ViewingAvailabilityResponse> availability(
             @PathVariable @ValidObjectId String roomId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return StandardResponse.success(appointmentService.viewingAvailability(roomId, date));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) java.util.List<String> roomSlotIds) {
+        return StandardResponse.success(appointmentService.viewingAvailability(roomId, date, roomSlotIds));
     }
 
     @GetMapping("/branches/{branchId}")

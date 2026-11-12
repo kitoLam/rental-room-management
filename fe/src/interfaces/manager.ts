@@ -129,6 +129,9 @@ export const contractInputSchema = z.object({
 export const contractSchema = contractInputSchema.extend({
   // Draft contracts created after deposit may not have manager-authored terms yet.
   terms: z.string().max(4000),
+  // Nháp từ booking chưa có ngày hiệu lực cho tới khi manager duyệt evidence.
+  startDate: date.nullable(),
+  endDate: date.nullable(),
   landlordName: z.string().nullable().optional(),
   landlordIdNumber: z.string().nullable().optional(),
   landlordAddress: z.string().nullable().optional(),
@@ -154,7 +157,7 @@ export const contractSchema = contractInputSchema.extend({
   evidenceDeadline: z.string().nullable().optional(),
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
-  templateDownloadUrl: z.string().nullable().optional(),
+  contractUrl: z.string().nullable().optional(),
   signedFileUrl: z.string().nullable().optional(),
   services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
   roomName: z.string().optional(),

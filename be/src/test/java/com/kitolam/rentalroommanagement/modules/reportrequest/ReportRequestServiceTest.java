@@ -104,6 +104,7 @@ class ReportRequestServiceTest {
         contract = new Contract();
         contract.setId(contractId);
         contract.setRoomId(roomId);
+        contract.setTenantId(tenantId);
         contract.setManagerId(managerId);
         contract.setStatus(ContractStatus.ACTIVE);
     }
@@ -112,7 +113,7 @@ class ReportRequestServiceTest {
     void create_shouldThrowBadRequest_whenNoActiveContract() {
         when(tenantRepository.findByEmailAndIsDeletedFalse(tenantPrincipal.email())).thenReturn(Optional.of(tenant));
         when(roomRepository.findByIdAndIsDeletedFalse(roomId)).thenReturn(Optional.of(room));
-        when(mongoTemplate.find(any(Query.class), eq(Contract.class))).thenReturn(List.of());
+        when(mongoTemplate.findOne(any(Query.class), eq(Contract.class))).thenReturn(null);
 
         ReportRequestCreateRequest req = new ReportRequestCreateRequest(
                 tenantId, roomId, ReportRequestType.REPAIR, "Hong dieu hoa", "Mo ta", List.of(), ReportRequestPriority.HIGH, null, null
@@ -128,8 +129,7 @@ class ReportRequestServiceTest {
     void create_shouldSucceed_andAutoAssignManager_andCreateTimeline() {
         when(tenantRepository.findByEmailAndIsDeletedFalse(tenantPrincipal.email())).thenReturn(Optional.of(tenant));
         when(roomRepository.findByIdAndIsDeletedFalse(roomId)).thenReturn(Optional.of(room));
-        when(mongoTemplate.find(any(Query.class), eq(Contract.class))).thenReturn(List.of(contract));
-        when(mongoTemplate.exists(any(Query.class), eq(ContractTenant.class))).thenReturn(true);
+        when(mongoTemplate.findOne(any(Query.class), eq(Contract.class))).thenReturn(contract);
 
         ReportRequest savedReport = new ReportRequest();
         savedReport.setId(reportId);

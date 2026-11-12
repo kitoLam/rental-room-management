@@ -20,6 +20,10 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class RoomSlotServiceImpl implements RoomSlotService {
+    @Override
+    public List<StatusTotal> readStatusTotalsForAdmin() {
+        return roomSlotRepository.readStatusTotalsForAdmin();
+    }
 
     private final RoomSlotRepository roomSlotRepository;
     private final MongoTemplate mongoTemplate;
@@ -60,6 +64,14 @@ public class RoomSlotServiceImpl implements RoomSlotService {
 
     private RoomSlotResponse response(RoomSlot slot) {
         return new RoomSlotResponse(slot.getId(), slot.getRoomId(), slot.getSlotCode(), slot.getSlotNumber(),
-                slot.getStatus(), slot.getCreatedAt(), slot.getUpdatedAt());
+                slot.getStatus(), slot.getAvailableFrom(), slot.getCreatedAt(), slot.getUpdatedAt());
+    }
+    @Override
+    public List<OverviewSlot> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.fields().include("roomId", "slotCode", "status", "availableFrom");
+        return mongoTemplate.find(query, RoomSlot.class).stream()
+                .map(item -> new OverviewSlot(item.getId(), item.getRoomId(), item.getSlotCode(), item.getStatus(), item.getAvailableFrom())).toList();
     }
 }

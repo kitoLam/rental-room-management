@@ -41,10 +41,24 @@ public class VerificationMailService {
         var mail = new SimpleMailMessage();
         mail.setFrom(properties.mailFrom());
         mail.setTo(event.email());
-        mail.setSubject("Xác thực email - Rental Room Management");
-        mail.setText("Vui lòng xác thực email bằng liên kết sau:\n" + link
-                + "\n\nLiên kết có hiệu lực trong " + properties.verificationTokenTtl().toHours()
-                + " giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.");
+        if (event.createdByManager()) {
+            String branchInfo = (event.branchName() != null && !event.branchName().isBlank())
+                    ? " tại cơ sở \"" + event.branchName() + "\""
+                    : "";
+            mail.setSubject("Kích hoạt tài khoản & Đặt mật khẩu - Rental Room Management");
+            mail.setText("Tài khoản người thuê của bạn" + branchInfo
+                    + " đã được tạo trên hệ thống Rental Room Management.\n\n"
+                    + "Vui lòng bấm vào liên kết dưới đây để xác thực email trước, sau đó tự đặt mật khẩu riêng cho tài khoản của bạn "
+                    + "(Quản lý và Chủ cơ sở không thể biết mật khẩu của bạn):\n"
+                    + link
+                    + "\n\nLiên kết có hiệu lực trong " + properties.verificationTokenTtl().toHours()
+                    + " giờ. Nếu bạn không liên quan đến cơ sở này, hãy bỏ qua email này.");
+        } else {
+            mail.setSubject("Xác thực email - Rental Room Management");
+            mail.setText("Vui lòng xác thực email bằng liên kết sau:\n" + link
+                    + "\n\nLiên kết có hiệu lực trong " + properties.verificationTokenTtl().toHours()
+                    + " giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.");
+        }
         try {
             log.info("Đang gửi email xác thực đến: {}", event.email());
             sender.send(mail);

@@ -6,11 +6,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AuthService {
+    /** Internal read-only projection; caller must authorize the Admin scope. */
+    AdminAccountStatistics readStatisticsForAdmin(int year);
     Optional<AccountIdentityResponse> findAccount(String id);
     List<AccountIdentityResponse> activeManagementAccounts();
     MessageResponse signup(SignupRequest request);
     MessageResponse verifyEmail(String token);
+    MessageResponse setupPassword(SetupPasswordRequest request);
     MessageResponse resendVerification(ResendVerificationRequest request);
+    AccountIdentityResponse createManagedTenantAccount(String fullName, String email, String phone, String branchName);
+    MessageResponse resendManagedTenantVerification(String email, String branchName);
     TokenResponse login(LoginRequest request);
     TokenResponse refresh(RefreshTokenRequest request);
     MessageResponse logout(RefreshTokenRequest request);

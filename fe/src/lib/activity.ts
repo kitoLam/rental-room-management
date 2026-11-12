@@ -20,18 +20,6 @@ export const dateTime = (value: string) =>
   })
 export const dateOnly = (value: string) =>
   new Date(`${value}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-export const vnDateKey = (value?: string | null) => {
-  if (!value) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return value.slice(0, 10)
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d)
-}
 export function referenceLink(type: string | null, id: string | null, tenancyId?: string, branchId?:string) {
   if(type==='ADMIN_VERIFICATION'&&id)return `/admin/owner-verifications/${encodeURIComponent(id)}`
   if(type==='ADMIN_USER'&&id)return `/admin/users/${encodeURIComponent(id)}`

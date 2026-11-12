@@ -11,8 +11,10 @@ import java.util.List;
 
 public record ShiftUpdateRequest(
         @NotNull @PositiveOrZero Long version,
-        @NotNull @Size(min = 3, max = 3) List<@NotNull @Valid PeriodInput> periods
+        @NotNull @Size(min = 3, max = 3) List<@NotNull @Valid PeriodInput> periods,
+        Boolean viewingEnabled
 ) {
+    public ShiftUpdateRequest(Long version, List<PeriodInput> periods) { this(version, periods, null); }
     @JsonAnySetter
     public void rejectUnknown(String field, Object value) {
         throw new IllegalArgumentException("Trường không được phép: " + field);

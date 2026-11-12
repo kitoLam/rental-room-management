@@ -16,6 +16,8 @@ import {
 } from '@/interfaces/tenant'
 
 import { provider } from './config'
+import { tenantOverviewService } from './tenant-overview'
+import type { Tenancy } from '@/interfaces/tenant'
 import { utilitiesService } from './utilities'
 import { reportRequestService } from './report-request'
 import { formatReportAssignee, type ReportRequestItem } from '@/interfaces/report-request'
@@ -80,81 +82,8 @@ export type ServiceRegistrationValue = {
   note: string
   contractEndDate: string
 }
-export type ServiceStopValue = { subscriptionId: string; proposedDate: string; note: string }
-
-function contractToTenancy(
-  c: z.infer<typeof tenantContractSchema>,
-  userId?: string,
-  resolvedSlotName?: string | null,
-) {
-  const parts = (c.roomAddress || '').split(' · ')
-  const branchName = parts.length > 1 ? parts[0] : c.roomAddress || 'Chi nhánh đang thuê'
-  const roomName =
-    parts.length > 1
-      ? (() => {
-          const r = parts.slice(1).join(' · ').trim()
-          return r.startsWith('P.') || r.startsWith('Phòng') ? r : `P.${r}`
-        })()
-      : `P.${c.roomId.slice(-4).toUpperCase()}`
-  const rent = Math.max(0, Math.round(c.rentPrice || 0))
-  const deposit = Math.max(0, Math.round(c.contractDepositAmount || rent))
-  const status =
-    c.status === 'ACTIVE'
-      ? ('ACTIVE' as const)
-      : c.status === 'DRAFT'
-        ? ('DRAFT' as const)
-        : c.status === 'EXPIRED'
-          ? ('LEFT' as const)
-          : ('CANCELLED' as const)
-  const contractStatus =
-    c.status === 'ACTIVE'
-      ? ('ACTIVE' as const)
-      : c.status === 'DRAFT'
-        ? ('DRAFT' as const)
-        : c.status === 'EXPIRED'
-          ? ('ENDED' as const)
-          : ('CANCELLED' as const)
-  const today = new Date().toISOString().slice(0, 10)
-  const defaultEnd = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10)
-  return tenancySchema.parse({
-    id: c.id,
-    userId: userId || c.tenantId || c.id,
-    contractId: c.id,
-    branchId: c.roomId,
-    roomId: c.roomId,
-    roomSlotId: c.roomSlotId || null,
-    branchName,
-    roomName,
-    slotName:
-      resolvedSlotName !== undefined
-        ? resolvedSlotName
-        : c.roomSlotId
-          ? `Slot ${c.roomSlotId.slice(-4).toUpperCase()}`
-          : null,
-    rentalMode: c.roomSlotId ? 'SLOT' : 'ROOM',
-    status,
-    contractStatus,
-    code: c.contractNumber,
-    role: 'REPRESENTATIVE',
-    startDate: c.startDate || today,
-    endDate: c.endDate || defaultEnd,
-    actualLeaveDate: null,
-    monthlyRent: rent,
-    firstMonthRent: rent,
-    lastMonthRent: rent,
-    prepaidFirstRequired: rent,
-    prepaidLastRequired: deposit,
-    terms: c.terms || 'Theo quy định hợp đồng thuê phòng.',
-    sharedTerms: c.terms || 'Theo nội quy chung của khu trọ.',
-    document: c.signedFileUrl
-      ? {
-          name: `Hợp đồng ${c.contractNumber}`,
-          url: c.signedFileUrl,
-          issuedAt: c.signedDate || today,
-        }
-      : null,
-  })
-}
+// subscriptionId dùng cho API thật; serviceId (id danh mục) dùng cho mock engine.
+export type ServiceStopValue = { serviceId: string; subscriptionId: string; proposedDate: string; note: string }
 
 export const tenantApi = {
   manualPay: (id: string, invoiceId: string, value: unknown) => request('tenant', path(id, `invoices/${encodeURIComponent(invoiceId)}/manual-payments`), tenantPaymentSchema, write('POST', value)),
@@ -173,59 +102,23 @@ export const tenantApi = {
     }
     const { useSession } = await import('@/features/auth/session-store')
     const user = useSession.getState().user
-    if (!user) return []
-    if (
-      !user.roles.includes('TENANT') &&
-      user.roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN')
-    ) {
-      return []
-    }
-    try {
-      const page = await request(
-        'leasing',
-        '/api/v1/contracts?page=0&size=100',
-        pageSchema(tenantContractSchema),
-      )
-      const today = new Date().toISOString().slice(0, 10)
-      const activeList = (page.content || [])
-        .filter(
-          (c) =>
-            c.status === 'ACTIVE' &&
-            (!c.startDate || c.startDate <= today) &&
-            (!c.endDate || c.endDate >= today),
-        )
-        .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''))
-      const contracts =
-        activeList.length > 0
-          ? [activeList[0]]
-          : (page.content || []).filter((c) => c.status === 'ACTIVE').slice(0, 1)
-      const { roomSlotService } = await import('./guest-user')
-      return await Promise.all(
-        contracts.map(async (c) => {
-          let resolvedSlot: string | null | undefined = undefined
-          const slotIds = c.roomSlotId ? [c.roomSlotId] : c.roomSlotIds?.length ? [c.roomSlotIds[0]] : []
-          if (c.roomId && slotIds.length > 0) {
-            try {
-              const slotsPage = await roomSlotService.list(c.roomId)
-              const codes = slotIds
-                .map((sid) => slotsPage.content.find((s) => s.id === sid)?.slotCode)
-                .filter((code): code is string => Boolean(code))
-              if (codes.length > 0) {
-                resolvedSlot = codes
-                  .map((code) => (code.includes('-') ? code.split('-').at(-1)!.trim() : code.trim()))
-                  .join(', ')
-              }
-            } catch {
-              // ignore slot lookup error
-            }
-          }
-          return contractToTenancy(c, user.id, resolvedSlot)
-        }),
-      )
-    } catch {
-      const { tenantDb } = await import('@/mocks/tenant-engine')
-      return tenantDb.state.tenancies.filter((t) => t.userId === user.id)
-    }
+    if (!user?.roles.includes('TENANT')) return []
+    const items = await tenantOverviewService.tenancies()
+    // Compatibility shape for existing detail screens. Overview uses the nullable API fields directly.
+    return items.map((t): Tenancy => ({
+      id: t.id, userId: user.id, contractId: t.contractId, branchId: t.branchId, roomId: t.roomId,
+      roomSlotId: t.roomSlotIds[0] || null, branchName: t.branchName, roomName: t.roomNumber,
+      slotName: t.slotCodes.map((code) => code.startsWith(t.roomNumber + '-') ? code.slice(t.roomNumber.length + 1) : code).join(', ') || null,
+      rentalMode: t.roomSlotIds.length ? 'SLOT' : 'ROOM',
+      status: t.status, contractStatus: t.contractStatus === 'EXPIRED' ? 'ENDED' : t.contractStatus === 'TERMINATED' ? 'CANCELLED' : t.contractStatus,
+      code: t.contractNumber || '', role: t.representative ? 'REPRESENTATIVE' : 'MEMBER',
+      startDate: t.startDate || '', endDate: t.endDate || '', actualLeaveDate: null,
+      monthlyRent: t.rentAmount ?? t.contractRentPrice ?? 0,
+      firstMonthRent: t.contractRentPrice ?? 0, lastMonthRent: t.contractRentPrice ?? 0,
+      prepaidFirstRequired: t.contractRentPrice ?? 0, prepaidLastRequired: t.contractDepositAmount ?? t.contractRentPrice ?? 0,
+      terms: t.terms || '', sharedTerms: t.terms || '',
+      document: t.signedFileUrl ? { name: `Hợp đồng ${t.contractNumber || ''}`, url: t.signedFileUrl, issuedAt: t.signedDate || t.startDate || '' } : null,
+    }))
   },
   contracts: async () => {
     if (provider('leasing') === 'real') {
@@ -384,8 +277,31 @@ export const tenantApi = {
   services: async (id: string): Promise<TenantService[]> => {
     if (provider('utilities') === 'real') {
       // BE tự xác định phòng / chỗ của người thuê từ token, FE không gửi roomId / contractId.
-      const items = await utilitiesService.serviceRequests.catalog()
-      return items.map((s) => ({
+      // Catalog của service-requests chỉ có dịch vụ đăng ký được; dịch vụ bắt buộc lấy từ danh mục công khai để hiển thị.
+      const [items, publicItems] = await Promise.all([
+        utilitiesService.serviceRequests.catalog(),
+        request(
+          'catalog',
+          '/api/v1/public/services?serviceScope=SLOT',
+          z.array(z.object({ id: z.string(), name: z.string(), unit: z.string(), unitPrice: z.coerce.number(), mandatory: z.boolean() })),
+        ),
+      ])
+      const mandatory: TenantService[] = publicItems.filter((s) => s.mandatory).map((s) => ({
+        id: s.id,
+        name: s.name,
+        mandatory: true,
+        unit: s.unit,
+        unitPrice: s.unitPrice,
+        subscriptionId: null,
+        requestId: null,
+        status: null,
+        allowedActions: [],
+        startDate: null,
+        endDate: null,
+        note: '',
+        history: [],
+      }))
+      return [...mandatory, ...items.map((s) => ({
         id: s.serviceId,
         name: s.name,
         mandatory: false,
@@ -399,7 +315,7 @@ export const tenantApi = {
         endDate: s.subscription?.endDate ?? null,
         note: '',
         history: [],
-      }))
+      }))]
     }
     return request('tenant', path(id, 'services'), z.array(serviceSchema))
   },
@@ -434,7 +350,7 @@ export const tenantApi = {
     }
     return request(
       'tenant',
-      path(id, `services/${encodeURIComponent(value.subscriptionId)}/cancel`),
+      path(id, `services/${encodeURIComponent(value.serviceId)}/cancel`),
       serviceSchema,
       write('POST'),
     )

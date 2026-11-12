@@ -36,6 +36,11 @@ public class RoomServiceImpl implements RoomService {
     private final MongoTemplate mongo;
     private final Clock clock;
 
+    @Override
+    public List<StatusTotal> readStatusTotalsForAdmin() {
+        return roomRepository.readStatusTotalsForAdmin();
+    }
+
     private Room find(String id) {
         return roomRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));

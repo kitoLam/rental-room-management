@@ -2,6 +2,7 @@ package com.kitolam.rentalroommanagement.modules.contract.dto.response;
 
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.document.ContractServiceSnapshot;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractEvidenceHistoryEntry;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -46,7 +47,8 @@ public record ContractResponse(
         Instant evidenceDeadline,
         Integer evidenceResubmissionCount,
         String evidenceNote,
-        String templateDownloadUrl,
+        List<ContractEvidenceHistoryEntry> evidenceHistory,
+        String contractUrl,
         Instant terminatedAt,
         String terminationReason,
         ContractStatus status,

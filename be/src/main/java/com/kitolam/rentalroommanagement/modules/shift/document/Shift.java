@@ -22,6 +22,8 @@ public class Shift extends BaseDocument {
     @Version
     private Long version;
     private List<Period> periods;
+    /** Room-level viewing switch; missing values in older documents remain enabled. */
+    private Boolean viewingEnabled = true;
 
     public record Period(String id, ShiftType type, String startTime, String endTime, boolean isActive) { }
 }

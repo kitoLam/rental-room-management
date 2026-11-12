@@ -1,5 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.contracttenant.service.impl;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
+
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
@@ -42,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ContractTenantServiceImpl implements ContractTenantService {
 
+    private final MongoTemplate overviewMongo;
+
     private final ContractTenantRepository contractTenantRepository;
     private final ContractRepository contractRepository;
     private final TenantRepository tenantRepository;
@@ -55,13 +59,19 @@ public class ContractTenantServiceImpl implements ContractTenantService {
         Contract contract = authorizedContract(request.contractId(), principal);
         if (contract.getStatus() != ContractStatus.DRAFT && contract.getStatus() != ContractStatus.ACTIVE)
             throw new ConflictException("Chỉ hợp đồng nháp hoặc đang hiệu lực mới thêm được người thuê");
+        Room room = roomRepository.findByIdAndIsDeletedFalse(contract.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(request.tenantId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy hồ sơ Tenant"));
-        if (tenant.getStatus() != TenantStatus.ACTIVE)
-            throw new ConflictException("Tài khoản Tenant hiện không hoạt động");
+        if (tenant.getStatus() != TenantStatus.ACTIVE || tenant.isInactiveInBranch(room.getBranchId()))
+            throw new ConflictException("Tài khoản Tenant hiện không hoạt động tại cơ sở này");
         if (contractTenantRepository.existsByContractIdAndTenantIdAndIsDeletedFalse(contract.getId(), tenant.getId()))
             throw new ConflictException("Tenant đã thuộc hợp đồng này");
         validateDates(request.joinedAt(), request.leftAt());
+        if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(room.getBranchId())) {
+            tenant.addBranch(room.getBranchId());
+            tenantRepository.save(tenant);
+        }
 
         ContractTenant item = new ContractTenant();
         item.setContractId(contract.getId());
@@ -131,7 +141,10 @@ public class ContractTenantServiceImpl implements ContractTenantService {
 
     @Override
     public List<EligibleContractTenantResponse> eligibleTenants(String contractId, AuthPrincipal principal) {
-        authorizedContract(contractId, principal);
+        Contract contract = authorizedContract(contractId, principal);
+        Room room = roomRepository.findByIdAndIsDeletedFalse(contract.getRoomId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
+        String branchId = room.getBranchId();
         List<User> users = userRepository.findByRoleInAndEnabledTrueAndEmailVerifiedTrueAndIsDeletedFalse(List.of(Role.TENANT));
         if (users.isEmpty()) return List.of();
         List<String> emails = users.stream().map(User::getEmail).filter(email -> email != null && !email.isBlank()).toList();
@@ -144,6 +157,7 @@ public class ContractTenantServiceImpl implements ContractTenantService {
                 .filter(user -> tenantsByEmail.containsKey(user.getEmail()))
                 .map(user -> Map.entry(user, tenantsByEmail.get(user.getEmail())))
                 .filter(entry -> entry.getValue().getStatus() == TenantStatus.ACTIVE)
+                .filter(entry -> !entry.getValue().isInactiveInBranch(branchId))
                 .filter(entry -> !linkedTenantIds.contains(entry.getValue().getId()))
                 .map(entry -> new EligibleContractTenantResponse(entry.getValue().getId(), entry.getKey().getFullName(),
                         entry.getKey().getEmail(), entry.getKey().getPhone()))
@@ -191,5 +205,23 @@ public class ContractTenantServiceImpl implements ContractTenantService {
                 item.getRoomSlotIds(), item.getServices(),
                 tenant.getFullName(), tenant.getEmail(), item.getIsRepresentative(), item.getRentAmount(), item.getJoinedAt(),
                 item.getLeftAt(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
+    }
+    @Override
+    public List<TenantLease> readOwnedForOverview(String tenantId) {
+        if (tenantId == null) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("tenantId", List.of(tenantId));
+        query.fields().include("contractId", "roomSlotIds", "isRepresentative", "rentAmount", "joinedAt", "leftAt", "status");
+        return overviewMongo.find(query, ContractTenant.class).stream().map(item -> new TenantLease(item.getId(),
+                item.getContractId(), item.getRoomSlotIds() == null ? List.of() : List.copyOf(item.getRoomSlotIds()),
+                item.getIsRepresentative(), item.getRentAmount(), item.getJoinedAt(), item.getLeftAt(), item.getStatus())).toList();
+    }
+
+    @Override
+    public List<OverviewTenancy> readForOverview(List<String> ids) {
+        if (ids.isEmpty()) return List.of();
+        var query = MongoQueryHelper.byReferenceIds("contractId", ids);
+        query.fields().include("contractId", "tenantId", "status", "joinedAt", "leftAt");
+        return overviewMongo.find(query, ContractTenant.class).stream()
+                .map(item -> new OverviewTenancy(item.getId(), item.getContractId(), item.getTenantId(), item.getStatus(), item.getJoinedAt(), item.getLeftAt())).toList();
     }
 }
