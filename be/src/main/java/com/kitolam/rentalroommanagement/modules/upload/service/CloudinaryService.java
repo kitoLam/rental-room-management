@@ -90,6 +90,38 @@ public class CloudinaryService {
         }
     }
 
+    public ContractPdf uploadContractPdf(byte[] pdf, String revision, String fileName) throws IOException {
+        String folder = properties.folder();
+        String publicId = (folder == null || folder.isBlank() ? "contracts" : buildFolder("contracts"))
+                + "/" + revision + "/" + fileName;
+        Map<?, ?> result = cloudinary.uploader().upload(pdf, Map.of(
+                "public_id", publicId,
+                "resource_type", "raw",
+                "type", "authenticated",
+                "overwrite", true
+        ));
+        return new ContractPdf((String) result.get("public_id"), (String) result.get("secure_url"));
+    }
+
+    public String contractDownloadUrl(String publicId, long expiresAt) {
+        try {
+            return cloudinary.privateDownload(publicId, null, Map.of(
+                    "resource_type", "raw",
+                    "type", "authenticated",
+                    "expires_at", expiresAt,
+                    "attachment", true
+            ));
+        } catch (Exception e) {
+            throw new InternalServerErrorException("Không thể tạo link tải hợp đồng.");
+        }
+    }
+
+    public void deleteContractPdf(String publicId) throws IOException {
+        cloudinary.uploader().destroy(publicId, Map.of("resource_type", "raw", "type", "authenticated"));
+    }
+
+    public record ContractPdf(String publicId, String url) { }
+
     private String buildFolder(String subFolder) {
         String base = properties.folder();
         if (subFolder != null && !subFolder.isBlank()) {

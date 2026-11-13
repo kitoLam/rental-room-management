@@ -1,6 +1,7 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
+import { ContractPdfDownload } from '@/features/leasing/contract-pdf-download'
 import { addMonths, bookingMoveInDate, dateOnly, firstBillingStartDate as suggestedFirstBillingStartDate } from '@/lib/activity'
 import { managerApi } from '@/services/manager'
 import { bookingService } from '@/services/guest-user'
@@ -71,6 +72,18 @@ export function ManagerContractDetail() {
                 ]}
               />
               {query.data.terms && <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.terms}</p>}
+              {query.data.generatedPdf && (
+                <div className="mt-4">
+                  <ContractPdfDownload
+                    key={contractId}
+                    id={contractId}
+                    ready={Boolean(query.data.contractUrl)}
+                    waitingForTerm={!query.data.termMonths}
+                    canManage
+                    onChanged={query.refetch}
+                  />
+                </div>
+              )}
               {query.data.signedFileUrl && <a className="mt-4 inline-block text-sm text-primary underline" href={query.data.signedFileUrl} target="_blank" rel="noreferrer">Mở hợp đồng đã ký</a>}
               {!!query.data.services?.length && <div className="mt-4 space-y-2 text-sm">
                 <h3 className="font-semibold">Dịch vụ theo snapshot hợp đồng</h3>

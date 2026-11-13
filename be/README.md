@@ -9,6 +9,7 @@ Backend quản lý phòng trọ: Spring Boot 4 + MongoDB Atlas, tổ chức theo
 ### Yêu cầu
 - JDK 21 trở lên (đang dùng JDK 24)
 - Không cần cài Maven, dùng `mvnw` có sẵn (Maven 3.9.11)
+- Để tạo PDF hợp đồng, cài LibreOffice Writer và font có hỗ trợ tiếng Việt trên máy chạy backend. Đặt `soffice` trong PATH hoặc cấu hình `CONTRACT_PDF_LIBREOFFICE_COMMAND` trỏ tới file thực thi (ví dụ `C:\Program Files\LibreOffice\program\soffice.com` trên Windows).
 
 ### Cấu hình biến môi trường
 Toàn bộ backend nằm trong thư mục `be/`. Mọi lệnh bên dưới chạy **trong `be/`**.
@@ -26,6 +27,8 @@ MONGODB_DATABASE=rental_room_management
 ```
 
 `application.yml` tự đọc file `.env` ở thư mục gốc. Biến môi trường thật của hệ thống sẽ được ưu tiên hơn `.env`.
+
+PDF hợp đồng dùng cấu hình Cloudinary hiện có. Tác vụ nền tạo lại PDF khi tạo slot, khi xác nhận cọc và khi người thuê chốt kỳ hạn. Khi xuất hoặc upload lỗi, backend tự thử lại. Với hợp đồng cũ còn thiếu các field của mẫu, có thể chạy `scripts/migrations/2026-11-13-contract-template-fields-backfill.js` trong MongoDB Compass để bổ sung các field còn thiếu.
 
 ### Chạy
 ```bash

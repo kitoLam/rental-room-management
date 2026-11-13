@@ -234,7 +234,7 @@ export function ContractsTab() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {c.roomAddress} · {formatVnd(c.rentPrice ?? 0)}/tháng
-                        {c.startDate && ` · ${c.startDate} → ${c.endDate}`}
+                        {c.startDate && c.endDate && ` · ${c.startDate} → ${c.endDate}`}
                       </p>
                       {c.status === 'DRAFT' && c.evidenceDeadline && !c.evidenceSubmittedAt && (
                         <p className="text-xs text-danger">Hạn nộp bản ký: {dateTime(c.evidenceDeadline)}</p>
@@ -250,7 +250,9 @@ export function ContractsTab() {
                         </Button>
                       )}
                       <Button variant="outline" onClick={() => setOpen(expanded ? null : c.id)}>
-                        {c.status === 'DRAFT' && !c.evidenceSubmittedAt ? 'Nộp bản ký' : 'Chi tiết'}
+                        {c.generatedPdf && c.status === 'DRAFT' && !c.evidenceSubmittedAt
+                          ? 'Tải và nộp hợp đồng'
+                          : c.status === 'DRAFT' && !c.evidenceSubmittedAt ? 'Nộp bản ký' : 'Chi tiết'}
                         {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </Button>
                     </div>

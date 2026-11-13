@@ -45,6 +45,7 @@ public record ContractResponse(
         String evidenceNote,
         List<ContractEvidenceHistoryEntry> evidenceHistory,
         String contractUrl,
+        boolean generatedPdf,
         Instant terminatedAt,
         String terminationReason,
         ContractStatus status,

@@ -1,3 +1,7 @@
+contract:
+  pdf:
+    libreoffice-command: ${CONTRACT_PDF_LIBREOFFICE_COMMAND:soffice}
+
 spring:
   servlet:
     multipart:

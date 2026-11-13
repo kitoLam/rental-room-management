@@ -10,9 +10,9 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { EmptyRows, Facts, TenantLink, TenantPage, TenantStatus } from './components'
 import { useTenant, useTenantQuery } from './context'
 import { PrepaidPanel } from './prepaid-panel'
-import { catalogService, bookingService, contractService, roomSlotService } from '@/services/guest-user'
-import { Button } from '@/components/ui/button'
-import { InlineError } from '@/components/common/page'
+import { catalogService, bookingService, roomSlotService } from '@/services/guest-user'
+import { ContractPdfDownload } from '@/features/leasing/contract-pdf-download'
+import { ContractEvidenceFile, submitContractEvidence } from '@/features/leasing/contract-evidence-file'
 
 export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
   const { contractId = '' } = useParams(),
@@ -24,7 +24,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     ),
     payments = useTenantQuery('payments', tenantApi.payments),
     contract = query.data && 'contractNumber' in query.data ? query.data : null
-  const [evidenceUrl, setEvidenceUrl] = useState('')
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
   const [termMonths, setTermMonths] = useState('3')
   const roomQuery = useQuery({
     queryKey: ['contract-room', contract?.roomId],
@@ -39,12 +39,10 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     retry: false,
   })
   const submitEvidence = useMutation({
-    mutationFn: () => contractService.submitEvidence(contract!.id, {
-      evidenceUrl: evidenceUrl.trim(),
-      termMonths: Number(termMonths),
-    }),
+    mutationFn: (file: File) => submitContractEvidence(contract!.id, file,
+      contract?.generatedPdf ? contract.termMonths! : Number(termMonths)),
     onSuccess: async () => {
-      setEvidenceUrl('')
+      setEvidenceFile(null)
       await query.refetch()
     },
   })
@@ -62,6 +60,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     retry: false,
   })
   const expectedStartDate = contract?.startDate || bookingMoveInDate(sourceBooking.data) || null
+  const pendingEvidence = contract?.bookingId && contract.status === 'DRAFT' && !contract.evidenceSubmittedAt
   const placeName = slotCodes.length
     ? `${roomName} · ${slotCodes.join(', ')}`
     : contract?.roomSlotIds?.length
@@ -193,15 +192,27 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
             ) : (
               <Panel>
                 <h2 className="mb-3 font-bold">Văn bản hợp đồng</h2>
-                <a
-                  href={contract?.contractUrl || 'https://www.youtube.com/'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-primary"
-                >
-                  Tải mẫu hợp đồng
-                  <ExternalLink size={16} />
-                </a>
+                {contract?.generatedPdf ? (
+                  <ContractPdfDownload
+                    key={contract.id}
+                    id={contract.id}
+                    rentalStartDate={expectedStartDate}
+                    ready={Boolean(contract.contractUrl)}
+                    canChooseTerm={Boolean(pendingEvidence && contract.evidenceDeadline && !contract.termMonths)}
+                    waitingForTerm={!contract.termMonths}
+                    onChanged={query.refetch}
+                  />
+                ) : contract?.contractUrl && (
+                  <a
+                    href={contract.contractUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-primary"
+                  >
+                    Tải mẫu hợp đồng
+                    <ExternalLink size={16} />
+                  </a>
+                )}
                 {contract?.signedFileUrl ? (
                   <a
                     href={contract.signedFileUrl}
@@ -249,18 +260,18 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                     })}
                   </ol>
                 </section>}
-                {contract?.bookingId && contract.status === 'DRAFT' && !contract.evidenceSubmittedAt && <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); submitEvidence.mutate() }}>
-                  <label className="grid gap-1 text-sm">Link ảnh/PDF hợp đồng đã ký
-                    <input className="input" type="url" autoComplete="off" placeholder="https://..." required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} />
-                  </label>
-                  <label className="grid gap-1 text-sm">Thời hạn hợp đồng
+                {pendingEvidence && (!contract.generatedPdf || (contract.termMonths && contract.contractUrl)) && <form className="mt-5 grid gap-4" onSubmit={(event) => {
+                  event.preventDefault()
+                  if (evidenceFile && !submitEvidence.isPending) submitEvidence.mutate(evidenceFile)
+                }}>
+                  {!contract.generatedPdf && <label className="grid gap-1 text-sm">Thời hạn hợp đồng
                     <select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>
                       {[3, 6, 8, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}
                     </select>
-                  </label>
-                  {expectedStartDate && <p className="text-xs text-muted-foreground">Hiệu lực dự kiến: {dateOnly(expectedStartDate)} → {dateOnly(addMonths(expectedStartDate, Number(termMonths)))}</p>}
-                  <InlineError error={submitEvidence.error} />
-                  <Button loading={submitEvidence.isPending}>Gửi bằng chứng hợp đồng</Button>
+                  </label>}
+                  {expectedStartDate && <p className="text-xs text-muted-foreground">Hiệu lực dự kiến: {dateOnly(expectedStartDate)} → {dateOnly(addMonths(expectedStartDate, contract.generatedPdf ? contract.termMonths! : Number(termMonths)))}</p>}
+                  <ContractEvidenceFile file={evidenceFile} pending={submitEvidence.isPending} error={submitEvidence.error}
+                    onSelect={(file) => { setEvidenceFile(file); submitEvidence.reset() }} />
                 </form>}
               </Panel>
             )}

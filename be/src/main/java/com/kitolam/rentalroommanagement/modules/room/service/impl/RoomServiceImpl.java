@@ -27,6 +27,7 @@ import com.kitolam.rentalroommanagement.modules.booking.document.Booking;
 import com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import com.kitolam.rentalroommanagement.modules.contract.service.ContractTemplateService;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.query.Query;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
@@ -65,6 +67,8 @@ public class RoomServiceImpl implements RoomService {
     private final Clock clock;
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository occupancyRepository;
+    @Autowired
+    private ContractTemplateService contractTemplates;
 
     @Override
     public List<StatusTotal> readStatusTotalsForAdmin() {
@@ -192,6 +196,7 @@ public class RoomServiceImpl implements RoomService {
         slots.forEach(slot -> {
             slot.markDeleted();
             roomSlotRepository.save(slot);
+            contractTemplates.removeForSlot(slot.getId());
         });
         room.markDeleted();
         roomRepository.save(room);
@@ -263,6 +268,7 @@ public class RoomServiceImpl implements RoomService {
             free.subList(0, toRemove).forEach(slot -> {
                 slot.markDeleted();
                 roomSlotRepository.save(slot);
+                contractTemplates.removeForSlot(slot.getId());
             });
             return;
         }
@@ -277,7 +283,7 @@ public class RoomServiceImpl implements RoomService {
             slot.setStatus(RoomSlotStatus.AVAILABLE);
             // New slots are bookable right away (RoomSlot.availableFrom, Vietnam date).
             slot.setAvailableFrom(java.time.LocalDate.now(clock.withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))));
-            roomSlotRepository.save(slot);
+            contractTemplates.createForSlot(room, roomSlotRepository.save(slot));
         }
     }
 
