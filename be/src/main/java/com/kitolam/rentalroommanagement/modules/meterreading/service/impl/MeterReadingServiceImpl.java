@@ -15,6 +15,7 @@ import com.kitolam.rentalroommanagement.modules.meterreading.dto.response.MeterR
 import com.kitolam.rentalroommanagement.modules.meterreading.enums.MeterReadingStatus;
 import com.kitolam.rentalroommanagement.modules.meterreading.repository.RoomMeterReadingRepository;
 import com.kitolam.rentalroommanagement.modules.meterreading.service.MeterReadingService;
+import com.kitolam.rentalroommanagement.modules.meterreading.support.RoomOccupancyCalendar;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -41,6 +43,7 @@ public class MeterReadingServiceImpl implements MeterReadingService {
     private final BranchService branchService;
     private final StaffAccess staffAccess;
     private final Clock clock;
+    private final RoomOccupancyCalendar occupancy;
 
     private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -59,15 +62,18 @@ public class MeterReadingServiceImpl implements MeterReadingService {
         Map<String, RoomMeterReading> current = repository
                 .findByRoomIdInAndPeriodAndIsDeletedFalse(rooms.stream().map(Room::getId).toList(), period).stream()
                 .collect(Collectors.toMap(RoomMeterReading::getRoomId, Function.identity(), (a, b) -> a));
+        Set<String> occupied = occupancy.occupiedRooms(rooms.stream().map(Room::getId).toList(), YearMonth.parse(period));
         List<MeterBoardResponse.Row> rows = new ArrayList<>();
         for (Room room : rooms) {
             BigDecimal previous = previousEnd(room.getId(), period);
             RoomMeterReading reading = current.get(room.getId());
-            // New month: carry the previous end reading over as both start and end (usage 0) so the
-            // month is never missing; staff then correct the end reading.
+            // New month: carry the previous end reading over as both start and end (usage 0) for every
+            // room, occupied or not, so the meter chain never has a gap; staff correct occupied rooms.
             if (reading == null && editable && previous != null && rate != null) {
                 reading = carryOver(room, period, previous, rate);
             }
+            // Only rooms someone lived in during that month are shown / need a reading.
+            if (!occupied.contains(room.getId())) continue;
             rows.add(new MeterBoardResponse.Row(room.getId(), room.getRoomNumber(), room.getTitle(), previous,
                     reading == null ? null : toResponse(reading)));
         }
@@ -80,6 +86,9 @@ public class MeterReadingServiceImpl implements MeterReadingService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng"));
         staffAccess.requireBranch(room.getBranchId(), principal);
         requireCurrentPeriod(request.period());
+        if (!occupancy.occupiedRooms(List.of(room.getId()), YearMonth.parse(request.period())).contains(room.getId())) {
+            throw new BadRequestException("Phòng " + room.getRoomNumber() + " không có người ở trong tháng này, không cần nhập chỉ số");
+        }
         BigDecimal rate = branchService.getById(room.getBranchId()).electricityRate();
         if (rate == null) throw new BadRequestException("Chi nhánh chưa cấu hình giá điện");
 

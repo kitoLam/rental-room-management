@@ -1,0 +1,58 @@
+package com.kitolam.rentalroommanagement.modules.meterreading.support;
+
+import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Which rooms had someone living in them during a month: a non-DRAFT contract whose stay
+ * [startDate, endDate) — cut at terminatedAt when terminated — overlaps the month.
+ */
+@Component
+@RequiredArgsConstructor
+public class RoomOccupancyCalendar {
+
+    private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    private final ContractRepository contractRepository;
+
+    public Set<String> occupiedRooms(Collection<String> roomIds, YearMonth month) {
+        if (roomIds.isEmpty()) return Set.of();
+        return occupiedRooms(contractRepository.findByRoomIdInAndIsDeletedFalse(roomIds), month);
+    }
+
+    /** Same rule over contracts already loaded (the seeder checks many months at once). */
+    public Set<String> occupiedRooms(List<Contract> contracts, YearMonth month) {
+        LocalDate first = month.atDay(1);
+        LocalDate afterLast = month.plusMonths(1).atDay(1);
+        return contracts.stream()
+                .filter(c -> c.getRoomId() != null && c.getStatus() != null && c.getStatus() != ContractStatus.DRAFT)
+                .filter(c -> c.getStartDate() != null && c.getStartDate().isBefore(afterLast))
+                .filter(c -> {
+                    LocalDate end = stayEnd(c);
+                    return end == null || end.isAfter(first);
+                })
+                .map(Contract::getRoomId)
+                .collect(Collectors.toSet());
+    }
+
+    /** Exclusive end of the stay, or null when open-ended. */
+    private LocalDate stayEnd(Contract c) {
+        LocalDate end = c.getEndDate();
+        if (c.getStatus() == ContractStatus.TERMINATED && c.getTerminatedAt() != null) {
+            LocalDate terminated = c.getTerminatedAt().atZone(VIETNAM).toLocalDate();
+            if (end == null || terminated.isBefore(end)) end = terminated;
+        }
+        return end;
+    }
+}

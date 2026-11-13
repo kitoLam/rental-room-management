@@ -34,7 +34,7 @@ export function ManagerMeterReadings() {
   return (
     <ManagerPage
       title="Chỉ số điện"
-      description="Giá điện chung của chi nhánh và chỉ số công tơ đầu / cuối tháng của từng phòng. Chỉ nhập được tháng hiện tại; sang tháng mới, chỉ số đầu và cuối được lấy sẵn từ chỉ số cuối tháng trước để bạn sửa lại."
+      description="Giá điện chung của chi nhánh và chỉ số công tơ đầu / cuối tháng của từng phòng. Chỉ hiện các phòng có người ở trong tháng đang xem, và chỉ nhập được tháng hiện tại. Sang tháng mới, chỉ số đầu và cuối được lấy sẵn từ chỉ số cuối tháng trước để bạn sửa lại; phòng trống tự giữ nguyên chỉ số."
       actions={
         <div className="flex items-end gap-2">
           <label className="grid gap-1 text-sm">
@@ -68,7 +68,7 @@ export function ManagerMeterReadings() {
               </Notice>
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat label="Số phòng" value={String(board.data.rooms.length)} />
+              <Stat label="Phòng có người ở" value={String(board.data.rooms.length)} />
               <Stat label="Đã chốt" value={`${confirmed} / ${board.data.rooms.length}`} />
               <Stat label="Tổng tiền điện tháng" value={formatVnd(total)} />
               <Stat label="Đầu kỳ = cuối kỳ" value={`${unchanged} phòng`} warn={unchanged > 0} />
@@ -96,6 +96,13 @@ export function ManagerMeterReadings() {
                     </tr>
                   </thead>
                   <tbody>
+                    {board.data.rooms.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                          Không có phòng nào có người ở trong tháng {formatPeriod(period)}, không cần nhập chỉ số.
+                        </td>
+                      </tr>
+                    )}
                     {board.data.rooms.map((row) => (
                       <ReadingRow
                         key={`${row.roomId}-${row.reading?.id ?? 'new'}-${row.reading?.status ?? ''}`}
