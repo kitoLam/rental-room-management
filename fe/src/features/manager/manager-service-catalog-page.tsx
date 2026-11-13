@@ -10,7 +10,7 @@ import {
   type CatalogKind,
 } from '@/services/service-catalog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { ManagerPage } from './components'
 import { useManager } from './context'
@@ -31,7 +31,19 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
     queryFn: () => serviceCatalogApi.list(kind, branch.id),
   })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['service-catalog', kind] })
-  const remove = useMutation({ mutationFn: (id: string) => serviceCatalogApi.remove(kind, id), onSuccess: refresh })
+  const [deleting, setDeleting] = useState<CatalogItem | null>(null)
+  const remove = useMutation({
+    mutationFn: (id: string) => serviceCatalogApi.remove(kind, id),
+    onSuccess: () => {
+      setDeleting(null)
+      void refresh()
+    },
+  })
+  const closeDelete = () => {
+    if (remove.isPending) return
+    setDeleting(null)
+    remove.reset()
+  }
 
   return (
     <ManagerPage
@@ -44,7 +56,6 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
         </Button>
       }
     >
-      <InlineError error={remove.error} />
       <Panel className="p-0 sm:p-0">
         <QueryState
           pending={list.isPending}
@@ -90,10 +101,7 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
                         variant="ghost"
                         size="icon"
                         aria-label="Xoá"
-                        disabled={remove.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Xoá dịch vụ “${item.name}”?`)) remove.mutate(item.id)
-                        }}
+                        onClick={() => setDeleting(item)}
                       >
                         <Trash2 size={16} className="text-danger" />
                       </Button>
@@ -117,6 +125,37 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
           }}
         />
       )}
+      <Modal
+        title="Xoá dịch vụ"
+        description={deleting ? `Xoá “${deleting.name}” khỏi danh mục?` : undefined}
+        open={!!deleting}
+        onOpenChange={(open) => !open && closeDelete()}
+      >
+        <div className="grid gap-5">
+          <div className="flex gap-3 rounded-lg bg-danger/10 p-4 text-sm">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-danger" />
+            <p>
+              {kind === 'room'
+                ? 'Chỉ xoá được khi không còn phòng nào đang gắn dịch vụ này.'
+                : 'Chỉ xoá được khi không còn người thuê nào đang đăng ký và không còn yêu cầu nào chờ duyệt.'}{' '}
+              Nếu chỉ muốn ngừng cho đăng ký mới, hãy chuyển dịch vụ sang ngừng hoạt động.
+            </p>
+          </div>
+          <InlineError error={remove.error} />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" disabled={remove.isPending} onClick={closeDelete}>
+              Giữ lại
+            </Button>
+            <Button
+              className="bg-danger text-white hover:bg-danger/90"
+              loading={remove.isPending}
+              onClick={() => deleting && remove.mutate(deleting.id)}
+            >
+              Xoá dịch vụ
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </ManagerPage>
   )
 }
