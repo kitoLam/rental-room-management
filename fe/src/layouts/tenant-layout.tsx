@@ -10,7 +10,6 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
-  House,
   ReceiptText,
   Wallet,
   AlertTriangle,
@@ -22,6 +21,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { useSession } from '@/features/auth/session-store'
+import type { Tenancy } from '@/interfaces/tenant'
 import { tenantApi } from '@/services/tenant'
 import { useTenancySelection, isActive, tenantLink } from '@/features/tenant/context'
 import { Notice, QueryState } from '@/components/common/page'
@@ -33,7 +33,6 @@ import { dashboardPath } from '@/features/auth/navigation'
 // reached from the header avatar — the rental space only holds tenancy-scoped pages.
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
-  ['/tenant/my-room', 'Phòng của tôi', House],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
   ['/user/payments', 'Thanh toán', Wallet],
   ['/tenant/debts', 'Công nợ', AlertTriangle],
@@ -48,6 +47,16 @@ const needsTenancy = (path: string) =>
   !['/tenant/appointments', '/tenant/bookings'].some(
     (base) => path === base || path.startsWith(base + '/'),
   )
+
+const today = () => new Date().toLocaleDateString('en-CA')
+/** Approved contract whose first day is still ahead. */
+const isUpcoming = (t: Tenancy) =>
+  !isActive(t) && t.contractStatus === 'ACTIVE' && t.status !== 'LEFT' && !!t.startDate && t.startDate > today()
+/** Contract not approved yet (signed copy still being reviewed). */
+const isPending = (t: Tenancy) => t.contractStatus === 'DRAFT'
+const displayDay = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
+const tenancyNote = (t: Tenancy) =>
+  isActive(t) ? '' : isUpcoming(t) ? ` · Bắt đầu ${displayDay(t.startDate)}` : isPending(t) ? ' · Chờ duyệt' : ' · Đã kết thúc'
 
 export function TenantLayout() {
   const user = useSession((s) => s.user!)
@@ -135,7 +144,7 @@ export function TenantLayout() {
                     <option key={t.id} value={t.id}>
                       {t.roomName}
                       {t.slotName ? ` · ${t.slotName}` : ''}
-                      {!isActive(t) ? ' · Lịch sử / chưa hiệu lực' : ''}
+                      {tenancyNote(t)}
                     </option>
                   ))}
                 </select>
@@ -195,8 +204,11 @@ export function TenantLayout() {
                   {!isActive(tenancy) && (
                     <div className="mb-6">
                       <Notice>
-                        Quan hệ thuê đã kết thúc hoặc chưa hiệu lực. Bạn có thể xem hồ sơ; các thao
-                        tác yêu cầu thuê đang hiệu lực được khóa.
+                        {isPending(tenancy)
+                          ? `Hợp đồng ${tenancy.code} đang chờ quản lý duyệt bản ký. Duyệt xong bạn dùng được đầy đủ không gian thuê.`
+                          : isUpcoming(tenancy)
+                          ? `Hợp đồng ${tenancy.code} đã được duyệt và bắt đầu từ ${displayDay(tenancy.startDate)}. Trước ngày này chưa phát sinh hoá đơn, tiền điện hay dịch vụ; một số thao tác sẽ mở khi hợp đồng bắt đầu.`
+                          : `Hợp đồng ${tenancy.code} đã kết thúc${tenancy.endDate ? ` từ ${displayDay(tenancy.endDate)}` : ''}. Bạn vẫn xem được lịch sử; các thao tác cần hợp đồng đang hiệu lực đã bị khoá.`}
                       </Notice>
                     </div>
                   )}

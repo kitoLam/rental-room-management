@@ -130,6 +130,10 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   if (
     feature === 'manager' &&
     ((matches('/api/v1/(rooms|room-types)') && verb === 'GET') ||
+      (pathname === '/api/v1/rooms' && verb === 'POST') ||
+      (matches(`/api/v1/rooms/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/rooms/${id}/slots`) && verb === 'GET') ||
+      (matches(`/api/v1/rooms/${id}/slots/${id}/available-from`) && verb === 'PATCH') ||
       (matches('/api/v1/bookings') && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
