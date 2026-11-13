@@ -111,7 +111,7 @@ function addTenancy(e: ManagerEngine, c: ManagerContract, input: unknown) {
     rentalMode: c.rentalMode,
     status: 'DRAFT',
     contractStatus: c.status === 'EXPIRED' ? 'ENDED' : c.status,
-    code: c.code,
+    code: c.code ?? 'Chưa có mã hợp đồng',
     actualLeaveDate: null,
     sharedTerms: c.terms,
     document: null,
@@ -256,7 +256,7 @@ export function leasingAction(
         .parse(input)
       if (
         e.state.contracts.some(
-          (c) => c.branchId === branchId && c.code.toLowerCase() === data.code.toLowerCase(),
+          (c) => c.branchId === branchId && c.code?.toLowerCase() === data.code.toLowerCase(),
         )
       )
         throw new MockError('Mã hợp đồng đã tồn tại.', 409)
@@ -444,7 +444,7 @@ export function leasingAction(
         (v) =>
           v.branchId === branchId &&
           v.id !== id &&
-          v.code.toLowerCase() === data.code.toLowerCase(),
+          v.code?.toLowerCase() === data.code.toLowerCase(),
       )
     )
       throw new MockError('Mã hợp đồng đã tồn tại.', 409)
@@ -461,7 +461,7 @@ export function leasingAction(
       Object.assign(c, data, { rentalMode: room.rentalMode })
       c.history.push(e.audit(actor, 'Cập nhật hợp đồng nháp.'))
       for (const t of e.tenant.state.tenancies.filter((t) => t.contractId === c.id)) {
-        t.code = c.code
+        t.code = data.code
         t.sharedTerms = c.terms
       }
       return c

@@ -1,3 +1,4 @@
+import { ContractEvidenceLink } from '@/features/leasing/contract-evidence-link'
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
@@ -37,6 +38,8 @@ export function ManagerContractDetail() {
   const firstBillingStartDate = query.data?.evidenceSubmittedAt && (expectedStartDate || sourceBooking.isSuccess)
     ? suggestedFirstBillingStartDate(query.data.evidenceSubmittedAt, undefined, expectedStartDate)
     : ''
+  const signedContractUrl = [query.data?.signedEvidenceUrl, query.data?.signedFileUrl]
+    .find((url) => url && /^https?:\/\//i.test(url))
   const billingDateMinimum = firstBillingStartDate
   const validFirstBillingStartDate = Boolean(
     firstBillingStartDate && firstBillingStartDate >= billingDateMinimum && firstBillingStartDate.endsWith('-01'),
@@ -51,7 +54,7 @@ export function ManagerContractDetail() {
           <>
             <Panel>
               <div className="mb-5 flex flex-wrap items-center gap-3">
-                <h2 className="text-xl font-bold">{query.data.code}</h2>
+                <h2 className="text-xl font-bold">{query.data.code ?? 'Chưa có mã hợp đồng'}</h2>
                 <ManagerStatus value={query.data.status} />
                 {query.data.expiringSoon && <ExpiringSoonBadge />}
               </div>
@@ -84,7 +87,12 @@ export function ManagerContractDetail() {
                   />
                 </div>
               )}
-              {query.data.signedFileUrl && <a className="mt-4 inline-block text-sm text-primary underline" href={query.data.signedFileUrl} target="_blank" rel="noreferrer">Mở hợp đồng đã ký</a>}
+              {signedContractUrl && (
+                <div className="mt-4">
+                  <ContractEvidenceLink key={signedContractUrl} contractId={contractId}
+                    evidenceUrl={query.data.signedEvidenceUrl} legacyUrl={query.data.signedFileUrl} label="Mở hợp đồng đã ký" />
+                </div>
+              )}
               {!!query.data.services?.length && <div className="mt-4 space-y-2 text-sm">
                 <h3 className="font-semibold">Dịch vụ theo snapshot hợp đồng</h3>
                 {query.data.services.map((service: { serviceId: string; name: string; unit: string; unitPrice: number; mandatory: boolean; selected: boolean; quantity?: number | null }) =>
@@ -92,7 +100,6 @@ export function ManagerContractDetail() {
               </div>}
               {query.data.status === 'DRAFT' && query.data.evidenceSubmittedAt && <div className="mt-5 grid gap-4 rounded-xl border p-4">
                 <h3 className="font-semibold">Duyệt evidence đã ký</h3>
-                {query.data.signedEvidenceUrl && <a className="text-sm text-primary underline" href={query.data.signedEvidenceUrl} target="_blank" rel="noreferrer">Mở evidence người thuê đã gửi</a>}
                 <label className="grid gap-1 text-sm">Ngày bắt đầu tính tiền kỳ đầu<input className="input disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground" type="date" required min={billingDateMinimum} value={firstBillingStartDate} disabled /></label>
                 <label className="grid gap-1 text-sm">Lý do nếu yêu cầu gửi lại<textarea className="input min-h-20" value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} /></label>
                 <div className="flex flex-wrap gap-3">

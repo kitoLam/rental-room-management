@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URI;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +103,38 @@ public class CloudinaryService {
                 "overwrite", true
         ));
         return new ContractPdf((String) result.get("public_id"), (String) result.get("secure_url"));
+    }
+
+    public String contractEvidenceDownloadUrl(String storedUrl, long expiresAt) {
+        URI url;
+        try {
+            url = URI.create(storedUrl);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Đường dẫn bản ký không hợp lệ.");
+        }
+        if (!"https".equalsIgnoreCase(url.getScheme()) || !"res.cloudinary.com".equalsIgnoreCase(url.getHost())
+                || url.getPort() != -1 || url.getUserInfo() != null || url.getRawQuery() != null
+                || url.getRawFragment() != null) {
+            throw new BadRequestException("Đường dẫn bản ký Cloudinary không hợp lệ.");
+        }
+
+        String folder = buildFolder("contract-evidence");
+        String prefix = "/" + properties.cloudName() + "/image/upload/";
+        var asset = Pattern.compile(Pattern.quote(prefix) + "(?:v[0-9]+/)?("
+                + Pattern.quote(folder) + "/[A-Za-z0-9_-]+)\\.(pdf|jpe?g|png)").matcher(url.getRawPath());
+        if (!asset.matches()) {
+            throw new BadRequestException("Không xác định được tệp bản ký trong thư mục Cloudinary của ứng dụng.");
+        }
+        try {
+            return cloudinary.privateDownload(asset.group(1), asset.group(2), Map.of(
+                    "resource_type", "image",
+                    "type", "upload",
+                    "expires_at", expiresAt,
+                    "attachment", false
+            ));
+        } catch (Exception e) {
+            throw new InternalServerErrorException("Không thể tạo link mở bản ký.");
+        }
     }
 
     public String contractDownloadUrl(String publicId, long expiresAt) {

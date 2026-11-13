@@ -163,6 +163,17 @@ public class ContractServiceImpl implements ContractService {
         return cloudinary.contractDownloadUrl(contract.getPdfPublicId(), clock.instant().plusSeconds(120).getEpochSecond());
     }
 
+    @Override
+    public String downloadSignedEvidence(String id, AuthPrincipal principal) {
+        Contract contract = find(id);
+        requireManager(room(contract.getRoomId()), principal);
+        String evidence = contract.getSignedEvidenceUrl();
+        if (evidence == null || evidence.isBlank()) {
+            throw new NotFoundException("Hợp đồng chưa có bản ký do người thuê gửi.");
+        }
+        return cloudinary.contractEvidenceDownloadUrl(evidence, clock.instant().plusSeconds(120).getEpochSecond());
+    }
+
     private void validateTerm(int termMonths) {
         if (!List.of(3, 6, 8, 12).contains(termMonths))
             throw new BadRequestException("Kỳ hạn hợp đồng chỉ gồm 3, 6, 8 hoặc 12 tháng");
