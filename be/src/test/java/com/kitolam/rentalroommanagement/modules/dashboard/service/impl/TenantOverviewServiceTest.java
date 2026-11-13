@@ -116,7 +116,7 @@ class TenantOverviewServiceTest {
     }
     @Test void scopesBalancesAndSupportToOwnedTenancyAndSupportsOldContractLinks() {
         scope(false, List.of("own-slot"), LocalDate.of(2026, 11, 1)); inbox();
-        when(invoices.readForTenantOverview(List.of("lease"))).thenReturn(List.of(
+        when(invoices.readForTenantOverview(List.of("contract"))).thenReturn(List.of(
                 new InvoiceService.TenantInvoice("i1", "HD01", "2026-11", LocalDate.of(2026, 11, 14), new BigDecimal("200"), new BigDecimal("100"), InvoiceStatus.PARTIALLY_PAID),
                 new InvoiceService.TenantInvoice("i2", "HD02", "2026-11", LocalDate.of(2026, 11, 18), new BigDecimal("300"), BigDecimal.ZERO, InvoiceStatus.PAID)));
         when(support.readForTenantOverview(anyList(), eq("contract"))).thenReturn(List.of(
@@ -133,7 +133,7 @@ class TenantOverviewServiceTest {
     }
     @Test void missingBalanceIsUnknownRatherThanZeroDebt() {
         scope(false, List.of("own-slot"), LocalDate.of(2026, 11, 1)); inbox();
-        when(invoices.readForTenantOverview(List.of("lease"))).thenReturn(List.of(new InvoiceService.TenantInvoice(
+        when(invoices.readForTenantOverview(List.of("contract"))).thenReturn(List.of(new InvoiceService.TenantInvoice(
                 "i", "HD", "2026-11", null, new BigDecimal("500"), null, InvoiceStatus.ISSUED)));
         var result = service.overview(TENANT, "lease");
         assertTrue(result.incompleteBalances()); assertNull(result.unpaidInvoiceCount()); assertNull(result.nextDueAmount());

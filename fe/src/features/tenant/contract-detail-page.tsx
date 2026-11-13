@@ -129,8 +129,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                       ['Phòng / chỗ ở', placeName],
                       ['Giá thuê / tháng', contract.rentPrice == null ? '—' : formatVnd(contract.rentPrice)],
                       ['Tiền cọc hợp đồng', contract.contractDepositAmount == null ? '—' : formatVnd(contract.contractDepositAmount)],
-                      ['Chỉ số điện đầu kỳ', contract.electricityInitialReading ?? '—'],
-                      ['Chỉ số nước đầu kỳ', contract.waterInitialReading ?? '—'],
                     ]}
                   />
                   {contract.services?.length ? (

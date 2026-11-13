@@ -21,11 +21,7 @@ public class InvoiceItem {
 
     private InvoiceItemType type;
 
-    @Field(targetType = FieldType.OBJECT_ID)
-    private String roomServiceChargeId;
 
-    @Field(targetType = FieldType.OBJECT_ID)
-    private String slotServiceChargeId;
 
     private String description;
 
@@ -41,4 +37,7 @@ public class InvoiceItem {
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal amount;
+
+    /** Something staff should double-check (e.g. electricity start = end reading). */
+    private String warning;
 }

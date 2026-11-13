@@ -373,11 +373,6 @@ public class ContractServiceImpl implements ContractService {
         c.setTenantIdNumber(old.getTenantIdNumber());
         c.setTenantAddress(old.getTenantAddress());
         c.setRoomAddress(old.getRoomAddress());
-        c.setElectricityInitialReading(old.getElectricityInitialReading());
-        c.setWaterInitialReading(old.getWaterInitialReading());
-        c.setElectricityRate(old.getElectricityRate());
-        c.setWaterRate(old.getWaterRate());
-        c.setParkingRate(old.getParkingRate());
         c.setMaxOccupants(old.getMaxOccupants());
         c.setTerms(old.getTerms());
         c.setServices(old.getServices() == null ? new ArrayList<>() : new ArrayList<>(old.getServices()));
@@ -628,8 +623,7 @@ public class ContractServiceImpl implements ContractService {
                 c.getBookingId(), c.getTenantId(), c.getManagerId(),
                 c.getContractNumber(), c.getStartDate(), c.getEndDate(), c.getRentPrice(), c.getContractDepositAmount(),
                 c.getLandlordName(), c.getLandlordIdNumber(), c.getLandlordAddress(), c.getTenantName(), c.getTenantIdNumber(),
-                c.getTenantAddress(), c.getRoomAddress(), c.getElectricityInitialReading(), c.getWaterInitialReading(),
-                c.getElectricityRate(), c.getWaterRate(), c.getParkingRate(), c.getMaxOccupants(),
+                c.getTenantAddress(), c.getRoomAddress(), c.getMaxOccupants(),
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
                 c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getContractUrl(),

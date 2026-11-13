@@ -44,11 +44,12 @@ public class RoomOccupancyCalendar {
         if (c.getStatus() == null || c.getStatus() == ContractStatus.DRAFT || c.getStartDate() == null) return false;
         if (!c.getStartDate().isBefore(month.plusMonths(1).atDay(1))) return false;
         LocalDate end = stayEnd(c);
-        return end == null || end.isAfter(month.atDay(1));
+        // A stay that ends on / before its own start (e.g. terminated before moving in) never counts.
+        return end == null || (end.isAfter(month.atDay(1)) && end.isAfter(c.getStartDate()));
     }
 
     /** Exclusive end of the stay, or null when open-ended. */
-    private LocalDate stayEnd(Contract c) {
+    public LocalDate stayEnd(Contract c) {
         LocalDate end = c.getEndDate();
         if (c.getStatus() == ContractStatus.TERMINATED && c.getTerminatedAt() != null) {
             LocalDate terminated = c.getTerminatedAt().atZone(VIETNAM).toLocalDate();
