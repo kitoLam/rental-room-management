@@ -71,11 +71,11 @@ class ViewingSlotEligibilityTest {
         assertFalse(inventory.slotsForViewing("room", end.plusDays(4)).getFirst().available());
         assertTrue(inventory.slotsForViewing("room", end.plusDays(11)).getFirst().available());
     }
-    @Test void availableFromAndMaintenanceAreIndependentOfOtherSlots() {
+    @Test void vacantSlotCanBeViewedBeforeMoveInDateButMaintenanceStillBlocks() {
         when(slots.readForOverview(List.of("room"))).thenReturn(List.of(
                 new RoomSlotService.OverviewSlot("free", "room", "S01", RoomSlotStatus.AVAILABLE, end),
                 new RoomSlotService.OverviewSlot("maintenance", "room", "S02", RoomSlotStatus.MAINTENANCE, null)));
-        assertFalse(inventory.slotsForViewing("room", end.minusDays(1)).getFirst().available());
+        assertTrue(inventory.slotsForViewing("room", end.minusDays(1)).getFirst().available());
         assertTrue(inventory.slotsForViewing("room", end).getFirst().available());
         assertFalse(inventory.slotsForViewing("room", end.plusDays(1)).get(1).selectable());
     }
@@ -87,17 +87,74 @@ class ViewingSlotEligibilityTest {
         assertTrue(inventory.slotsForViewing("room", today).get(1).available());
     }
 
+    @Test void currentTemporaryHoldBlocksEvenBeforeOrAfterItsReservedStayDates() {
+        when(bookings.readForOverview(anyList())).thenReturn(List.of(hold("free", com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.AWAITING_PAYMENT)));
+        when(occupancies.readForOverview(anyList())).thenReturn(List.of(new RoomSlotOccupancyService.OverviewOccupancy(
+                "free", null, "hold", today.plusDays(10), end, OccupancyStatus.RESERVED)));
+        assertFalse(inventory.slotsForViewing("room", today).get(1).available());
+        assertFalse(inventory.slotsForViewing("room", end.plusYears(1)).get(1).available());
+    }
+
+    @Test void confirmedHoldWithoutKnownLeaseDatesCannotBeAssumedFree() {
+        when(bookings.readForOverview(anyList())).thenReturn(List.of(hold("free", com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.CONFIRMED)));
+        var result = inventory.slotsForViewing("room", today.plusYears(2)).get(1);
+        assertFalse(result.available());
+        assertEquals("SLOT_OFFICIAL_HOLD", result.reason());
+        assertNull(result.availableFrom());
+    }
+
+    @Test void finishedLeasesAndEndedStaysDoNotReviveHistoricalConfirmedBooking() {
+        when(bookings.readForOverview(anyList())).thenReturn(List.of(hold("free", com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.CONFIRMED)));
+        when(contracts.readForOverview(anyList())).thenReturn(List.of(new ContractService.OverviewContract(
+                "old", "room", "tenant", "hold", "HD-old", ContractStatus.TERMINATED, today.minusMonths(1), end, null, List.of("free"))));
+        when(occupancies.readForOverview(anyList())).thenReturn(List.of(new RoomSlotOccupancyService.OverviewOccupancy(
+                "free", "tenancy", "hold", today.minusMonths(1), end, OccupancyStatus.ENDED)));
+        assertTrue(inventory.slotsForViewing("room", today).get(1).available());
+    }
+
+    @Test void confirmedReservationWithKnownLeaseEndAllowsOnlyFollowingDay() {
+        when(bookings.readForOverview(anyList())).thenReturn(List.of(hold("free", com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.CONFIRMED)));
+        when(contracts.readForOverview(anyList())).thenReturn(List.of(new ContractService.OverviewContract(
+                "draft", "room", "tenant", "hold", "HD-new", ContractStatus.DRAFT, today.plusDays(3), end, null, List.of("free"))));
+        assertFalse(inventory.slotsForViewing("room", today).get(1).available());
+        assertFalse(inventory.slotsForViewing("room", end).get(1).available());
+        assertTrue(inventory.slotsForViewing("room", end.plusDays(1)).get(1).available());
+    }
+
+    @Test void activeContractForOneSlotCannotReleaseAnotherSlotOfTheSameBooking() {
+        lease(end);
+        when(bookings.readForOverview(anyList())).thenReturn(List.of(new BookingService.OverviewBooking(
+                "booking", "tenant", "slot", List.of("slot", "free"), "contract", today,
+                null, null, null, com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus.CONFIRMED)));
+        assertTrue(inventory.slotsForViewing("room", end.plusDays(1)).getFirst().available());
+        assertFalse(inventory.slotsForViewing("room", end.plusDays(1)).get(1).available());
+    }
+
+    private BookingService.OverviewBooking hold(String slot, com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus status) {
+        return new BookingService.OverviewBooking("hold", "tenant", slot, List.of(slot), null, today.plusDays(3),
+                Instant.parse("2026-11-13T01:00:00Z"), Instant.parse("2026-11-13T01:00:00Z"), null, status);
+    }
+
     @Test void automationKeepsAValidFutureSlotViewingEvenWhenTheRoomIsOccupiedToday() {
         var repository = runAutomation(true);
         verify(repository, never()).applyAction(any(), any(), anyLong(), any(), any(), any());
     }
 
-    @Test void automationCancelsAnUnavailableSelectedSlotEvenWhenOtherSlotsAreFree() {
+    @Test void automationLeavesLeaseConflictForManagerToCancelWithReason() {
         var repository = runAutomation(false);
+        verify(repository, never()).applyAction(any(), any(), anyLong(), any(), any(), any());
+    }
+
+    @Test void automationStillCancelsForANewOfficialReservation() {
+        var repository = runAutomation(false, "SLOT_OFFICIAL_HOLD");
         verify(repository).applyAction(any(), any(), anyLong(), any(), any(), any());
     }
 
     private com.kitolam.rentalroommanagement.modules.appointment.repository.AppointmentRepository runAutomation(boolean selectedAvailable) {
+        return runAutomation(selectedAvailable, selectedAvailable ? "AVAILABLE" : "SLOT_OCCUPIED");
+    }
+
+    private com.kitolam.rentalroommanagement.modules.appointment.repository.AppointmentRepository runAutomation(boolean selectedAvailable, String reason) {
         var repository = mock(com.kitolam.rentalroommanagement.modules.appointment.repository.AppointmentRepository.class);
         var source = mock(com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingInventoryGateway.class);
         var appointment = new com.kitolam.rentalroommanagement.modules.appointment.document.Appointment();
@@ -114,7 +171,7 @@ class ViewingSlotEligibilityTest {
                 selectedAvailable ? 1 : 2, selectedAvailable ? 1 : 0, 0, 0, List.of(), "revision", Instant.parse("2026-11-12T01:00:00Z")));
         when(source.slotsForViewing("room", appointment.getAppointmentDate())).thenReturn(List.of(
                 new com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingSlotSnapshot("slot", "S01", RoomSlotStatus.OCCUPIED,
-                        true, selectedAvailable, end.plusDays(1), selectedAvailable ? "AVAILABLE" : "SLOT_OCCUPIED", selectedAvailable ? null : "Slot chưa trống")));
+                        true, selectedAvailable, end.plusDays(1), reason, selectedAvailable ? null : "Slot chưa trống")));
         var automation = new com.kitolam.rentalroommanagement.modules.appointment.service.impl.AppointmentAutomationServiceImpl(repository, source,
                 new com.kitolam.rentalroommanagement.modules.appointment.service.support.AppointmentNotificationSupport(
                         mock(com.kitolam.rentalroommanagement.modules.appointment.service.support.AppointmentAccessService.class)),

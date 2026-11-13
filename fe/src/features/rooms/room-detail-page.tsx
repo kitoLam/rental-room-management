@@ -93,8 +93,12 @@ export default function RoomDetailPage() {
     )
   const r = room.data
   const badge = r ? getRoomBadge(r) : null
-  const selectedSlots = requestedSlots.filter((id) =>
-    available.data?.slots.some((slot) => slot.id === id && slot.available),
+  const selectedSlots = requestedSlots.filter(
+    (id) =>
+      available.data?.slots.some((slot) => slot.id === id) &&
+      (available.data?.slots.some((slot) => slot.id === id && slot.available) ||
+        (provider('viewing') === 'real' &&
+          viewing.data?.slots.some((slot) => slot.id === id && slot.selectable))),
   )
   const bookable =
     r &&
@@ -111,9 +115,7 @@ export default function RoomDetailPage() {
     )
   const earliestAvailableFrom =
     (available.data?.slots ?? [])
-      .flatMap((s) =>
-        s.available && s.availableFrom ? [s.availableFrom] : [],
-      )
+      .flatMap((s) => (s.available && s.availableFrom ? [s.availableFrom] : []))
       .sort()[0] ?? null
   return (
     <Page
@@ -237,13 +239,16 @@ export default function RoomDetailPage() {
                 </section>
                 <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
                   <h2 className="mb-4 text-xl font-bold">Dịch vụ</h2>
-                  {roomServices.isPending ? <p className="text-sm text-muted-foreground">Đang tải danh sách dịch vụ…</p>
-                    : roomServices.error ? <InlineError error={roomServices.error} />
-                      : roomServices.data?.length ? (
+                  {roomServices.isPending ? (
+                    <p className="text-sm text-muted-foreground">Đang tải danh sách dịch vụ…</p>
+                  ) : roomServices.error ? (
+                    <InlineError error={roomServices.error} />
+                  ) : roomServices.data?.length ? (
                     <>
                       <p className="mb-2 text-sm text-muted-foreground">
-                        Dịch vụ đi kèm phòng luôn được áp dụng. Dịch vụ tự chọn (gửi xe, giặt sấy...) bạn có
-                        thể tích để dự tính chi phí, và đăng ký sau khi hợp đồng có hiệu lực.
+                        Dịch vụ đi kèm phòng luôn được áp dụng. Dịch vụ tự chọn (gửi xe, giặt
+                        sấy...) bạn có thể tích để dự tính chi phí, và đăng ký sau khi hợp đồng có
+                        hiệu lực.
                       </p>
                       <RoomServicePicker
                         services={roomServices.data}
@@ -317,37 +322,55 @@ export default function RoomDetailPage() {
                         Chọn các slot muốn thuê / xem phòng
                       </legend>
                       <div className="grid grid-cols-2 gap-2">
-                        {available.data.slots.map((s) => (
-                          <label
-                            key={s.id}
-                            className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${!s.available ? 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600' : selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              className={s.available ? 'mt-0.5 accent-primary' : 'mt-0.5 accent-gray-500'}
-                              value={s.id}
-                              checked={selectedSlots.includes(s.id)}
-                              disabled={!s.available}
-                              onChange={(event) =>
-                                setSelectedSlots((current) =>
-                                  event.target.checked
-                                    ? [...current, s.id]
-                                    : current.filter((id) => id !== s.id),
-                                )
-                              }
-                            />
-                            <span className="grid gap-0.5 leading-snug">
-                              <span className="font-medium">{s.label}</span>
-                              {!s.available ? (
-                                <span className="w-fit rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Đã được đặt</span>
-                              ) : s.availableFrom ? (
-                                <span className="text-xs text-muted-foreground">
-                                  Từ {s.availableFrom.slice(8, 10)}/{s.availableFrom.slice(5, 7)}/{s.availableFrom.slice(2, 4)}
-                                </span>
-                              ) : null}
-                            </span>
-                          </label>
-                        ))}
+                        {available.data.slots.map((s) => {
+                          const viewingSlot = viewing.data?.slots.find((slot) => slot.id === s.id)
+                          const selectable = s.available || !!viewingSlot?.selectable
+                          return (
+                            <label
+                              key={s.id}
+                              className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${!selectable ? 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600' : selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className={
+                                  selectable ? 'mt-0.5 accent-primary' : 'mt-0.5 accent-gray-500'
+                                }
+                                value={s.id}
+                                checked={selectedSlots.includes(s.id)}
+                                disabled={!selectable}
+                                onChange={(event) =>
+                                  setSelectedSlots((current) =>
+                                    event.target.checked
+                                      ? [...current, s.id]
+                                      : current.filter((id) => id !== s.id),
+                                  )
+                                }
+                              />
+                              <span className="grid gap-0.5 leading-snug">
+                                <span className="font-medium">{s.label}</span>
+                                {!s.available ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Chưa mở giữ chỗ
+                                  </span>
+                                ) : s.availableFrom ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Nhận phòng từ {dateOnly(s.availableFrom)}
+                                  </span>
+                                ) : null}
+                                {viewingSlot?.message && (
+                                  <span className="text-xs leading-5 text-warning">
+                                    {viewingSlot.message}
+                                  </span>
+                                )}
+                                {viewingSlot?.available && (
+                                  <span className="text-xs text-primary">
+                                    Có thể chọn ngày và ca xem
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          )
+                        })}
                       </div>
                     </fieldset>
                   )}
@@ -403,8 +426,7 @@ export default function RoomDetailPage() {
                   )}
                   {selectedSlots.length > 0 && viewing.data?.canReceiveRequest && (
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Ngày và ca xem của các slot đã chọn sẽ được
-                      kiểm tra ở bước tiếp theo.
+                      Ngày và ca xem của các slot đã chọn sẽ được kiểm tra ở bước tiếp theo.
                     </p>
                   )}
                   {!bookable && available.data?.available && (

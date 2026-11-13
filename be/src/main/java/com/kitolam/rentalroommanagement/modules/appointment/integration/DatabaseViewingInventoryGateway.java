@@ -70,49 +70,61 @@ public class DatabaseViewingInventoryGateway implements ViewingInventoryGateway 
         var units = slots.readForOverview(List.of(roomId));
         var ids = units.stream().map(RoomSlotService.OverviewSlot::id).toList();
         var occupancy = occupancies.readForOverview(ids);
-        var leases = contracts.readForOverview(List.of(roomId)).stream().filter(c -> c.status() == ContractStatus.ACTIVE).toList();
-        var holds = bookings.readForOverview(ids).stream().filter(b -> effectiveHold(b, clock.instant()))
-                .filter(b -> leases.stream().noneMatch(c -> Objects.equals(c.bookingId(), b.id())))
-                .collect(java.util.stream.Collectors.toMap(BookingService.OverviewBooking::id, b -> b));
+        var leases = contracts.readForOverview(List.of(roomId));
+        var holds = bookings.readForOverview(ids).stream().filter(b -> effectiveHold(b, clock.instant())).toList();
         LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneId.of("Asia/Ho_Chi_Minh"));
         return units.stream().map(unit -> {
             boolean selectable = unit.status() != null && unit.status() != RoomSlotStatus.INACTIVE && unit.status() != RoomSlotStatus.MAINTENANCE;
             var intervals = new java.util.ArrayList<Interval>();
-            leases.stream().filter(c -> c.roomSlotIds() != null && c.roomSlotIds().contains(unit.id()))
+            var unitLeases = leases.stream().filter(c -> c.roomSlotIds() != null && c.roomSlotIds().contains(unit.id())).toList();
+            var unitOccupancies = occupancy.stream().filter(o -> unit.id().equals(o.roomSlotId())).toList();
+            unitLeases.stream().filter(c -> c.status() == ContractStatus.ACTIVE)
                     .forEach(c -> intervals.add(new Interval(c.startDate(), c.endDate(), "SLOT_OCCUPIED")));
-            occupancy.stream().filter(o -> unit.id().equals(o.roomSlotId())).forEach(o -> {
-                if (o.status() == OccupancyStatus.ACTIVE) intervals.add(new Interval(o.startDate(), o.endDate(), "SLOT_OCCUPIED"));
-                else if (o.status() == OccupancyStatus.RESERVED && holds.containsKey(o.bookingId())) {
-                    String reason = holds.get(o.bookingId()).status() == BookingStatus.CONFIRMED ? "SLOT_OFFICIAL_HOLD" : "SLOT_TEMPORARY_HOLD";
-                    intervals.add(new Interval(o.startDate(), o.endDate(), reason));
+            unitOccupancies.stream().filter(o -> o.status() == OccupancyStatus.ACTIVE)
+                    .forEach(o -> intervals.add(new Interval(o.startDate(), o.endDate(), "SLOT_OCCUPIED")));
+            for (var hold : holds.stream().filter(b -> bookingSlots(b).contains(unit.id())).toList()) {
+                var linkedLeases = unitLeases.stream().filter(c -> Objects.equals(c.bookingId(), hold.id())).toList();
+                var linkedStays = unitOccupancies.stream().filter(o -> Objects.equals(o.bookingId(), hold.id())).toList();
+                if (hold.status() == BookingStatus.CONFIRMED) {
+                    // A converted lease owns the dates for THIS slot, not every slot of the booking.
+                    if (linkedLeases.stream().anyMatch(c -> c.status() == ContractStatus.ACTIVE)
+                            || linkedStays.stream().anyMatch(o -> o.status() == OccupancyStatus.ACTIVE)) continue;
+                    boolean liveReservation = linkedStays.stream().anyMatch(o -> o.status() == OccupancyStatus.RESERVED);
+                    boolean finishedLeases = !linkedLeases.isEmpty() && linkedLeases.stream()
+                            .allMatch(c -> c.status() == ContractStatus.EXPIRED || c.status() == ContractStatus.TERMINATED);
+                    boolean finishedStays = !linkedStays.isEmpty() && linkedStays.stream().allMatch(o -> o.status() == OccupancyStatus.ENDED);
+                    if (!liveReservation && (finishedLeases || (linkedLeases.isEmpty() && finishedStays))) continue;
                 }
-            });
-            // An effective hold without its range is unknown, never assumed free.
-            holds.values().stream().filter(b -> bookingSlots(b).contains(unit.id())
-                    && occupancy.stream().noneMatch(o -> unit.id().equals(o.roomSlotId()) && Objects.equals(b.id(), o.bookingId())
-                        && o.status() == OccupancyStatus.RESERVED))
-                    .forEach(b -> intervals.add(new Interval(today, null, b.status() == BookingStatus.CONFIRMED ? "SLOT_OFFICIAL_HOLD" : "SLOT_TEMPORARY_HOLD")));
+                LocalDate holdEnd = null;
+                if (hold.status() == BookingStatus.CONFIRMED) {
+                    var drafts = linkedLeases.stream().filter(c -> c.status() == ContractStatus.DRAFT).toList();
+                    var reservations = linkedStays.stream().filter(o -> o.status() == OccupancyStatus.RESERVED).toList();
+                    if (!drafts.isEmpty() && drafts.stream().allMatch(c -> c.endDate() != null))
+                        holdEnd = drafts.stream().map(ContractService.OverviewContract::endDate).max(LocalDate::compareTo).orElseThrow();
+                    else if (drafts.isEmpty() && !reservations.isEmpty() && reservations.stream().allMatch(o -> o.endDate() != null))
+                        holdEnd = reservations.stream().map(RoomSlotOccupancyService.OverviewOccupancy::endDate).max(LocalDate::compareTo).orElseThrow();
+                }
+                // A live reservation blocks new viewings even before its intended move-in date.
+                // Missing dates stay blocked; a historical finished booking is handled above.
+                intervals.add(new Interval(today, holdEnd, hold.status() == BookingStatus.CONFIRMED ? "SLOT_OFFICIAL_HOLD" : "SLOT_TEMPORARY_HOLD"));
+            }
             boolean knownOccupancy = intervals.stream().anyMatch(i -> i.reason.equals("SLOT_OCCUPIED")
                     && (i.start == null || !i.start.isAfter(today)));
             if (unit.status() == RoomSlotStatus.OCCUPIED && !knownOccupancy) intervals.add(new Interval(today, null, "SLOT_OCCUPIED"));
-            LocalDate earliest = unit.status() == RoomSlotStatus.AVAILABLE && unit.availableFrom() != null ? unit.availableFrom() : today;
-            for (var interval : intervals) {
-                if (interval.covers(today)) {
-                    if (interval.end == null) { earliest = null; break; }
-                    if (interval.end.plusDays(1).isAfter(earliest)) earliest = interval.end.plusDays(1);
-                }
-            }
+            // Move-in availability is independent from the date a vacant slot can be viewed.
+            LocalDate earliest = firstViewingDate(today, intervals);
             String reason = selectable ? "AVAILABLE" : "SLOT_UNAVAILABLE";
             var blocked = intervals.stream().filter(i -> i.covers(date)).findFirst().orElse(null);
             if (selectable && blocked != null) reason = blocked.reason;
-            else if (selectable && unit.status() == RoomSlotStatus.AVAILABLE && unit.availableFrom() != null && date.isBefore(unit.availableFrom())) reason = "SLOT_NOT_OPEN";
             String message = null;
             if (!reason.equals("AVAILABLE")) {
                 var blockedIntervals = intervals.stream().filter(i -> i.covers(date)).toList();
                 LocalDate from = blocked == null ? earliest : blockedIntervals.stream().anyMatch(i -> i.end == null) ? null
                         : blockedIntervals.stream().map(i -> i.end.plusDays(1)).max(LocalDate::compareTo).orElse(earliest);
                 message = !selectable ? "Slot " + unit.slotCode() + " đang bảo trì hoặc ngừng hoạt động."
-                        : from == null ? "Slot " + unit.slotCode() + " chưa xác định ngày có thể xem; vui lòng chọn slot khác."
+                        : from == null && (reason.equals("SLOT_OFFICIAL_HOLD") || reason.equals("SLOT_TEMPORARY_HOLD"))
+                          ? "Slot " + unit.slotCode() + " đang được giữ chỗ và chưa xác định ngày kết thúc; chưa thể đặt lịch xem khi giữ chỗ còn hiệu lực."
+                        : from == null ? "Slot " + unit.slotCode() + " đang có người thuê nhưng chưa xác định ngày kết thúc; vui lòng chọn slot khác."
                         : "Slot " + unit.slotCode() + " chỉ có thể xem từ " + from.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
                           + ". Ngày xem phải sau ngày kết thúc hợp đồng/lượt ở và ngoài thời gian giữ chỗ.";
             }
@@ -122,6 +134,19 @@ public class DatabaseViewingInventoryGateway implements ViewingInventoryGateway 
 
     private record Interval(LocalDate start, LocalDate end, String reason) {
         boolean covers(LocalDate date) { return (start == null || !date.isBefore(start)) && (end == null || !date.isAfter(end)); }
+    }
+    private static LocalDate firstViewingDate(LocalDate today, List<Interval> intervals) {
+        LocalDate candidate = today;
+        for (int pass = 0; pass <= intervals.size(); pass++) {
+            LocalDate next = candidate;
+            for (var interval : intervals) if (interval.covers(candidate)) {
+                if (interval.end == null) return null;
+                if (interval.end.plusDays(1).isAfter(next)) next = interval.end.plusDays(1);
+            }
+            if (next.equals(candidate)) return candidate;
+            candidate = next;
+        }
+        return candidate;
     }
     private static List<String> bookingSlots(BookingService.OverviewBooking booking) {
         return booking.roomSlotIds() != null && !booking.roomSlotIds().isEmpty() ? booking.roomSlotIds()

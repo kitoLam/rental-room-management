@@ -97,7 +97,8 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
             return;
         }
         boolean cannotReceive = !room.branchActive() || !room.roomOperational();
-        boolean noRentableUnits = room.totalUnits() - room.occupiedUnits() - room.officiallyHeldUnits() <= 0;
+        boolean noRentableUnits = room.officiallyHeldUnits() > 0
+                && room.totalUnits() - room.occupiedUnits() - room.officiallyHeldUnits() <= 0;
         boolean officialBlock = room.officiallyHeldUnits() > 0;
         String slotReason = null;
         String revision = room.sourceRevision();
@@ -106,8 +107,10 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
             try {
                 var slotStates = inventory.slotsForViewing(appointment.getRoomId(), appointment.getAppointmentDate());
                 boolean missing = appointment.getRoomSlotIds().stream().anyMatch(id -> slotStates.stream().noneMatch(s -> id.equals(s.id())));
+                // A changed lease end (including renewal) needs the manager's reason and contact
+                // with the viewer. Do not silently cancel that existing viewing in the scheduler.
                 noRentableUnits = missing || slotStates.stream().anyMatch(s -> appointment.getRoomSlotIds().contains(s.id())
-                        && !s.available() && !"SLOT_TEMPORARY_HOLD".equals(s.reason()));
+                        && !s.available() && !Set.of("SLOT_TEMPORARY_HOLD", "SLOT_OCCUPIED").contains(s.reason()));
                 officialBlock = slotStates.stream().anyMatch(s -> appointment.getRoomSlotIds().contains(s.id())
                         && !s.available() && "SLOT_OFFICIAL_HOLD".equals(s.reason()));
                 slotReason = missing ? "Slot đã chọn không còn tồn tại hoặc không còn thuộc phòng."
