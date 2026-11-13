@@ -34,6 +34,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
+import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -194,6 +195,48 @@ public class RoomServiceImpl implements RoomService {
         });
         room.markDeleted();
         roomRepository.save(room);
+    }
+
+    @Override
+    public List<RoomSlotUsageResponse> slots(String roomId, AuthPrincipal principal) {
+        Room room = find(roomId);
+        requireAccess(room.getBranchId(), principal);
+        List<RoomSlot> slots = sortedSlots(room.getId());
+        Map<String, String> busy = busySlots(slots);
+        return slots.stream().map(slot -> usage(slot, busy)).toList();
+    }
+
+    @Override
+    public RoomSlotUsageResponse updateSlotAvailableFrom(String roomId, String slotId, LocalDate availableFrom,
+                                                         AuthPrincipal principal) {
+        Room room = find(roomId);
+        requireAccess(room.getBranchId(), principal);
+        RoomSlot slot = roomSlotRepository.findByRoomIdAndIsDeletedFalse(room.getId()).stream()
+                .filter(s -> s.getId().equals(slotId)).findFirst()
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chỗ ở trong phòng " + room.getRoomNumber()));
+        String reason = busySlots(List.of(slot)).get(slot.getId());
+        if (reason != null) {
+            throw new BadRequestException("Không thể đổi ngày bắt đầu cho thuê của chỗ " + slot.getSlotCode()
+                    + " vì chỗ này " + reason + ". Chỉ chỉnh được khi chỗ chưa có ai ở hay giữ.");
+        }
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")));
+        if (availableFrom.isBefore(today)) {
+            throw new BadRequestException("Ngày bắt đầu cho thuê không được ở quá khứ");
+        }
+        slot.setAvailableFrom(availableFrom);
+        return usage(roomSlotRepository.save(slot), Map.of());
+    }
+
+    private List<RoomSlot> sortedSlots(String roomId) {
+        List<RoomSlot> slots = new ArrayList<>(roomSlotRepository.findByRoomIdAndIsDeletedFalse(roomId));
+        slots.sort(Comparator.comparing(s -> s.getSlotNumber() == null ? 0 : s.getSlotNumber()));
+        return slots;
+    }
+
+    private static RoomSlotUsageResponse usage(RoomSlot slot, Map<String, String> busy) {
+        String reason = busy.get(slot.getId());
+        return new RoomSlotUsageResponse(slot.getId(), slot.getSlotCode(), slot.getSlotNumber(), slot.getStatus(),
+                slot.getAvailableFrom(), reason != null, reason);
     }
 
     /**
