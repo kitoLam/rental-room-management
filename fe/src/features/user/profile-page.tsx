@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
@@ -21,6 +21,7 @@ import {
 } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
+import { formatProfileDate } from '@/lib/format'
 import { profileSchema, changePasswordSchema, today } from '@/lib/validation'
 import { profileService, authService } from '@/services/guest-user'
 import { useSession } from '@/features/auth/session-store'
@@ -69,13 +70,13 @@ function ProfileInfoForm({ user }: { user: User }) {
     ['Họ và tên', user.fullName],
     ['Email tài khoản', user.email],
     ['Số điện thoại', user.phone],
-    ['Ngày sinh', user.dateOfBirth],
+    ['Ngày sinh', formatProfileDate(user.dateOfBirth).replace(/-/g, '/')],
     ['Giới tính', genderLabel],
   ]
   const identity = [
     ['Địa chỉ thường trú', user.permanentAddress],
     ['Số CCCD', maskedCccd],
-    ['Ngày cấp CCCD', user.cccdIssueDate],
+    ['Ngày cấp CCCD', formatProfileDate(user.cccdIssueDate)],
     ['Nơi cấp CCCD', user.cccdIssuePlace],
   ]
   const facts = (rows: (string | null | undefined)[][]) => (
@@ -119,8 +120,18 @@ function ProfileInfoForm({ user }: { user: User }) {
             <Field id="profile-phone" label="Số điện thoại" error={form.formState.errors.phone?.message}>
               <input id="profile-phone" className="input" type="tel" autoComplete="tel" {...form.register('phone')} />
             </Field>
-            <Field id="profile-birth" label="Ngày sinh" error={form.formState.errors.dateOfBirth?.message}>
-              <input id="profile-birth" className="input" type="date" max={today()} {...form.register('dateOfBirth')} />
+            <Field id="profile-birth" label="Ngày sinh" hint="Định dạng dd/mm/yyyy" error={form.formState.errors.dateOfBirth?.message}>
+              <Controller control={form.control} name="dateOfBirth" render={({ field }) => (
+                <input
+                  {...field}
+                  id="profile-birth"
+                  className="input"
+                  placeholder="dd/mm/yyyy"
+                  autoComplete="bday"
+                  value={(field.value ?? '').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1')}
+                  onChange={(event) => field.onChange(event.target.value.replace(/^(\d{2})\/(\d{2})\/(\d{4})$/, '$3-$2-$1'))}
+                />
+              )} />
             </Field>
             <Field id="profile-gender" label="Giới tính" error={form.formState.errors.gender?.message}>
               <select id="profile-gender" className="input" {...form.register('gender')}>
