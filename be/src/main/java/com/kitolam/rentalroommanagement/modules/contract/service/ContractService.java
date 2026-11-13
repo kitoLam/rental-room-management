@@ -23,6 +23,10 @@ public interface ContractService {
 
     ContractResponse getById(String id, AuthPrincipal principal);
 
+    ContractResponse chooseTerm(String id, int termMonths, AuthPrincipal principal);
+
+    String downloadPdf(String id, AuthPrincipal principal);
+
     PagedResponse<ContractResponse> search(ContractFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
     ContractResponse update(String id, ContractUpdateRequest request, AuthPrincipal principal);
