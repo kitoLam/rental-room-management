@@ -583,10 +583,9 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                // "Phòng của tôi" was removed; old links land on the overview.
                 path: 'my-room',
-                lazy: async () => ({
-                  Component: (await import('@/features/tenant/my-room-page')).MyRoomPage,
-                }),
+                element: <Navigate to="/tenant/dashboard" replace />,
               },
               {
                 path: 'my-room/invoices/:invoiceId',

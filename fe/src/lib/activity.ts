@@ -105,7 +105,7 @@ export function referenceLink(type: string | null, id: string | null, tenancyId?
     TENANT_ALLOCATION: '/tenant/utilities/allocations',
     TENANT_UTILITY:'/tenant/utilities',
     TENANT_MAINTENANCE: `/tenant/maintenance/${id}`,
-    TENANT_BRANCH: '/tenant/my-room',
+    TENANT_BRANCH: '/tenant/dashboard',
   }
   if (id && type && routes[type] && tenancyId)
     return `${routes[type]}?tenancyId=${encodeURIComponent(tenancyId)}${type === 'TENANT_PAYMENT' ? `&paymentId=${encodeURIComponent(id)}` : ''}`

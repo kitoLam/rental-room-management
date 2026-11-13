@@ -10,7 +10,6 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
-  House,
   ReceiptText,
   Plug,
   Zap,
@@ -31,7 +30,6 @@ import { dashboardPath } from '@/features/auth/navigation'
 // reached from the header avatar — the rental space only holds tenancy-scoped pages.
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
-  ['/tenant/my-room', 'Phòng của tôi', House],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Tiền điện', Zap],
