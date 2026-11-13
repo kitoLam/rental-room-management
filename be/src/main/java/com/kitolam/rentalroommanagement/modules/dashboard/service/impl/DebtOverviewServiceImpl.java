@@ -74,7 +74,8 @@ public class DebtOverviewServiceImpl implements DebtOverviewService {
         var contractById = contractList.stream().collect(Collectors.toMap(OverviewContract::id, Function.identity()));
         var tenancyList = tenancies.readForOverview(new ArrayList<>(contractById.keySet())).stream()
                 .filter(t -> contractTenantId == null || contractTenantId.equals(t.id())).toList();
-        var tenancyById = tenancyList.stream().collect(Collectors.toMap(t -> t.id(), Function.identity()));
+        // Invoices belong to a contract; show them under its (first) tenancy record.
+        var tenancyByContract = tenancyList.stream().collect(Collectors.toMap(t -> t.contractId(), Function.identity(), (a, b) -> a));
         var tenantIds = new HashSet<String>();
         tenancyList.forEach(t -> { if (t.tenantId() != null) tenantIds.add(t.tenantId()); });
         Map<String, OverviewTenant> tenantById = tenants.readForOverview(new ArrayList<>(tenantIds)).stream()
@@ -83,8 +84,8 @@ public class DebtOverviewServiceImpl implements DebtOverviewService {
         LocalDate today = LocalDate.ofInstant(clock.instant(), ZONE);
         String needle = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
         var items = new ArrayList<DebtItemResponse>();
-        for (var invoice : invoices.readDebts(new ArrayList<>(tenancyById.keySet()))) {
-            var tenancy = tenancyById.get(invoice.contractTenantId());
+        for (var invoice : invoices.readDebts(new ArrayList<>(tenancyByContract.keySet()))) {
+            var tenancy = tenancyByContract.get(invoice.contractId());
             var contract = tenancy == null ? null : contractById.get(tenancy.contractId());
             var room = contract == null ? null : roomById.get(contract.roomId());
             if (room == null || (roomId != null && !roomId.equals(room.id()))) continue;
@@ -100,7 +101,7 @@ public class DebtOverviewServiceImpl implements DebtOverviewService {
             String status = overdueDays > 0 ? "OVERDUE"
                     : invoice.totalAmount() != null && invoice.remainingAmount().compareTo(invoice.totalAmount()) < 0
                             ? "PARTIAL" : "UNPAID";
-            items.add(new DebtItemResponse(invoice.id(), invoice.contractTenantId(), name, phone, room.id(),
+            items.add(new DebtItemResponse(invoice.id(), tenancy.id(), name, phone, room.id(),
                     room.roomNumber(), room.branchId(), branch == null ? null : branch.name(), invoice.invoiceNumber(),
                     invoice.period(), invoice.dueDate(), invoice.totalAmount(), invoice.remainingAmount(), status, overdueDays));
         }

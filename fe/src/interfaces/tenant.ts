@@ -24,11 +24,6 @@ export const tenantContractSchema = z.object({
   tenantAddress: z.string().nullable().optional(),
   roomAddress: z.string().nullable().optional(),
   roomSlotIds: z.array(databaseId).optional(),
-  electricityInitialReading: z.number().nullable().optional(),
-  waterInitialReading: z.number().nullable().optional(),
-  electricityRate: z.number().nullable().optional(),
-  waterRate: z.number().nullable().optional(),
-  parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
   services: z.array(z.object({
     serviceId: z.string(),
