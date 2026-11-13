@@ -450,6 +450,23 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
     management &&
     !!record?.branchId &&
     !!context.data?.manageableBranchIds.includes(record.branchId)
+  const slotReview = useQuery({
+    queryKey: ['viewing-slot-review', context.data?.accountId, record?.id, record?.actionVersion],
+    queryFn: () =>
+      viewingDependenciesService.availability(
+        record!.roomId,
+        record!.appointmentDate,
+        record!.roomSlotIds,
+      ),
+    enabled: () =>
+      canManage &&
+      !!record?.roomSlotIds.length &&
+      ['PENDING', 'CONFIRMED'].includes(record.status) &&
+      !!record.startAt &&
+      Date.parse(record.startAt) > Date.now(),
+    retry: false,
+    refetchInterval: 15000,
+  })
   if (
     context.data &&
     ((!management && hasViewingManagementRole(context.data.roles)) ||
@@ -538,7 +555,16 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
                       <div>
                         <dt className="text-muted-foreground">Số điện thoại đã dùng</dt>
                         <dd className="mt-2 font-bold">
-                          {record.contactPhone ?? 'Chưa có thông tin'}
+                          {canManage && record.contactPhone ? (
+                            <a
+                              className="text-primary underline"
+                              href={`tel:${record.contactPhone}`}
+                            >
+                              {record.contactPhone}
+                            </a>
+                          ) : (
+                            (record.contactPhone ?? 'Chưa có thông tin')
+                          )}
                         </dd>
                       </div>
                     </dl>
@@ -576,6 +602,17 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
                       <p className="mt-2 text-sm text-muted-foreground">
                         Nguyên nhân: {viewingCancellationLabels[record.cancellationCause]}
                       </p>
+                    )}
+                    {canManage && slotReview.data?.selectionError && (
+                      <div className="mt-5">
+                        <Notice tone="warning">
+                          {slotReview.data.selectionError}
+                          <p className="mt-2">
+                            Khả dụng của slot đã thay đổi. Kiểm tra việc gia hạn hoặc giữ chỗ, liên
+                            hệ người xem và dùng “Hủy lịch” kèm lý do nếu không thể tiếp khách.
+                          </p>
+                        </Notice>
+                      </div>
                     )}
                     {record.result && (
                       <p className="mt-5 whitespace-pre-line text-sm">Kết quả: {record.result}</p>

@@ -62,6 +62,8 @@ export const tenancySchema = z.object({
   branchId: databaseId,
   roomId: databaseId,
   roomSlotId: databaseId.nullable(),
+  roomSlotIds: z.array(databaseId).optional(),
+  slotNames: z.array(z.string()).optional(),
   branchName: z.string(),
   roomName: z.string(),
   slotName: z.string().nullable(),
