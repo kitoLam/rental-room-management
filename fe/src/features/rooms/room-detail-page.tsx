@@ -359,7 +359,10 @@ export default function RoomDetailPage() {
                                 ) : null}
                                 {viewingSlot?.message && (
                                   <span className="text-xs leading-5 text-warning">
-                                    {viewingSlot.message}
+                                    {viewingSlot.message.replace(
+                                      '. Ngày xem phải sau ngày kết thúc hợp đồng/lượt ở và ngoài thời gian giữ chỗ.',
+                                      '',
+                                    )}
                                   </span>
                                 )}
                                 {viewingSlot?.available && (
