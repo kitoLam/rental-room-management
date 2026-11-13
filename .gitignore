@@ -55,3 +55,9 @@ Thumbs.db
 desktop.ini
 # Local credentials used for browser integration checks.
 be/browser-test.local.json
+
+# ===== AI / Editor Agent =====
+.cursor/
+**/.cursor/
+.codegraph/
+**/.codegraph/
