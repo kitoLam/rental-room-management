@@ -27,6 +27,8 @@ public interface ContractService {
 
     String downloadPdf(String id, AuthPrincipal principal);
 
+    String downloadSignedEvidence(String id, AuthPrincipal principal);
+
     PagedResponse<ContractResponse> search(ContractFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
     ContractResponse update(String id, ContractUpdateRequest request, AuthPrincipal principal);

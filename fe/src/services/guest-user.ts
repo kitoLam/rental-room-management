@@ -627,6 +627,8 @@ export const contractService = {
     request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
   submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number }) =>
     request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
+  downloadSignedEvidence: (id: string) =>
+    request('manager', `/api/v1/contracts/${id}/evidence/download`, z.url()),
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
