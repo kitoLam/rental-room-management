@@ -21,7 +21,7 @@ export function KindBadge({ kind }: { kind?: string | null }) {
 export function InvoiceItemsTable({ invoice }: { invoice: BillingInvoice }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] text-sm">
+      <table className="w-full min-w-[520px] text-[15px]">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="py-2 pr-3 font-bold">Khoản</th>
@@ -42,6 +42,9 @@ export function InvoiceItemsTable({ invoice }: { invoice: BillingInvoice }) {
               <td className="py-3 pr-3">
                 <p className="font-medium">{item.description || itemTypeLabel[item.type] || item.type}</p>
                 <p className="text-xs text-muted-foreground">{itemTypeLabel[item.type] || item.type}</p>
+                {item.warning && (
+                  <p className="mt-1 inline-block rounded bg-warning/20 px-1.5 py-0.5 text-xs font-medium">⚠ {item.warning}</p>
+                )}
               </td>
               <td className="py-3 pr-3 whitespace-nowrap text-muted-foreground">
                 {item.fromDate ? `${dayLabel(item.fromDate)} – ${dayLabel(item.toDate)}` : '—'}

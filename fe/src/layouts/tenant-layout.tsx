@@ -15,7 +15,7 @@ import {
   Wallet,
   AlertTriangle,
   Plug,
-  Droplets,
+  Zap,
   Wrench,
   Bell,
   FileSignature,
@@ -38,7 +38,7 @@ const nav = [
   ['/user/payments', 'Thanh toán', Wallet],
   ['/tenant/debts', 'Công nợ', AlertTriangle],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
-  ['/tenant/utilities', 'Điện & nước', Droplets],
+  ['/tenant/utilities', 'Tiền điện', Zap],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
   ['/notifications', 'Thông báo', Bell],
 ] as const

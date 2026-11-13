@@ -9,7 +9,6 @@ import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService.ReportContract;
-import com.kitolam.rentalroommanagement.modules.contracttenant.service.ContractTenantService;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.request.ManagementReportRequest;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.ManagementReportResponse;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.response.ManagementReportResponse.*;
@@ -40,7 +39,6 @@ public class ManagementReportServiceImpl implements ManagementReportService {
     private final BranchService branches;
     private final RoomService rooms;
     private final ContractService contracts;
-    private final ContractTenantService tenancies;
     private final InvoiceService invoices;
     private final PaymentService payments;
     private final Clock clock;
@@ -82,14 +80,10 @@ public class ManagementReportServiceImpl implements ManagementReportService {
         var roomIds = new ArrayList<>(roomById.keySet());
         var contractById = contracts.readForReports(roomIds).stream().filter(c -> roomById.containsKey(c.roomId()))
                 .collect(Collectors.toMap(ReportContract::id, Function.identity()));
-        var tenancyRoom = new HashMap<String, String>();
-        for (var tenancy : tenancies.readForOverview(new ArrayList<>(contractById.keySet()))) {
-            var contract = contractById.get(tenancy.contractId());
-            if (contract != null) tenancyRoom.put(tenancy.id(), contract.roomId());
-        }
         var invoiceRoom = new HashMap<String, String>();
-        for (var invoice : invoices.readForReports(new ArrayList<>(tenancyRoom.keySet()))) {
-            String roomId = tenancyRoom.get(invoice.contractTenantId());
+        for (var invoice : invoices.readForReports(new ArrayList<>(contractById.keySet()))) {
+            var contract = contractById.get(invoice.contractId());
+            String roomId = contract == null ? null : contract.roomId();
             if (roomId != null) invoiceRoom.put(invoice.id(), roomId);
         }
 

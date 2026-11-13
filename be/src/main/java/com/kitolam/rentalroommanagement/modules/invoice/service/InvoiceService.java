@@ -1,59 +1,42 @@
 package com.kitolam.rentalroommanagement.modules.invoice.service;
 
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
+
 import java.util.List;
 
 import com.kitolam.rentalroommanagement.common.base.PagedResponse;
-import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceCreateRequest;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceFilterRequest;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.request.InvoiceUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceResponse;
-import com.kitolam.rentalroommanagement.modules.invoice.dto.response.TenantDebtResponse;
-import org.springframework.data.domain.Pageable;
 
 public interface InvoiceService {
 
-    InvoiceResponse create(InvoiceCreateRequest request);
+    /** Staff of the invoice's branch, or a tenant of its contract. */
+    InvoiceResponse getById(String id, AuthPrincipal principal);
 
-    InvoiceResponse getById(String id);
+    /** Invoices of a branch for a month (staff). */
+    List<InvoiceResponse> listForBranch(String branchId, String period, AuthPrincipal principal);
 
-    PagedResponse<InvoiceResponse> search(InvoiceFilterRequest filter, Pageable pageable);
+    /** The signed-in tenant's issued invoices, newest period first. */
+    PagedResponse<InvoiceResponse> my(AuthPrincipal principal, int page, int size);
 
-    PagedResponse<TenantDebtResponse> listDebts(
-            String branchId,
-            String keyword,
-            boolean overdueOnly,
-            String period,
-            Pageable pageable,
-            AuthPrincipal principal
-    );
-
-    TenantDebtResponse payDebt(String debtId, AuthPrincipal principal);
-
-    TenantDebtResponse unpayDebt(String debtId, AuthPrincipal principal);
-
-    InvoiceResponse update(String id, InvoiceUpdateRequest request);
-
-    void delete(String id);
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewInvoice> readForOverview(List<String> ids);
 
-    /** Issued, non-cancelled invoices without deposit lines; tenancy IDs must already be authorized. */
-    List<OverviewInvoice> readForReports(List<String> contractTenantIds);
+    /** Issued, non-cancelled invoices without deposit lines; contract IDs must already be authorized. */
+    List<OverviewInvoice> readForReports(List<String> contractIds);
 
-    /** Read issued invoices for already-authorized tenancy IDs, without calculating or updating balances. */
-    List<TenantInvoice> readForTenantOverview(List<String> contractTenantIds);
+    /** Read issued invoices for already-authorized contract IDs, without calculating or updating balances. */
+    List<TenantInvoice> readForTenantOverview(List<String> contractIds);
 
     record TenantInvoice(String id, String invoiceNumber, String period, java.time.LocalDate dueDate,
                          java.math.BigDecimal totalAmount, java.math.BigDecimal remainingAmount,
                          com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus status) { }
 
-    /** Issued invoices that still have an outstanding balance; tenancy IDs must already be authorized. */
-    List<DebtInvoice> readDebts(List<String> contractTenantIds);
+    /** Issued invoices that still have an outstanding balance; contract IDs must already be authorized. */
+    List<DebtInvoice> readDebts(List<String> contractIds);
 
-    record DebtInvoice(String id, String contractTenantId, String invoiceNumber, String period,
+    record DebtInvoice(String id, String contractId, String invoiceNumber, String period,
                        java.time.LocalDate dueDate, java.math.BigDecimal totalAmount,
                        java.math.BigDecimal remainingAmount) { }
 
-    record OverviewInvoice(String id, String contractTenantId) { }
+    record OverviewInvoice(String id, String contractId) { }
 }

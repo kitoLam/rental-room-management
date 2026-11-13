@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -8,11 +8,8 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  Lock,
   LogOut,
-  Phone,
   Save,
-  User as UserIcon,
   ArrowRight,
 } from 'lucide-react'
 import {
@@ -32,209 +29,142 @@ import type { User } from '@/interfaces/domain'
 type ProfileFormData = z.infer<typeof profileSchema>
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>
 
-/* =========================================================================
-   2. FORM: SỬA HỌ TÊN, SỐ ĐIỆN THOẠI & EMAIL KHÓA CỨNG (MỞ RỘNG)
-   ========================================================================= */
 function ProfileInfoForm({ user }: { user: User }) {
   const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState(false)
-  const defaultValues: ProfileFormData = {
-    fullName: user.fullName || '',
-    phone: user.phone || '',
-    dateOfBirth: user.dateOfBirth || '',
-    gender: (['MALE', 'FEMALE', 'OTHER'].includes(user.gender || '') ? user.gender : '') as ProfileFormData['gender'],
-  }
-
-  const form = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
-    defaultValues,
-  })
-
-  useEffect(() => {
-    if (!form.formState.isDirty) {
-      form.reset({
-        fullName: user.fullName || '',
-        phone: user.phone || '',
-        dateOfBirth: user.dateOfBirth || '',
-        gender: (['MALE', 'FEMALE', 'OTHER'].includes(user.gender || '') ? user.gender : '') as ProfileFormData['gender'],
-      })
-    }
-  }, [user.fullName, user.phone, user.dateOfBirth, user.gender, form])
+  const form = useForm<ProfileFormData>({ resolver: zodResolver(profileSchema) })
 
   const update = useMutation({
     mutationFn: profileService.update,
     onSuccess: (data) => {
-      useSession.getState().updateUser(data)
       queryClient.setQueryData(['profile', user.id], data)
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      form.reset()
+      setEditing(false)
       setSaved(true)
-      form.reset({
-        fullName: data.fullName,
-        phone: data.phone || '',
-        dateOfBirth: data.dateOfBirth || '',
-        gender: (data.gender || '') as ProfileFormData['gender'],
-      })
     },
   })
 
+  function startEditing() {
+    update.reset()
+    setSaved(false)
+    form.reset({
+      fullName: user.fullName || '',
+      phone: user.phone || '',
+      dateOfBirth: user.dateOfBirth || '',
+      gender: user.gender === 'MALE' || user.gender === 'FEMALE' || user.gender === 'OTHER' ? user.gender : '',
+      permanentAddress: user.permanentAddress || '',
+      cccdNumber: '',
+      cccdIssueDate: user.cccdIssueDate || '',
+      cccdIssuePlace: user.cccdIssuePlace || '',
+    })
+    setEditing(true)
+  }
+
+  const genderLabel = user.gender === 'MALE' ? 'Nam' : user.gender === 'FEMALE' ? 'Nữ' : user.gender === 'OTHER' ? 'Khác' : ''
+  const maskedCccd = user.cccdNumber
+    ? (/^[0-9]{9,12}$/.test(user.cccdNumber) ? `•••• ${user.cccdNumber.slice(-4)}` : /^•••• [0-9]{4}$/.test(user.cccdNumber) ? user.cccdNumber : '••••')
+    : ''
+  const personal = [
+    ['Họ và tên', user.fullName],
+    ['Email tài khoản', user.email],
+    ['Số điện thoại', user.phone],
+    ['Ngày sinh', user.dateOfBirth],
+    ['Giới tính', genderLabel],
+  ]
+  const identity = [
+    ['Địa chỉ thường trú', user.permanentAddress],
+    ['Số CCCD', maskedCccd],
+    ['Ngày cấp CCCD', user.cccdIssueDate],
+    ['Nơi cấp CCCD', user.cccdIssuePlace],
+  ]
+  const facts = (rows: (string | null | undefined)[][]) => (
+    <dl className="grid gap-4 sm:grid-cols-2">
+      {rows.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-sm text-muted-foreground">{label}</dt>
+          <dd className="mt-1 break-words font-medium">{value || 'Chưa cập nhật'}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+
   return (
-    <Panel className="p-6">
-      <form
-        className="grid gap-5"
-        noValidate
-        onChange={() => setSaved(false)}
-        onSubmit={form.handleSubmit((values) => update.mutate(values))}
-      >
-        <div className="flex items-center gap-2 border-b border-border/60 pb-3">
-          <UserIcon className="size-5 text-primary" />
-          <h2 className="font-bold text-base text-foreground">Thông tin cá nhân</h2>
-        </div>
-
-        {/* EMAIL KHÓA CỨNG - CHỈ ĐƯỢC XEM */}
-        <div className="rounded-lg border border-border/80 bg-muted/30 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <Lock className="size-3.5 text-muted-foreground" />
-              Email tài khoản (Khóa cố định)
-            </label>
-            <span className="text-[11px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded">
-              Chỉ xem
-            </span>
+    <Panel className="space-y-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">Thông tin cá nhân</h2>
+        {!editing && <Button variant="outline" onClick={startEditing}>Chỉnh sửa</Button>}
+      </div>
+      {editing ? (
+        <form className="grid gap-6" noValidate onSubmit={form.handleSubmit((values) => {
+          const changed = form.formState.dirtyFields
+          update.mutate({
+            fullName: values.fullName,
+            phone: values.phone,
+            dateOfBirth: changed.dateOfBirth ? values.dateOfBirth : undefined,
+            gender: changed.gender ? values.gender : undefined,
+            permanentAddress: changed.permanentAddress ? values.permanentAddress : undefined,
+            cccdNumber: values.cccdNumber || undefined,
+            cccdIssueDate: changed.cccdIssueDate ? values.cccdIssueDate : undefined,
+            cccdIssuePlace: changed.cccdIssuePlace ? values.cccdIssuePlace : undefined,
+          })
+        })}>
+          <fieldset disabled={update.isPending} className="grid gap-4 sm:grid-cols-2">
+            <Field id="profile-fullname" label="Họ và tên" error={form.formState.errors.fullName?.message}>
+              <input id="profile-fullname" className="input" autoComplete="name" {...form.register('fullName')} />
+            </Field>
+            <Field id="profile-email" label="Email tài khoản">
+              <input id="profile-email" className="input" type="email" value={user.email} readOnly />
+            </Field>
+            <Field id="profile-phone" label="Số điện thoại" error={form.formState.errors.phone?.message}>
+              <input id="profile-phone" className="input" type="tel" autoComplete="tel" {...form.register('phone')} />
+            </Field>
+            <Field id="profile-birth" label="Ngày sinh" error={form.formState.errors.dateOfBirth?.message}>
+              <input id="profile-birth" className="input" type="date" max={today()} {...form.register('dateOfBirth')} />
+            </Field>
+            <Field id="profile-gender" label="Giới tính" error={form.formState.errors.gender?.message}>
+              <select id="profile-gender" className="input" {...form.register('gender')}>
+                <option value="">Không cung cấp</option>
+                <option value="MALE">Nam</option>
+                <option value="FEMALE">Nữ</option>
+                <option value="OTHER">Khác</option>
+              </select>
+            </Field>
+          </fieldset>
+          <fieldset disabled={update.isPending} className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
+            <legend className="pr-2 font-bold">Thông tin định danh</legend>
+            <Field id="profile-address" label="Địa chỉ thường trú" error={form.formState.errors.permanentAddress?.message}>
+              <input id="profile-address" className="input" {...form.register('permanentAddress')} />
+            </Field>
+            <Field id="profile-cccd" label="Số CCCD" hint={maskedCccd ? `Đang lưu ${maskedCccd}. Để trống nếu giữ số hiện tại.` : undefined} error={form.formState.errors.cccdNumber?.message}>
+              <input id="profile-cccd" className="input" inputMode="numeric" maxLength={12} autoComplete="off" {...form.register('cccdNumber')} />
+            </Field>
+            <Field id="profile-cccd-date" label="Ngày cấp CCCD" error={form.formState.errors.cccdIssueDate?.message}>
+              <input id="profile-cccd-date" className="input" type="date" max={today()} {...form.register('cccdIssueDate')} />
+            </Field>
+            <Field id="profile-cccd-place" label="Nơi cấp CCCD" error={form.formState.errors.cccdIssuePlace?.message}>
+              <input id="profile-cccd-place" className="input" {...form.register('cccdIssuePlace')} />
+            </Field>
+          </fieldset>
+          <InlineError error={update.error} />
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" loading={update.isPending} disabled={!form.formState.isDirty}><Save /> Lưu thay đổi</Button>
+            <Button type="button" variant="outline" disabled={update.isPending} onClick={() => {
+              form.reset()
+              setEditing(false)
+            }}>Hủy</Button>
           </div>
-          <input
-            id="profile-email-readonly"
-            className="input mt-1.5 bg-muted/60 text-muted-foreground cursor-not-allowed select-none font-medium"
-            value={user.email}
-            type="email"
-            readOnly
-            disabled
-            aria-readonly="true"
-          />
-          <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed flex items-start gap-1">
-            <Lock className="size-3 shrink-0 mt-0.5 text-muted-foreground" />
-            <span>
-              Email là định danh tài khoản chính và được sử dụng để xác thực hợp đồng thuê. Trường này được khóa cứng để đảm bảo tính an toàn.
-            </span>
-          </p>
-        </div>
-
-        {/* HỌ VÀ TÊN - CÓ THỂ SỬA */}
-        <Field
-          id="profile-fullname"
-          label="Họ và tên"
-          error={form.formState.errors.fullName?.message}
-          hint="Tên hiển thị trên hồ sơ thuê phòng và thông tin liên hệ."
-        >
-          <div className="relative">
-            <UserIcon className="absolute top-3 left-3 size-4 text-muted-foreground" />
-            <input
-              id="profile-fullname"
-              className="input pl-10"
-              autoComplete="name"
-              placeholder="Nhập họ và tên đầy đủ"
-              {...form.register('fullName')}
-              aria-invalid={!!form.formState.errors.fullName}
-            />
-          </div>
-        </Field>
-
-        {/* SỐ ĐIỆN THOẠI - CÓ THỂ SỬA */}
-        <Field
-          id="profile-phone"
-          label="Số điện thoại"
-          error={form.formState.errors.phone?.message}
-          hint="Số điện thoại liên hệ để quản lý liên lạc khi xem phòng."
-        >
-          <div className="relative">
-            <Phone className="absolute top-3 left-3 size-4 text-muted-foreground" />
-            <input
-              id="profile-phone"
-              className="input pl-10"
-              type="tel"
-              autoComplete="tel"
-              placeholder="VD: 0912345678"
-              {...form.register('phone')}
-              aria-invalid={!!form.formState.errors.phone}
-            />
-          </div>
-        </Field>
-
-        {/* NGÀY SINH & GIỚI TÍNH */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            id="profile-birth"
-            label="Ngày sinh (tùy chọn)"
-            error={form.formState.errors.dateOfBirth?.message}
-          >
-            <input
-              id="profile-birth"
-              className="input"
-              type="date"
-              max={today()}
-              {...form.register('dateOfBirth')}
-            />
-          </Field>
-
-          <Field id="profile-gender" label="Giới tính (tùy chọn)">
-            <select id="profile-gender" className="input" {...form.register('gender')}>
-              <option value="">Không cung cấp</option>
-              <option value="MALE">Nam</option>
-              <option value="FEMALE">Nữ</option>
-              <option value="OTHER">Khác</option>
-            </select>
-          </Field>
-        </div>
-
-        {(user.permanentAddress || user.cccdNumber || user.cccdIssueDate || user.cccdIssuePlace) && (
-          <div className="rounded-lg border border-border/80 bg-muted/30 p-4 grid gap-3">
-            <p className="text-xs font-bold text-foreground">Thông tin thường trú & CCCD đã đăng ký</p>
-            <div className="grid gap-3 sm:grid-cols-2 text-sm">
-              <div className="sm:col-span-2">
-                <span className="text-xs text-muted-foreground block">Địa chỉ thường trú</span>
-                <span className="font-medium text-foreground">{user.permanentAddress || 'Chưa cập nhật'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Số CCCD</span>
-                <span className="font-medium text-foreground">{user.cccdNumber || 'Chưa cập nhật'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground block">Ngày cấp CCCD</span>
-                <span className="font-medium text-foreground">{user.cccdIssueDate || 'Chưa cập nhật'}</span>
-              </div>
-              <div className="sm:col-span-2">
-                <span className="text-xs text-muted-foreground block">Nơi cấp CCCD</span>
-                <span className="font-medium text-foreground">{user.cccdIssuePlace || 'Chưa cập nhật'}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <InlineError error={update.error} />
-        {saved && <Notice tone="success">Đã cập nhật thông tin cá nhân thành công!</Notice>}
-
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          <Button
-            type="submit"
-            loading={update.isPending}
-            disabled={!form.formState.isDirty}
-          >
-            <Save />
-            Lưu thông tin cá nhân
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={update.isPending || !form.formState.isDirty}
-            onClick={() => {
-              form.reset(defaultValues)
-              setSaved(false)
-            }}
-          >
-            Hủy thay đổi
-          </Button>
-        </div>
-      </form>
+        </form>
+      ) : (
+        <>
+          {facts(personal)}
+          <section className="space-y-4 border-t border-border pt-5">
+            <h3 className="font-bold">Thông tin định danh</h3>
+            {facts(identity)}
+          </section>
+        </>
+      )}
+      {saved && <Notice tone="success">Đã cập nhật hồ sơ.</Notice>}
     </Panel>
   )
 }
@@ -424,12 +354,12 @@ export default function ProfilePage() {
       <div className="space-y-8">
         {/* KHU VỰC CHÍNH: HÀNG TRÊN CÙNG GỒM THÔNG TIN CÁ NHÂN + ĐỔI MẬT KHẨU (NGANG NHAU) VÀ ASIDE */}
         <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
-          {/* CỘT CHÍNH: HÀNG NGANG CHỨA FORM THÔNG TIN (MỞ RỘNG) & FORM ĐỔI MẬT KHẨU (THU NHỎ) */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-            {/* THÔNG TIN CÁ NHÂN - MỞ RỘNG (7/12 CỘT) */}
-            <div className="md:col-span-7">
-              {activeUser ? (
-                <ProfileInfoForm user={activeUser} />
+          <div className="grid gap-6">
+            <div>
+              {profile.data ? (
+                <ProfileInfoForm key={profile.data.id} user={profile.data} />
+              ) : profile.error ? (
+                <Panel><InlineError error={profile.error} /><Button variant="outline" onClick={() => void profile.refetch()}>Thử lại</Button></Panel>
               ) : (
                 <Panel className="p-6">
                   <div className="animate-pulse space-y-4">
@@ -441,8 +371,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ĐỔI MẬT KHẨU - THU NHỎ (5/12 CỘT) */}
-            <div className="md:col-span-5">
+            <div>
               <ChangePasswordForm />
             </div>
           </div>

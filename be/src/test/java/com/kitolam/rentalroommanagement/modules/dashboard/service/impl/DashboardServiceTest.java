@@ -104,7 +104,7 @@ class DashboardServiceTest {
         when(tenancies.readForOverview(anyList())).thenReturn(List.of(
                 new ContractTenantService.OverviewTenancy("ct1", "c1", "tenant", ContractTenantStatus.ACTIVE, null, null),
                 new ContractTenantService.OverviewTenancy("ct2", "c1", "tenant", ContractTenantStatus.ACTIVE, null, null)));
-        when(invoices.readForOverview(anyList())).thenReturn(List.of(new InvoiceService.OverviewInvoice("invoice", "ct1")));
+        when(invoices.readForOverview(anyList())).thenReturn(List.of(new InvoiceService.OverviewInvoice("invoice", "c1")));
         when(payments.readForOverview(anyList(), any(), any())).thenReturn(List.of(new PaymentService.OverviewPayment("invoice", new BigDecimal("2500000"))));
         var result = service.management(OWNER, BRANCH, YearMonth.of(2026, 11), 0);
         assertEquals(1, result.metrics().occupiedSlots());

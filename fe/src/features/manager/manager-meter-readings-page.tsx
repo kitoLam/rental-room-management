@@ -67,11 +67,10 @@ export function ManagerMeterReadings() {
                 tại ({formatPeriod(board.data.currentPeriod)}).
               </Notice>
             )}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Stat label="Phòng có người ở" value={String(board.data.rooms.length)} />
               <Stat label="Đã chốt" value={`${confirmed} / ${board.data.rooms.length}`} />
               <Stat label="Tổng tiền điện tháng" value={formatVnd(total)} />
-              <Stat label="Đầu kỳ = cuối kỳ" value={`${unchanged} phòng`} warn={unchanged > 0} />
             </div>
             {unchanged > 0 && (
               <div role="note" className="flex gap-3 rounded-lg bg-warning/15 p-4 text-sm ring-1 ring-warning/40">

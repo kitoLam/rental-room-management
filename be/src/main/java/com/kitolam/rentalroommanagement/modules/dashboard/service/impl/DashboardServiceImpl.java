@@ -156,21 +156,21 @@ public class DashboardServiceImpl implements DashboardService {
         activityItems.sort(Comparator.comparing(ActivityItem::at).reversed().thenComparing(ActivityItem::id));
         var activityPageItems = activityItems.stream().skip((long) activityPage * ACTIVITY_PAGE_SIZE).limit(ACTIVITY_PAGE_SIZE).toList();
 
-        var tenancyBranch = new HashMap<String, String>();
+        var contractBranch = new HashMap<String, String>();
         var activeTenantByBranch = new HashMap<String, Set<String>>();
         for (var tenancy : tenancyList) {
             var contract = contractById.get(tenancy.contractId());
             if (contract == null || !roomById.containsKey(contract.roomId())) continue;
             String id = roomById.get(contract.roomId()).branchId();
-            tenancyBranch.put(tenancy.id(), id);
+            contractBranch.put(contract.id(), id);
             if (contract.status() == ContractStatus.ACTIVE && tenancy.status() == ContractTenantStatus.ACTIVE
                     && covers(contract.startDate(), contract.endDate(), today) && covers(tenancy.joinedAt(), tenancy.leftAt(), today)
                     && tenancy.tenantId() != null)
                 activeTenantByBranch.computeIfAbsent(id, ignored -> new HashSet<>()).add(tenancy.tenantId());
         }
-        var invoiceList = invoices.readForOverview(new ArrayList<>(tenancyBranch.keySet()));
+        var invoiceList = invoices.readForOverview(new ArrayList<>(contractBranch.keySet()));
         var invoiceBranch = new HashMap<String, String>();
-        invoiceList.forEach(i -> invoiceBranch.put(i.id(), tenancyBranch.get(i.contractTenantId())));
+        invoiceList.forEach(i -> invoiceBranch.put(i.id(), contractBranch.get(i.contractId())));
         var receiptByBranch = new HashMap<String, BigDecimal>();
         var paymentList = payments.readForOverview(new ArrayList<>(invoiceBranch.keySet()),
                 period.atDay(1).atStartOfDay(ZONE).toInstant(), period.plusMonths(1).atDay(1).atStartOfDay(ZONE).toInstant());

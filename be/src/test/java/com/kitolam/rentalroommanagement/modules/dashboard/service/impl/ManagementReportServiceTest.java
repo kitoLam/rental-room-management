@@ -10,7 +10,6 @@ import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService.ReportContract;
-import com.kitolam.rentalroommanagement.modules.contracttenant.service.ContractTenantService;
 import com.kitolam.rentalroommanagement.modules.dashboard.dto.request.ManagementReportRequest;
 import com.kitolam.rentalroommanagement.modules.invoice.service.InvoiceService;
 import com.kitolam.rentalroommanagement.modules.invoice.service.impl.InvoiceServiceImpl;
@@ -48,13 +47,12 @@ class ManagementReportServiceTest {
     @Mock BranchService branches;
     @Mock RoomService rooms;
     @Mock ContractService contracts;
-    @Mock ContractTenantService tenancies;
     @Mock InvoiceService invoices;
     @Mock PaymentService payments;
     ManagementReportServiceImpl service;
 
     @BeforeEach void setup() {
-        service = new ManagementReportServiceImpl(branches, rooms, contracts, tenancies, invoices, payments,
+        service = new ManagementReportServiceImpl(branches, rooms, contracts, invoices, payments,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
     ManagementReportRequest request() {
@@ -92,7 +90,7 @@ class ManagementReportServiceTest {
         scope(List.of(room(ROOM)));
         var request = request(); request.setRoomId("foreign-room");
         assertThrows(ForbiddenException.class, () -> service.report(OWNER, request));
-        verifyNoInteractions(contracts, tenancies, invoices, payments);
+        verifyNoInteractions(contracts, invoices, payments);
     }
     @Test void validatesMonthRangeAndPaginationBeforeReadingData() {
         var request = request(); request.setFromMonth("2026-13");
@@ -108,10 +106,7 @@ class ManagementReportServiceTest {
     @Test void scopesReceiptsThroughInvoiceAndGroupsAtVietnamMonthBoundary() {
         scope(List.of(room(ROOM)));
         when(contracts.readForReports(anyList())).thenReturn(List.of(contract("c1", ContractStatus.ACTIVE, "2026-01-01", null, List.of("s1"))));
-        when(tenancies.readForOverview(List.of("c1"))).thenReturn(List.of(
-                new ContractTenantService.OverviewTenancy("ct1", "c1", "t1", null, null, null),
-                new ContractTenantService.OverviewTenancy("foreign", "other-contract", "t2", null, null, null)));
-        when(invoices.readForReports(List.of("ct1"))).thenReturn(List.of(new InvoiceService.OverviewInvoice("i1", "ct1")));
+        when(invoices.readForReports(List.of("c1"))).thenReturn(List.of(new InvoiceService.OverviewInvoice("i1", "c1")));
         when(payments.readForReports(anyList(), any(), any())).thenReturn(List.of(
                 new PaymentService.ReportPayment("i1", new BigDecimal("300"), Instant.parse("2026-10-31T17:00:00Z")),
                 new PaymentService.ReportPayment("i1", new BigDecimal("200"), Instant.parse("2026-10-31T16:59:59Z")),
@@ -172,7 +167,7 @@ class ManagementReportServiceTest {
         MongoTemplate mongo = mock(MongoTemplate.class);
         InvoiceRepository repository = mock(InvoiceRepository.class);
         when(mongo.find(any(Query.class), eq(Invoice.class))).thenReturn(List.of());
-        new InvoiceServiceImpl(mongo, repository).readForReports(List.of("710000000000000000000003"));
+        new InvoiceServiceImpl(mongo, repository, null, null, null).readForReports(List.of("710000000000000000000003"));
         var captor = ArgumentCaptor.forClass(Query.class);
         verify(mongo).find(captor.capture(), eq(Invoice.class));
         var criteria = captor.getValue().getQueryObject();
