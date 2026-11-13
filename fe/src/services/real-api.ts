@@ -170,6 +170,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
       (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
       (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings/my' && verb === 'GET') ||
       (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
       (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
   )

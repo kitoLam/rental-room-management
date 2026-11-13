@@ -6,7 +6,11 @@ import com.kitolam.rentalroommanagement.common.validation.ValidObjectId;
 import com.kitolam.rentalroommanagement.modules.meterreading.dto.request.MeterReadingSaveRequest;
 import com.kitolam.rentalroommanagement.modules.meterreading.dto.response.MeterBoardResponse;
 import com.kitolam.rentalroommanagement.modules.meterreading.dto.response.MeterReadingResponse;
+import com.kitolam.rentalroommanagement.modules.meterreading.dto.response.TenantMeterYearResponse;
 import com.kitolam.rentalroommanagement.modules.meterreading.service.MeterReadingService;
+import com.kitolam.rentalroommanagement.modules.meterreading.service.impl.TenantMeterReadingService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,6 +37,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class MeterReadingController {
 
     private final MeterReadingService service;
+    private final TenantMeterReadingService tenantService;
+
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('TENANT')")
+    @Operation(summary = "Người thuê: chỉ số điện 12 tháng trong năm của phòng thuộc hợp đồng")
+    public StandardResponse<TenantMeterYearResponse> my(
+            @RequestParam @ValidObjectId String contractId,
+            @RequestParam @Min(2000) @Max(2100) int year,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(tenantService.year(contractId, year, principal));
+    }
 
     @GetMapping("/board")
     @Operation(summary = "Bảng chỉ số điện của chi nhánh trong một tháng (kèm giá điện)")
