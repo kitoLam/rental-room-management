@@ -11,12 +11,8 @@ export const uploadResponseSchema = z.object({
   width: z.number().nullish(),
   height: z.number().nullish(),
 })
-const uploadResponse = z.object({ secureUrl: z.url() })
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>
-export async function uploadToCloudinary(file: File): Promise<string> {
-  const body = new FormData()
-  body.append('file', file)
 
 /**
  * Tải file ảnh lên Cloudinary thông qua API backend `/api/v1/public/upload`.
@@ -25,13 +21,14 @@ export async function uploadToCloudinary(file: File): Promise<string> {
 export async function uploadToCloudinary(file: File, folder?: string): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
-  if (folder) {
-    formData.append('folder', folder)
-  }
+
+  const endpoint = folder
+    ? `/api/v1/public/upload?folder=${encodeURIComponent(folder)}`
+    : '/api/v1/public/upload'
 
   const res = await request<UploadResponse>(
     'tenant',
-    '/api/v1/public/upload',
+    endpoint,
     uploadResponseSchema,
     {
       method: 'POST',
@@ -44,9 +41,28 @@ export async function uploadToCloudinary(file: File, folder?: string): Promise<s
     throw new Error('Không nhận được URL ảnh sau khi tải lên Cloudinary.')
   }
   return finalUrl
-  const { secureUrl } = await request('tenant', '/api/v1/public/upload', uploadResponse, {
-    method: 'POST',
-    body,
-  })
-  return secureUrl
+}
+
+/**
+ * Tải nhiều file ảnh lên Cloudinary thông qua API backend `/api/v1/public/upload/multiple`.
+ */
+export async function uploadMultipleToCloudinary(files: File[], folder?: string): Promise<string[]> {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+
+  const endpoint = folder
+    ? `/api/v1/public/upload/multiple?folder=${encodeURIComponent(folder)}`
+    : '/api/v1/public/upload/multiple'
+
+  const res = await request<UploadResponse[]>(
+    'tenant',
+    endpoint,
+    z.array(uploadResponseSchema),
+    {
+      method: 'POST',
+      body: formData,
+    },
+  )
+
+  return (res || []).map((item) => item.secureUrl || item.url).filter(Boolean) as string[]
 }
