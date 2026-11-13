@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { formatVnd } from '@/lib/format'
 import { meterReadingApi, type MeterBoard } from '@/services/meter-readings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, LockOpen, Save } from 'lucide-react'
+import { AlertTriangle, Check, History, LockOpen, Save } from 'lucide-react'
 import { useState } from 'react'
 import { ManagerPage } from './components'
 import { useManager } from './context'
@@ -27,28 +27,61 @@ export function ManagerMeterReadings() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['meter-board'] })
 
   const confirmed = board.data?.rooms.filter((r) => r.reading?.status === 'CONFIRMED').length ?? 0
+  const unchanged = board.data?.rooms.filter((r) => isUnchanged(r.reading)).length ?? 0
+  const editable = board.data?.editable ?? period === currentPeriod()
   const total = board.data?.rooms.reduce((sum, r) => sum + (r.reading?.amount ?? 0), 0) ?? 0
 
   return (
     <ManagerPage
       title="Chỉ số điện"
-      description="Giá điện chung của chi nhánh và chỉ số công tơ đầu / cuối tháng của từng phòng. Chỉ số cuối tháng đã chốt tự thành chỉ số đầu tháng sau."
+      description="Giá điện chung của chi nhánh và chỉ số công tơ đầu / cuối tháng của từng phòng. Chỉ hiện các phòng có người ở trong tháng đang xem, và chỉ nhập được tháng hiện tại. Sang tháng mới, chỉ số đầu và cuối được lấy sẵn từ chỉ số cuối tháng trước để bạn sửa lại; phòng trống tự giữ nguyên chỉ số."
       actions={
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium">Tháng</span>
-          <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="h-11 rounded-lg border border-border bg-surface px-3" />
-        </label>
+        <div className="flex items-end gap-2">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Lọc theo tháng</span>
+            <input
+              type="month"
+              value={period}
+              max={currentPeriod()}
+              onChange={(e) => e.target.value && e.target.value <= currentPeriod() && setPeriod(e.target.value)}
+              className="h-11 rounded-lg border border-border bg-surface px-3"
+            />
+          </label>
+          {period !== currentPeriod() && (
+            <Button variant="outline" onClick={() => setPeriod(currentPeriod())}>
+              Tháng này
+            </Button>
+          )}
+        </div>
       }
     >
       <QueryState pending={board.isPending} error={board.error} retry={board.refetch}>
         {board.data && (
           <>
-            <RateEditor branchId={branch.id} rate={board.data.electricityRate ?? null} onSaved={refresh} />
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Số phòng" value={String(board.data.rooms.length)} />
+            {editable ? (
+              <RateEditor branchId={branch.id} rate={board.data.electricityRate ?? null} onSaved={refresh} />
+            ) : (
+              <Notice>
+                <History size={18} className="shrink-0" />
+                Đang xem lịch sử tháng {formatPeriod(period)}: chỉ xem, không sửa được. Chỉ số chỉ nhập cho tháng hiện
+                tại ({formatPeriod(board.data.currentPeriod)}).
+              </Notice>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Phòng có người ở" value={String(board.data.rooms.length)} />
               <Stat label="Đã chốt" value={`${confirmed} / ${board.data.rooms.length}`} />
               <Stat label="Tổng tiền điện tháng" value={formatVnd(total)} />
+              <Stat label="Đầu kỳ = cuối kỳ" value={`${unchanged} phòng`} warn={unchanged > 0} />
             </div>
+            {unchanged > 0 && (
+              <div role="note" className="flex gap-3 rounded-lg bg-warning/15 p-4 text-sm ring-1 ring-warning/40">
+                <AlertTriangle size={20} className="mt-0.5 shrink-0 text-warning" />
+                <p>
+                  Có <strong>{unchanged} phòng</strong> có chỉ số cuối kỳ bằng chỉ số đầu kỳ (tiêu thụ 0 kWh), có thể
+                  đã quên nhập chỉ số cuối tháng. Các phòng này được tô vàng bên dưới.
+                </p>
+              </div>
+            )}
             <Panel className="p-0 sm:p-0">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[860px] text-sm">
@@ -63,11 +96,19 @@ export function ManagerMeterReadings() {
                     </tr>
                   </thead>
                   <tbody>
+                    {board.data.rooms.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-10 text-center text-sm text-muted-foreground">
+                          Không có phòng nào có người ở trong tháng {formatPeriod(period)}, không cần nhập chỉ số.
+                        </td>
+                      </tr>
+                    )}
                     {board.data.rooms.map((row) => (
                       <ReadingRow
                         key={`${row.roomId}-${row.reading?.id ?? 'new'}-${row.reading?.status ?? ''}`}
                         row={row}
                         period={period}
+                        editable={editable}
                         rate={board.data.electricityRate ?? null}
                         onChanged={refresh}
                       />
@@ -114,16 +155,18 @@ function RateEditor({ branchId, rate, onSaved }: { branchId: string; rate: numbe
 function ReadingRow({
   row,
   period,
+  editable,
   rate,
   onChanged,
 }: {
   row: MeterBoard['rooms'][number]
   period: string
+  editable: boolean
   rate: number | null
   onChanged: () => void
 }) {
   const reading = row.reading
-  const locked = reading?.status === 'CONFIRMED'
+  const locked = !editable || reading?.status === 'CONFIRMED'
   const knownStart = reading?.startReading ?? row.suggestedStartReading ?? null
   const [start, setStart] = useState(knownStart == null ? '' : String(knownStart))
   const [end, setEnd] = useState(reading ? String(reading.endReading) : '')
@@ -136,16 +179,24 @@ function ReadingRow({
   const reopen = useMutation({ mutationFn: () => meterReadingApi.reopen(reading!.id), onSuccess: onChanged })
   const error = save.error || confirm.error || reopen.error
   const dirty = !reading || String(reading.endReading) !== end || String(reading.startReading) !== start
+  // No usage (saved or being typed): the end-of-month reading was likely never entered.
+  const flagged = start !== '' && end !== '' && Number(start) === Number(end)
 
   return (
-    <tr className="border-b border-border/60 align-top">
+    <tr className={`border-b border-border/60 align-top ${flagged ? 'bg-warning/10' : ''}`}>
       <td className="px-5 py-4">
         <p className="font-bold">{row.roomNumber}</p>
         <p className="text-xs text-muted-foreground">{row.title}</p>
         {reading && (
-          <StatusBadge tone={locked ? 'success' : 'warning'} className="mt-1">
-            {locked ? 'Đã chốt' : 'Nháp'}
+          <StatusBadge tone={reading.status === 'CONFIRMED' ? 'success' : 'warning'} className="mt-1">
+            {reading.status === 'CONFIRMED' ? 'Đã chốt' : 'Nháp'}
           </StatusBadge>
+        )}
+        {flagged && (
+          <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-warning">
+            <AlertTriangle size={13} />
+            Đầu = cuối, kiểm tra lại
+          </p>
         )}
         {error && <p className="mt-2 max-w-48 text-xs text-danger">{error instanceof Error ? error.message : 'Lỗi'}</p>}
       </td>
@@ -168,7 +219,7 @@ function ReadingRow({
           value={end}
           disabled={locked}
           onChange={(e) => setEnd(e.target.value)}
-          className="input w-32"
+          className={`input w-32 ${flagged ? 'ring-2 ring-warning' : ''}`}
           aria-label={`Chỉ số cuối kỳ phòng ${row.roomNumber}`}
         />
       </td>
@@ -179,7 +230,9 @@ function ReadingRow({
         {reading && !dirty ? formatVnd(reading.amount) : usage !== null && usage >= 0 && rate != null ? `≈ ${formatVnd(usage * rate)}` : '—'}
       </td>
       <td className="px-5 py-4 text-right whitespace-nowrap">
-        {locked ? (
+        {!editable ? (
+          <span className="text-xs text-muted-foreground">Chỉ xem</span>
+        ) : locked ? (
           <Button variant="ghost" loading={reopen.isPending} onClick={() => reopen.mutate()}>
             <LockOpen size={16} />
             Mở lại
@@ -208,11 +261,19 @@ function ReadingRow({
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+const isUnchanged = (reading?: MeterBoard['rooms'][number]['reading']) =>
+  !!reading && reading.startReading === reading.endReading
+
+const formatPeriod = (period: string) => {
+  const [year, month] = period.split('-')
+  return `${month}/${year}`
+}
+
+function Stat({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="rounded-xl bg-surface p-4 ring-1 ring-border/70">
+    <div className={`rounded-xl p-4 ring-1 ${warn ? 'bg-warning/15 ring-warning/50' : 'bg-surface ring-border/70'}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-bold">{value}</p>
+      <p className={`mt-1 text-lg font-bold ${warn ? 'text-warning' : ''}`}>{value}</p>
     </div>
   )
 }

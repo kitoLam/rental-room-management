@@ -23,6 +23,8 @@ export type MeterReading = z.infer<typeof meterReadingSchema>
 const boardSchema = z.object({
   branchId: z.string(),
   period: z.string(),
+  currentPeriod: z.string(),
+  editable: z.boolean(),
   electricityRate: money.nullish(),
   rooms: z.array(
     z.object({
