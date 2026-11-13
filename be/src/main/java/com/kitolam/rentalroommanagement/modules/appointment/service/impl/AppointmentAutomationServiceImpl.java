@@ -1,5 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.appointment.service.impl;
 
+import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
 import com.kitolam.rentalroommanagement.modules.appointment.document.Appointment;
 import com.kitolam.rentalroommanagement.modules.appointment.document.Appointment.CancellationCause;
 import com.kitolam.rentalroommanagement.modules.appointment.enums.AppointmentStatus;
@@ -87,9 +88,15 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
         // An unknown/unavailable source must leave the appointment intact for retry.
         // Temporary holds alone never cancel existing appointments.
         com.kitolam.rentalroommanagement.modules.appointment.integration.ViewingRoomSnapshot room;
-        try { room = inventory.getRoom(appointment.getRoomId()); }
-        catch (RuntimeException unavailable) {
-            log.warn("Could not refresh viewing inventory for room {}", appointment.getRoomId());
+        try {
+            room = inventory.getRoom(appointment.getRoomId());
+        } catch (NotFoundException missing) {
+            cancelBySystem(appointment, CancellationCause.ROOM_UNAVAILABLE,
+                    "Phòng hoặc chi nhánh của lịch xem không còn tồn tại.", List.of(), "inventory-not-found");
+            return;
+        } catch (RuntimeException unavailable) {
+            log.warn("Could not refresh viewing inventory for room {} ({})",
+                    appointment.getRoomId(), unavailable.getClass().getSimpleName());
             return;
         }
         if (!appointment.getRoomId().equals(room.roomId()) || !java.util.Objects.equals(appointment.getBranchId(), room.branchId())) {
@@ -103,7 +110,7 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
         String slotReason = null;
         String revision = room.sourceRevision();
         var relatedBookings = room.officialBookingIds();
-        if (appointment.getRoomSlotIds() != null && !appointment.getRoomSlotIds().isEmpty()) {
+        if (!cannotReceive && appointment.getRoomSlotIds() != null && !appointment.getRoomSlotIds().isEmpty()) {
             try {
                 var slotStates = inventory.slotsForViewing(appointment.getRoomId(), appointment.getAppointmentDate());
                 boolean missing = appointment.getRoomSlotIds().stream().anyMatch(id -> slotStates.stream().noneMatch(s -> id.equals(s.id())));
@@ -122,7 +129,8 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
                 // Room-wide booking references cannot be attributed to a selected slot.
                 relatedBookings = List.of();
             } catch (RuntimeException unavailable) {
-                log.warn("Could not refresh viewing slot dates for appointment {}", appointment.getId());
+                log.warn("Could not refresh viewing slot dates for appointment {} ({})",
+                        appointment.getId(), unavailable.getClass().getSimpleName());
                 return;
             }
         }
@@ -131,6 +139,11 @@ public class AppointmentAutomationServiceImpl implements AppointmentAutomationSe
         String reason = cause == CancellationCause.OFFICIAL_BOOKING ? "Phòng không còn chỗ thuê do quyền giữ chỗ chính thức có hiệu lực"
                 : "Phòng hoặc chi nhánh không còn đủ điều kiện tiếp khách";
         if (!cannotReceive && slotReason != null && !slotReason.isBlank()) reason = slotReason;
+        cancelBySystem(appointment, cause, reason, relatedBookings, revision);
+    }
+
+    private void cancelBySystem(Appointment appointment, CancellationCause cause, String reason,
+                                List<String> relatedBookings, String revision) {
         Instant at = viewingClock.instant();
         String eventId = new ObjectId().toHexString();
         var event = new Appointment.HistoryEntry(eventId, "SYSTEM_CANCELLED", null, "Hệ thống", at,
