@@ -110,7 +110,7 @@ function addTenancy(e: ManagerEngine, c: ManagerContract, input: unknown) {
     slotName: slot?.name || null,
     rentalMode: c.rentalMode,
     status: 'DRAFT',
-    contractStatus: c.status,
+    contractStatus: c.status === 'EXPIRED' ? 'ENDED' : c.status,
     code: c.code,
     actualLeaveDate: null,
     sharedTerms: c.terms,

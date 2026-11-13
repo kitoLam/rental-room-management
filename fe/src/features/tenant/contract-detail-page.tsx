@@ -1,5 +1,5 @@
 import { Notice, Panel, QueryState } from '@/components/common/page'
-import { addMonths, dateOnly, dateTime } from '@/lib/activity'
+import { addMonths, bookingMoveInDate, dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { tenantApi } from '@/services/tenant'
 import type { TenantContract, Tenancy } from '@/interfaces/tenant'
@@ -61,7 +61,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
     enabled: Boolean(contract?.bookingId && !contract?.startDate && !terms),
     retry: false,
   })
-  const expectedStartDate = contract?.startDate || sourceBooking.data?.startDate || null
+  const expectedStartDate = contract?.startDate || bookingMoveInDate(sourceBooking.data) || null
   const placeName = slotCodes.length
     ? `${roomName} · ${slotCodes.join(', ')}`
     : contract?.roomSlotIds?.length
@@ -103,7 +103,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                         [
                           'Thời hạn',
                           contract?.startDate && contract.endDate
-                            ? `${dateOnly(contract.startDate)} – ${dateOnly(contract.endDate)} (không gồm ngày kết thúc)`
+                            ? `${dateOnly(contract.startDate)} – ${dateOnly(contract.endDate)}`
                             : expectedStartDate
                               ? `Dự kiến từ ${dateOnly(expectedStartDate)}${contract?.termMonths ? ` · ${contract.termMonths} tháng` : ''} — chờ manager duyệt`
                               : 'Manager chưa duyệt thời hạn hợp đồng',
@@ -129,8 +129,6 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                       ['Phòng / chỗ ở', placeName],
                       ['Giá thuê / tháng', contract.rentPrice == null ? '—' : formatVnd(contract.rentPrice)],
                       ['Tiền cọc hợp đồng', contract.contractDepositAmount == null ? '—' : formatVnd(contract.contractDepositAmount)],
-                      ['Chỉ số điện đầu kỳ', contract.electricityInitialReading ?? '—'],
-                      ['Chỉ số nước đầu kỳ', contract.waterInitialReading ?? '—'],
                     ]}
                   />
                   {contract.services?.length ? (
@@ -240,6 +238,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                         SUBMITTED: 'Bạn đã gửi bằng chứng hợp đồng',
                         APPROVED: 'Manager/admin đã duyệt và kích hoạt hợp đồng',
                         RESUBMISSION_REQUESTED: 'Manager/admin yêu cầu gửi lại bằng chứng',
+                        CONTRACT_EXPIRED: 'Hợp đồng đã hết hạn',
                         EXPIRED: 'Hồ sơ bằng chứng đã hết hạn',
                       }
                       return <li key={`${entry.action}-${entry.at}-${index}`} className="relative">

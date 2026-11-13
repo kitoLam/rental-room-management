@@ -43,12 +43,20 @@ export function BookingDetailPage() {
           <p className="mt-3 break-all text-xs text-muted-foreground">Mã giữ chỗ: {record.id}</p>
           <dl className="my-7 grid gap-5 sm:grid-cols-2">
             <div><dt className="text-xs text-muted-foreground">Các slot</dt><dd className="mt-2 text-sm font-bold">{record.slotLabels.join(', ') || '—'}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">{record.hasRentalDates ? 'Ngày bắt đầu thuê' : 'Ngày bắt đầu thuê dự kiến'}</dt><dd className="mt-2 text-sm font-bold">{dateOnly(record.startDate)}</dd></div>
+            {record.slotMoveInDates ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">Ngày nhận phòng theo slot</dt>
+                {record.roomSlotIds.map((id, index) => {
+                  const date = record.slotMoveInDates?.[id]
+                  return <dd key={id} className="mt-2 text-sm">{record.slotLabels[index]} · {date ? dateOnly(date) : 'Chưa có thông tin'}</dd>
+                })}
+              </div>
+            ) : <div><dt className="text-xs text-muted-foreground">{record.hasRentalDates ? 'Ngày bắt đầu thuê' : 'Ngày bắt đầu thuê dự kiến'}</dt><dd className="mt-2 text-sm font-bold">{bookingMoveInDate(record) ? dateOnly(bookingMoveInDate(record)!) : "Chưa có thông tin"}</dd></div>}
             <div><dt className="text-xs text-muted-foreground">Tiền cọc</dt><dd className="mt-2 font-bold text-primary">{formatVnd(record.holdAmount)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Hạn thanh toán</dt><dd className="mt-2 text-sm">{record.paymentDueAt ? dateTime(record.paymentDueAt) : '—'}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Tạo lúc</dt><dd className="mt-2 text-sm">{dateTime(record.createdAt)}</dd></div>
           </dl>
-          {record.hasRentalDates && <Notice>Khoảng thuê: {record.startDate} → {record.endDate}</Notice>}
+          {!record.slotMoveInDates && record.hasRentalDates && <Notice>Khoảng thuê: {record.startDate} → {record.endDate}</Notice>}
           {record.status === 'AWAITING_PAYMENT' && <Notice tone="warning">Các slot được giữ trong 24 giờ. Thanh toán sau hạn không khôi phục booking và khoản tiền đến muộn sẽ chờ manager xử lý hoàn.</Notice>}
           {record.status === 'EXPIRED' && <Notice tone="warning">Booking đã hết hạn và slot đã được trả về inventory. Khoản thanh toán đến muộn cần được hoàn.</Notice>}
           {record.depositStatus === 'PROCESSING' && <Notice tone="warning">Khoản cọc đang được xử lý hoàn tiền.</Notice>}
@@ -67,7 +75,7 @@ export function BookingDetailPage() {
       {provider('leasing') === 'real' && contractIds.map((contractId, index) => (
         <ContractEvidencePanel key={contractId} contractId={contractId} index={contractIds.length > 1 ? index : undefined}
           canManage={canManage} onChanged={refresh}
-          moveInDate={bookingMoveInDate(record)} rentalStartDate={record?.startDate} />
+          moveInDate={bookingMoveInDate(record)} />
       ))}
     </Page>
   )

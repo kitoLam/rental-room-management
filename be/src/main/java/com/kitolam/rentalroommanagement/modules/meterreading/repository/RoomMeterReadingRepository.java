@@ -14,5 +14,7 @@ public interface RoomMeterReadingRepository extends BaseRepository<RoomMeterRead
     /** Latest earlier month (yyyy-MM sorts as text). */
     Optional<RoomMeterReading> findFirstByRoomIdAndPeriodLessThanAndIsDeletedFalseOrderByPeriodDesc(String roomId, String period);
 
+    List<RoomMeterReading> findByRoomIdAndPeriodInAndIsDeletedFalse(String roomId, Collection<String> periods);
+
     List<RoomMeterReading> findByRoomIdInAndPeriodAndIsDeletedFalse(Collection<String> roomIds, String period);
 }

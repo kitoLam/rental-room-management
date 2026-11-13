@@ -336,6 +336,7 @@ const backendBookingSchema = z.object({
     mandatory: z.boolean().optional(),
   })).optional(),
   expectedMoveInDate: z.string().nullable(),
+  slotMoveInDates: z.record(z.string(), z.iso.date()).nullish(),
   expectedMoveOutDate: z.string().nullable(),
   holdingDepositAmount: z.number().nullable(),
   paymentDeadline: z.string().nullable(),
@@ -409,11 +410,6 @@ const backendContractSchema = z.object({
   tenantIdNumber: z.string().nullable().optional(),
   tenantAddress: z.string().nullable().optional(),
   roomAddress: z.string().nullable().optional(),
-  electricityInitialReading: z.number().nullable().optional(),
-  waterInitialReading: z.number().nullable().optional(),
-  electricityRate: z.number().nullable().optional(),
-  waterRate: z.number().nullable().optional(),
-  parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
   paymentDueDay: z.number().nullable(),
   terms: z.string().nullable(),
@@ -424,7 +420,7 @@ const backendContractSchema = z.object({
   firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
   evidenceHistory: z.array(z.object({
-    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED', 'CONTRACT_EXPIRED']),
     at: z.string().nullable(), note: z.string().nullable(),
   })).optional(),
   evidenceDeadline: z.string().nullable().optional(),
@@ -457,6 +453,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     slotLabels: b.slotCodes || [b.slotCode],
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
     expectedMoveInDate: b.expectedMoveInDate,
+    slotMoveInDates: b.slotMoveInDates,
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
@@ -526,6 +523,7 @@ export const bookingService = {
       if (!('roomSlotIds' in input) || input.roomSlotIds.length === 0) throw new ApiError('Chọn ít nhất một slot trước khi giữ chỗ.', 400)
       return adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
         roomSlotIds: input.roomSlotIds,
+        slotMoveInDates: "slotMoveInDates" in input ? input.slotMoveInDates : undefined,
         selectedServices: input.selectedServices,
       })))
     }
@@ -564,13 +562,12 @@ export const bookingService = {
     const checked = slots.content.length
       ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
       : []
-    const availableFromById = new Map(slots.content.map((slot) => [slot.id, slot.availableFrom]))
     const slotAvailability = checked.map((slot) => ({
       id: slot.roomSlotId,
       label: slot.slotCode,
       available: slot.available,
       // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
-      availableFrom: slot.availableFrom ?? availableFromById.get(slot.roomSlotId) ?? null,
+      availableFrom: slot.availableFrom ?? null,
     }))
     const available = slotAvailability.some((slot) => slot.available)
     return {
@@ -628,29 +625,30 @@ export const contractService = {
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
-    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema, write('POST', value)),
+    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
 }
 export const profileService = {
-  get: async (): Promise<User> => {
-    if (provider('auth') === 'real' || provider('profile') === 'real') {
-      try {
-        return await request('auth', '/api/v1/auth/me', userSchema)
-      } catch {
-        const currentUser = useSession.getState().user
-        if (currentUser) return currentUser
-        throw new ApiError('Không thể tải thông tin hồ sơ.', 500)
-      }
-    }
-    return request('profile', '/api/me', userSchema)
-  },
+  get: (): Promise<User> =>
+    provider('auth') === 'real' || provider('profile') === 'real'
+      ? request('auth', '/api/v1/auth/me', userSchema)
+      : request('profile', '/api/me', userSchema),
   update: async (value: unknown): Promise<User> => {
-    if (provider('auth') === 'real' || provider('profile') === 'real') {
-      const updated = await request('auth', '/api/v1/auth/me', userSchema, write('PATCH', value))
-      useSession.getState().updateUser(updated)
-      return updated
+    const updated = provider('auth') === 'real' || provider('profile') === 'real'
+      ? await request('auth', '/api/v1/auth/me', userSchema, write('PATCH', value))
+      : await request('profile', '/api/me', userSchema, write('PATCH', value))
+    const current = useSession.getState().user
+    if (current?.id === updated.id) {
+      useSession.getState().updateUser({
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        phone: updated.phone,
+        dateOfBirth: null,
+        gender: null,
+        roles: updated.roles,
+        status: updated.status,
+      })
     }
-    const updated = await request('profile', '/api/me', userSchema, write('PATCH', value))
-    useSession.getState().updateUser(updated)
     return updated
   },
 }

@@ -56,30 +56,22 @@ export function ManagerContractDetail() {
               </div>
               <Facts
                 items={[
+                  ['Địa chỉ thuê', query.data.roomAddress || '—'],
+                  ['Phòng / chỗ ở', query.data.roomName || '—'],
                   [
                     'Thời hạn',
-                    query.data.status === 'ACTIVE' && query.data.startDate && query.data.endDate
+                    query.data.startDate && query.data.endDate
                       ? `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`
-                      : expectedStartDate
-                        ? `Dự kiến từ ${dateOnly(expectedStartDate)}${query.data.termMonths ? ` → ${dateOnly(addMonths(expectedStartDate, query.data.termMonths))}` : ''} — chưa duyệt evidence`
-                        : 'Chưa duyệt evidence',
+                      : query.data.status !== 'DRAFT'
+                        ? '—'
+                        : expectedStartDate
+                          ? `Dự kiến từ ${dateOnly(expectedStartDate)}${query.data.termMonths ? ` → ${dateOnly(addMonths(expectedStartDate, query.data.termMonths))}` : ''} — chưa duyệt evidence`
+                          : 'Chưa duyệt evidence',
                   ],
                 ]}
               />
-              <h3 className="mt-6 font-bold">Thông tin trên hợp đồng</h3>
-              <Facts items={[
-                ['Địa chỉ thuê', query.data.roomAddress || '—'],
-                ['Phòng / chỗ ở', query.data.roomName],
-                ['Giá thuê / tháng', query.data.rentPrice == null ? '—' : `${query.data.rentPrice.toLocaleString('vi-VN')} ₫`],
-                ['Tiền cọc hợp đồng', query.data.contractDepositAmount == null ? '—' : `${query.data.contractDepositAmount.toLocaleString('vi-VN')} ₫`],
-              ]} />
-              <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.terms}</p>
-              <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-                <p>Chỉ số điện đầu kỳ: {query.data.electricityInitialReading ?? '—'} · {query.data.electricityRate ?? '—'} VND/kWh</p>
-                <p>Chỉ số nước đầu kỳ: {query.data.waterInitialReading ?? '—'} · {query.data.waterRate ?? '—'} VND/m³</p>
-                <p>Số slot trong hợp đồng: {query.data.roomSlotIds?.length ?? query.data.maxOccupants ?? '—'}</p>
-                {query.data.signedFileUrl && <a className="text-primary underline" href={query.data.signedFileUrl} target="_blank" rel="noreferrer">Mở hợp đồng đã ký</a>}
-              </div>
+              {query.data.terms && <p className="mt-6 whitespace-pre-wrap text-sm leading-7">{query.data.terms}</p>}
+              {query.data.signedFileUrl && <a className="mt-4 inline-block text-sm text-primary underline" href={query.data.signedFileUrl} target="_blank" rel="noreferrer">Mở hợp đồng đã ký</a>}
               {!!query.data.services?.length && <div className="mt-4 space-y-2 text-sm">
                 <h3 className="font-semibold">Dịch vụ theo snapshot hợp đồng</h3>
                 {query.data.services.map((service: { serviceId: string; name: string; unit: string; unitPrice: number; mandatory: boolean; selected: boolean; quantity?: number | null }) =>
@@ -95,14 +87,13 @@ export function ManagerContractDetail() {
                   <Button variant="outline" disabled={!evidenceNote.trim()} loading={mutation.isPending} onClick={() => mutation.mutate({ resource: 'contracts', id: contractId, action: 'review-evidence', value: { approved: false, note: evidenceNote.trim() } })}>Yêu cầu gửi lại</Button>
                 </div>
               </div>}
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-4">
                 <ManagerLink to={`/manager/contracts/${contractId}/tenants`}>
-                  Thành viên & nghĩa vụ cá nhân
+                  Người ký và chỗ thuê
                 </ManagerLink>
-                <ManagerLink to={`/manager/rooms/${query.data.roomId}`}>Phòng / chỗ ở</ManagerLink>
-                {query.data.sourceBookingId && (
-                  <ManagerLink to={`/manager/bookings/${query.data.sourceBookingId}`}>
-                    Giữ phòng gốc
+                {query.data.renewedToContractId && (
+                  <ManagerLink to={`/manager/contracts/${query.data.renewedToContractId}`}>
+                    Hợp đồng gia hạn
                   </ManagerLink>
                 )}
                 {query.data.status === 'DRAFT' && !query.data.sourceBookingId && (
@@ -113,11 +104,6 @@ export function ManagerContractDetail() {
                 {query.data.status === 'ACTIVE' && !query.data.renewedToContractId && (
                   <Button onClick={() => setAction('renew')}>Gia hạn</Button>
                 )}
-                {query.data.status === 'ACTIVE' && (
-                  <Button variant="outline" onClick={() => setAction('end')}>
-                    Kết thúc khi hết hạn
-                  </Button>
-                )}
               </div>
             </Panel>
             {query.data.status === 'DRAFT' && <Notice>
@@ -125,9 +111,9 @@ export function ManagerContractDetail() {
             </Notice>}
             <Panel>
               <h2 className="mb-5 font-bold">Lịch sử hợp đồng</h2>
-              <History
-                items={query.data.history.map((h) => ({ ...h, note: `${h.actor}: ${h.note}` }))}
-              />
+              {query.data.history.length ? (
+                <History items={query.data.history.map((h) => ({ ...h, note: `${h.actor}: ${h.note}` }))} />
+              ) : <p className="text-sm text-muted-foreground">Chưa có lịch sử hợp đồng.</p>}
             </Panel>
           </>
         )}

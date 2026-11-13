@@ -64,7 +64,7 @@ const groups = [
   {
     label: 'Tài chính',
     items: [
-      ['billing', 'Billing theo tháng', CalendarRange],
+      ['billing', 'Ước tính hóa đơn', CalendarRange],
       ['invoices', 'Hóa đơn', ReceiptText],
       ['payments', 'Thanh toán', Wallet],
       ['debts', 'Công nợ', CircleDollarSign],

@@ -14,11 +14,14 @@ import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.RoomSer
 import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus;
 import com.kitolam.rentalroommanagement.modules.roomservice.repository.RoomServiceRepository;
 import com.kitolam.rentalroommanagement.modules.roomservice.service.RoomServiceCatalogService;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.bson.types.ObjectId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
+import com.kitolam.rentalroommanagement.modules.room.document.Room;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -82,6 +85,15 @@ public class RoomServiceCatalogServiceImpl implements RoomServiceCatalogService 
     public void delete(String id, AuthPrincipal principal) {
         RoomService item = getEntity(id);
         staffAccess.requireBranch(item.getBranchId(), principal);
+        // Still attached to a room: removing it would silently drop the fee from those rooms' invoices.
+        List<String> rooms = mongoTemplate.find(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                        Criteria.where("roomServiceIds").is(MongoQueryHelper.toObjectId(item.getId())))), Room.class).stream()
+                .map(Room::getRoomNumber).filter(Objects::nonNull).sorted().toList();
+        if (!rooms.isEmpty()) {
+            throw new ConflictException("Không thể xoá dịch vụ phòng “" + item.getName() + "” vì còn " + rooms.size()
+                    + " phòng đang dùng: " + String.join(", ", rooms)
+                    + ". Hãy bỏ dịch vụ này khỏi các phòng đó trước (hoặc chuyển sang ngừng hoạt động).");
+        }
         item.markDeleted();
         repository.save(item);
     }

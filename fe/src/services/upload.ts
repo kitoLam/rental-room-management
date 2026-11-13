@@ -11,8 +11,12 @@ export const uploadResponseSchema = z.object({
   width: z.number().nullish(),
   height: z.number().nullish(),
 })
+const uploadResponse = z.object({ secureUrl: z.url() })
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>
+export async function uploadToCloudinary(file: File): Promise<string> {
+  const body = new FormData()
+  body.append('file', file)
 
 /**
  * Tải file ảnh lên Cloudinary thông qua API backend `/api/v1/public/upload`.
@@ -40,4 +44,9 @@ export async function uploadToCloudinary(file: File, folder?: string): Promise<s
     throw new Error('Không nhận được URL ảnh sau khi tải lên Cloudinary.')
   }
   return finalUrl
+  const { secureUrl } = await request('tenant', '/api/v1/public/upload', uploadResponse, {
+    method: 'POST',
+    body,
+  })
+  return secureUrl
 }

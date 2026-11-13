@@ -237,20 +237,6 @@ export const viewingAppointmentPageSchema = z.object({
 })
 export type ViewingAppointmentInput = z.infer<typeof viewingAppointmentInputSchema>
 export type ViewingAppointment = z.infer<typeof viewingAppointmentSchema>
-const viewingNotificationSchema = z.object({
-  id: z.string().regex(/^[0-9a-f]{64}$/),
-  appointmentId: objectId,
-  kind: z.string(),
-  title: z.string(),
-  message: z.string(),
-  detailPath: z.string().regex(/^\/(user|manager)\/(appointments|contracts)(\/[0-9a-fA-F]{24})?$/),
-  createdAt: z.iso.datetime(),
-  readAt: z.iso.datetime().nullish(),
-})
-const viewingNotificationPageSchema = viewingAppointmentPageSchema.extend({
-  content: z.array(viewingNotificationSchema),
-})
-export type ViewingNotification = z.infer<typeof viewingNotificationSchema>
 export type ViewingAction = ViewingAppointment['allowedActions'][number]
 const actionVersion = { version: z.number().int().nonnegative() }
 const actionNote = z.string().trim().max(500).optional()
@@ -392,21 +378,6 @@ async function read<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {
 
 /** Does not alter the global auth session or fall back to FE mock data. */
 export const viewingDependenciesService = {
-  notifications: (read?: boolean, page = 1) => {
-    const params = new URLSearchParams({ page: String(page), size: '20' })
-    if (read !== undefined) params.set('read', String(read))
-    return readViewingNotifications(params)
-  },
-  readNotification: (id: string) => {
-    viewingNotificationSchema.shape.id.parse(id)
-    return read(`/api/v1/appointments/notifications/${id}/read`, viewingNotificationSchema, {
-      method: 'POST',
-    })
-  },
-  readAllNotifications: () =>
-    read('/api/v1/appointments/notifications/read-all', z.number().int().nonnegative(), {
-      method: 'POST',
-    }),
   context: () => read('/api/v1/appointments/context', viewingContextSchema),
   createAppointment: (input: ViewingAppointmentInput, idempotencyKey: string) =>
     read('/api/v1/appointments', viewingAppointmentSchema, {
@@ -500,10 +471,6 @@ export const viewingDependenciesService = {
       throw new ApiError('Kết quả máy chủ không khớp các phòng đã gửi. Tải lại để kiểm tra.', 502)
     return result
   },
-}
-
-function readViewingNotifications(params: URLSearchParams) {
-  return read(`/api/v1/appointments/notifications?${params}`, viewingNotificationPageSchema)
 }
 
 /** One user action, sequential bounded requests. Never rebase/retry an ambiguous write. */

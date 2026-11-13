@@ -12,6 +12,7 @@ import java.util.List;
 public record ContractResponse(
         String id,
         String roomId,
+        String roomName,
         String roomSlotId,
         List<String> roomSlotIds,
         String bookingId,
@@ -29,11 +30,6 @@ public record ContractResponse(
         String tenantIdNumber,
         String tenantAddress,
         String roomAddress,
-        BigDecimal electricityInitialReading,
-        BigDecimal waterInitialReading,
-        BigDecimal electricityRate,
-        BigDecimal waterRate,
-        BigDecimal parkingRate,
         Integer maxOccupants,
         List<ContractServiceSnapshot> services,
         Integer paymentDueDay,
@@ -55,6 +51,8 @@ public record ContractResponse(
         List<com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService> activeSlotServices,
         /** Hợp đồng đang hiệu lực và còn ≤ 60 ngày tới hạn (dùng cho cảnh báo "Sắp hết hạn"). */
         boolean expiringSoon,
+        String renewedFromContractId,
+        String renewedToContractId,
         Instant createdAt,
         Instant updatedAt
 ) {

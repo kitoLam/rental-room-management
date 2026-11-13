@@ -17,7 +17,7 @@ import { bookingService } from '@/services/guest-user'
 import { invalidateActivity } from '@/services/query-client'
 import { provider } from '@/services/config'
 import { formatVnd } from '@/lib/format'
-import { dateOnly, dateTime } from '@/lib/activity'
+import { bookingMoveInDate, dateOnly, dateTime } from '@/lib/activity'
 import { uuid } from '@/lib/validation'
 import type { PaymentScenario } from '@/interfaces/domain'
 
@@ -113,9 +113,16 @@ export default function PaymentPage() {
                 {b.branchName}
                 {b.slotLabel ? ` · ${b.slotLabel}` : ''}
               </p>
-              {b.hasRentalDates
+              {b.slotMoveInDates ? (
+                <ul className="mt-3 space-y-1 text-sm">
+                  {b.roomSlotIds.map((id, index) => {
+                    const date = b.slotMoveInDates?.[id]
+                    return <li key={id}>{b.slotLabels[index]} · {date ? dateOnly(date) : "Chưa có thông tin"}</li>
+                  })}
+                </ul>
+              ) : b.hasRentalDates
                 ? <p className="mt-3 text-sm">Thời hạn thuê: {dateOnly(b.startDate)} → {dateOnly(b.endDate)}</p>
-                : <p className="mt-3 text-sm">Ngày bắt đầu thuê dự kiến: <span className="font-bold">{dateOnly(b.startDate)}</span></p>}
+                : <p className="mt-3 text-sm">Ngày bắt đầu thuê dự kiến: <span className="font-bold">{bookingMoveInDate(b) ? dateOnly(bookingMoveInDate(b)!) : "Chưa có thông tin"}</span></p>}
               <div className="my-7 rounded-xl bg-primary-soft p-5">
                 <p className="text-xs text-primary">
                   KHOẢN GIỮ CHỖ

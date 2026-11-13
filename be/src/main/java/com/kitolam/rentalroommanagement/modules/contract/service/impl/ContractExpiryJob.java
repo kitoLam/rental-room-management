@@ -1,6 +1,7 @@
 package com.kitolam.rentalroommanagement.modules.contract.service.impl;
 
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractEvidenceHistoryEntry;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.contract.service.support.ContractExpirySupport;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.ArrayList;
 
 /**
  * Chuyển hợp đồng đang hiệu lực đã quá endDate sang EXPIRED. Hợp đồng đã được gia hạn
@@ -27,7 +29,7 @@ public class ContractExpiryJob {
     private final RoomSlotOccupancySupport occupancySupport;
     private final Clock clock;
 
-    @Scheduled(cron = "${contract.expiry.cron:0 5 0 * * *}", zone = "Asia/Ho_Chi_Minh")
+    @Scheduled(cron = "${contract.expiry.cron:0 * * * * *}", zone = "Asia/Ho_Chi_Minh")
     @Transactional
     public void expireContracts() {
         LocalDate today = LocalDate.ofInstant(clock.instant(), ContractExpirySupport.VIETNAM_ZONE);
@@ -40,6 +42,9 @@ public class ContractExpiryJob {
         int count = 0;
         for (Contract contract : contractRepository.findByStatusAndEndDateBeforeAndIsDeletedFalse(ContractStatus.ACTIVE, today)) {
             contract.setStatus(ContractStatus.EXPIRED);
+            if (contract.getEvidenceHistory() == null) contract.setEvidenceHistory(new ArrayList<>());
+            contract.getEvidenceHistory().add(new ContractEvidenceHistoryEntry(
+                    "CONTRACT_EXPIRED", clock.instant(), "Hệ thống tự động chuyển hợp đồng sang Hết hạn."));
             if (contract.getRenewedToContractId() == null) {
                 occupancySupport.endForContract(contract);
                 occupancySupport.markTenantsLeft(contract);

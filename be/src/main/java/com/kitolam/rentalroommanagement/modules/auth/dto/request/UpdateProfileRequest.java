@@ -16,9 +16,25 @@ public record UpdateProfileRequest(
 
         String dateOfBirth,
 
-        String gender
+        @Pattern(regexp = "^(MALE|FEMALE|OTHER)?$", message = "Giới tính không hợp lệ")
+        String gender,
+
+        @Size(min = 5, max = 255, message = "Địa chỉ thường trú phải từ 5 đến 255 ký tự")
+        String permanentAddress,
+
+        @Pattern(regexp = "^[0-9]{12}$", message = "Số CCCD phải gồm đúng 12 chữ số")
+        String cccdNumber,
+
+        String cccdIssueDate,
+
+        @Size(min = 2, max = 150, message = "Nơi cấp CCCD phải từ 2 đến 150 ký tự")
+        String cccdIssuePlace
 ) {
     public UpdateProfileRequest {
+        permanentAddress = optionalText(permanentAddress);
+        cccdNumber = optionalText(cccdNumber);
+        cccdIssueDate = optionalText(cccdIssueDate);
+        cccdIssuePlace = optionalText(cccdIssuePlace);
         fullName = fullName == null ? null : fullName.strip();
         if (phone != null) {
             phone = phone.replaceAll("\\s+", "").strip();
@@ -29,5 +45,14 @@ public record UpdateProfileRequest(
                 phone = null;
             }
         }
+    }
+
+    private static String optionalText(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    @Override
+    public String toString() {
+        return "UpdateProfileRequest[REDACTED]";
     }
 }

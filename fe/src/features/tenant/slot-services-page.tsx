@@ -10,7 +10,7 @@ import {
   type CatalogItem,
 } from '@/services/service-catalog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { AlertTriangle, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { TenantPage } from './components'
 
@@ -33,6 +33,7 @@ export function SlotServicesPage() {
   })
   const requests = useQuery({ queryKey: ['tenant', 'slot-requests'], queryFn: serviceCatalogApi.myRequests })
   const [adding, setAdding] = useState<CatalogItem | null>(null)
+  const [cancelling, setCancelling] = useState<{ id: string; name: string } | null>(null)
 
   const refresh = () =>
     Promise.all([
@@ -42,7 +43,10 @@ export function SlotServicesPage() {
   const cancelUse = useMutation({
     mutationFn: (slotServiceId: string) =>
       serviceCatalogApi.createRequest({ contractId: contract!.id, slotServiceId, action: 'CANCEL' }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      setCancelling(null)
+      void refresh()
+    },
   })
   const withdraw = useMutation({ mutationFn: serviceCatalogApi.cancelRequest, onSuccess: refresh })
 
@@ -74,7 +78,7 @@ export function SlotServicesPage() {
         empty={active.length === 0}
         emptyMessage="Bạn chưa có hợp đồng đang hiệu lực. Dịch vụ tự chọn dùng được sau khi hợp đồng được duyệt."
       >
-        <InlineError error={cancelUse.error || withdraw.error} />
+        <InlineError error={withdraw.error} />
         <Panel>
           <h2 className="mb-4 font-bold">Đang sử dụng</h2>
           {inUse.length === 0 && <p className="text-sm text-muted-foreground">Chưa dùng dịch vụ tự chọn nào.</p>}
@@ -84,8 +88,7 @@ export function SlotServicesPage() {
                 <div>
                   <p className="font-bold">{s.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {s.quantity} × {formatVnd(s.unitPrice ?? 0)} / {s.unit} · từ {s.startDate}
-                    {s.endDate && ` đến hết ${s.endDate}`}
+                    {s.quantity} × {formatVnd(s.unitPrice ?? 0)} / {s.unit}
                   </p>
                 </div>
                 {pendingIds.has(s.slotServiceId) ? (
@@ -95,10 +98,7 @@ export function SlotServicesPage() {
                     <Button
                       variant="outline"
                       className="text-danger"
-                      disabled={cancelUse.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Gửi yêu cầu huỷ “${s.name}”?`)) cancelUse.mutate(s.slotServiceId)
-                      }}
+                      onClick={() => setCancelling({ id: s.slotServiceId, name: s.name || 'dịch vụ' })}
                     >
                       Yêu cầu huỷ
                     </Button>
@@ -154,7 +154,6 @@ export function SlotServicesPage() {
                       {r.action === 'ADD' && ` × ${r.quantity}`}
                     </p>
                     {r.rejectReason && <p className="text-xs text-danger">Lý do: {r.rejectReason}</p>}
-                    {r.effectiveDate && <p className="text-xs text-muted-foreground">Hiệu lực từ {r.effectiveDate}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge tone={requestStatusTone[r.status]}>{requestStatusLabel[r.status]}</StatusBadge>
@@ -169,6 +168,44 @@ export function SlotServicesPage() {
           </ul>
         </Panel>
       </QueryState>
+      <Modal
+        title="Huỷ dịch vụ"
+        description={cancelling ? `Gửi yêu cầu huỷ “${cancelling.name}” tới quản lý?` : undefined}
+        open={!!cancelling}
+        onOpenChange={(o) => {
+          if (!o && !cancelUse.isPending) {
+            setCancelling(null)
+            cancelUse.reset()
+          }
+        }}
+      >
+        <div className="grid gap-5">
+          <div className="flex gap-3 rounded-lg bg-danger/10 p-4 text-sm">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-danger" />
+            <p>Dịch vụ vẫn dùng và tính phí bình thường cho đến khi quản lý duyệt yêu cầu huỷ.</p>
+          </div>
+          <InlineError error={cancelUse.error} />
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              disabled={cancelUse.isPending}
+              onClick={() => {
+                setCancelling(null)
+                cancelUse.reset()
+              }}
+            >
+              Giữ dịch vụ
+            </Button>
+            <Button
+              className="bg-danger text-white hover:bg-danger/90"
+              loading={cancelUse.isPending}
+              onClick={() => cancelling && cancelUse.mutate(cancelling.id)}
+            >
+              Gửi yêu cầu huỷ
+            </Button>
+          </div>
+        </div>
+      </Modal>
       {adding && contract && (
         <AddModal
           item={adding}

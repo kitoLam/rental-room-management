@@ -256,9 +256,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       {
         path: 'notifications/viewing',
-        lazy: async () => ({
-          Component: (await import('@/features/leasing/viewing-notifications-page')).default,
-        }),
+        element: <Navigate to="/notifications" replace />,
       },
       {
         path: 'preview',
@@ -585,10 +583,9 @@ export const router = createBrowserRouter([
                 }),
               },
               {
+                // "Phòng của tôi" was removed; old links land on the overview.
                 path: 'my-room',
-                lazy: async () => ({
-                  Component: (await import('@/features/tenant/my-room-page')).MyRoomPage,
-                }),
+                element: <Navigate to="/tenant/dashboard" replace />,
               },
               {
                 path: 'my-room/invoices/:invoiceId',
@@ -625,8 +622,8 @@ export const router = createBrowserRouter([
               {
                 path: 'invoices/:invoiceId',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/invoice-detail-page'))
-                    .InvoiceDetailPage,
+                  Component: (await import('@/features/tenant/monthly-invoice-detail-page'))
+                    .MonthlyInvoiceDetailPage,
                 }),
               },
               {
