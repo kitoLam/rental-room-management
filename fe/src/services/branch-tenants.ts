@@ -92,6 +92,24 @@ export const latePaymentHistorySchema = z.object({
 
 export type LatePaymentHistoryItem = z.infer<typeof latePaymentHistorySchema>
 
+export const debtPeriodHistorySchema = z.object({
+  invoiceId: z.string().nullable().optional(),
+  invoiceNumber: z.string().nullable().optional(),
+  period: z.string(),
+  dueDate: z.string().nullable().optional(),
+  issueDate: z.string().nullable().optional(),
+  totalAmount: z.coerce.number().optional().default(0),
+  paidAmount: z.coerce.number().optional().default(0),
+  remainingAmount: z.coerce.number().optional().default(0),
+  status: z.string().nullable().optional().default('UNPAID'),
+  overdueDays: z.number().optional().default(0),
+  lateDays: z.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  lateStatus: z.string().nullable().optional(),
+})
+
+export type DebtPeriodHistoryItem = z.infer<typeof debtPeriodHistorySchema>
+
 export const tenantDebtItemSchema = z.object({
   id: z.string(),
   contractId: z.string().nullable().optional(),
@@ -133,6 +151,7 @@ export const tenantDebtItemSchema = z.object({
   recordedLateDays: z.number().optional().default(0),
   reminderCount: z.number().optional().default(0),
   latePaymentHistory: z.array(latePaymentHistorySchema).optional().default([]),
+  periodHistory: z.array(debtPeriodHistorySchema).optional().default([]),
 })
 
 export type TenantDebtItem = z.infer<typeof tenantDebtItemSchema>
@@ -573,6 +592,36 @@ export const branchTenantsService = {
           recordedLateDays: 6,
           reminderCount: 1,
           latePaymentHistory: [],
+          periodHistory: [
+            {
+              invoiceId: '00000000-0000-4000-8000-000000009001',
+              invoiceNumber: 'INV-202611-001',
+              period: '2026-11',
+              dueDate: '2026-11-05',
+              issueDate: '2026-11-01',
+              totalAmount: 4020000,
+              paidAmount: 0,
+              remainingAmount: 4020000,
+              status: 'OVERDUE',
+              overdueDays: 6,
+              lateDays: 6,
+              reminderCount: 1,
+            },
+            {
+              invoiceId: '00000000-0000-4000-8000-000000009000',
+              invoiceNumber: 'INV-202610-001',
+              period: '2026-10',
+              dueDate: '2026-10-05',
+              issueDate: '2026-10-01',
+              totalAmount: 3980000,
+              paidAmount: 3980000,
+              remainingAmount: 0,
+              status: 'PAID',
+              overdueDays: 0,
+              lateDays: 0,
+              reminderCount: 0,
+            },
+          ],
         },
       ]
       const filtered = mockDebts.filter((d) => {
@@ -688,6 +737,7 @@ export const branchTenantsService = {
         recordedLateDays: 0,
         reminderCount: 0,
         latePaymentHistory: [],
+        periodHistory: [],
       }
     }
     return request(

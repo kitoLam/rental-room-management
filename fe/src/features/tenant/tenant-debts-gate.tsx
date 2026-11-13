@@ -1,5 +1,4 @@
 import { Container } from '@/components/common/container'
-import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
 import { TenantPage } from '@/features/tenant/components'
 import { useTenant } from '@/features/tenant/context'
@@ -8,18 +7,16 @@ import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import {
   branchTenantsService,
-  computeFirstMonthProration,
   type TenantDebtItem,
 } from '@/services/branch-tenants'
-import { queryClient } from '@/services/query-client'
 import { tenantApi } from '@/services/tenant'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
-  CalendarClock,
   BellRing,
+  CalendarClock,
   CheckCircle2,
-  CreditCard,
+  Clock,
   Droplets,
   FileText,
   History,
@@ -145,23 +142,9 @@ export default function TenantDebtsPage() {
     return raw[0] ?? null
   }, [debtsQuery.data, activeTenancy, tenancies])
 
-  const firstMonthProration = useMemo(
-    () => (currentDebt ? computeFirstMonthProration(currentDebt) : null),
-    [currentDebt],
-  )
-
-  const lateHistory = currentDebt?.latePaymentHistory ?? []
-  const currentOpen = Boolean(currentDebt && currentDebt.overdue && currentDebt.remainingAmount > 0)
-  const totalLateDays = lateHistory.reduce((sum, r) => sum + r.lateDays, 0) + (currentOpen ? currentDebt!.overdueDays : 0)
-  const totalReminders = lateHistory.reduce((sum, r) => sum + r.reminderCount, 0) + (currentDebt?.reminderCount ?? 0)
-
-  const payMutation = useMutation({
-    mutationFn: (debtId: string) => branchTenantsService.payDebt(debtId, 'tenant'),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['tenant-own-debts'] })
-      await queryClient.invalidateQueries({ queryKey: ['manager-tenant-debts'] })
-    },
-  })
+  const periodRows = currentDebt?.periodHistory ?? []
+  const totalLateDays = periodRows.reduce((sum, r) => sum + r.lateDays, 0)
+  const totalReminders = periodRows.reduce((sum, r) => sum + r.reminderCount, 0)
 
   const roomLabel = currentDebt?.roomNumber || activeTenancy?.roomName || 'đang thuê'
   const branchLabel = currentDebt?.branchName || activeTenancy?.branchName || 'Cơ sở'
@@ -192,7 +175,7 @@ export default function TenantDebtsPage() {
           Không tải được chi tiết công nợ:{' '}
           {debtsQuery.error instanceof Error ? debtsQuery.error.message : 'Lỗi không xác định'}
         </div>
-      ) : !currentDebt || !firstMonthProration ? (
+      ) : !currentDebt ? (
         <div className="rounded-2xl border border-border bg-surface py-10 text-center text-sm text-muted-foreground">
           Hiện tại phòng {roomLabel} không có khoản công nợ nào.
         </div>
@@ -242,17 +225,6 @@ export default function TenantDebtsPage() {
                   {formatVnd(currentDebt.remainingAmount)}
                 </p>
               </div>
-              {currentDebt.remainingAmount > 0 && (
-                <Button
-                  type="button"
-                  loading={payMutation.isPending && payMutation.variables === currentDebt.id}
-                  onClick={() => payMutation.mutate(currentDebt.id)}
-                  className="bg-danger text-white hover:bg-danger/90"
-                >
-                  <CreditCard className="size-4" />
-                  Trả ngay ({formatVnd(currentDebt.remainingAmount)})
-                </Button>
-              )}
             </div>
           </div>
 
@@ -272,34 +244,6 @@ export default function TenantDebtsPage() {
                     </span>
                     <span className="font-bold">{formatVnd(currentDebt.roomRentAmount)}</span>
                   </div>
-                  {firstMonthProration.isFirstMonth && (
-                    <div className="rounded-xl bg-background p-3 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span>Giá phòng tiêu chuẩn (30 ngày · 100%):</span>
-                        <span className="font-bold text-foreground">
-                          {formatVnd(firstMonthProration.baseRoomRent)}
-                        </span>
-                      </div>
-                      {firstMonthProration.unoccupiedDays > 0 && (
-                        <div className="flex items-center justify-between text-danger">
-                          <span>
-                            Trừ ngày chưa ở ({firstMonthProration.unoccupiedDays}/30 ngày · -
-                            {firstMonthProration.deductedPercent}%):
-                          </span>
-                          <span className="font-bold">
-                            -{formatVnd(firstMonthProration.deductedAmount)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between border-t border-border pt-1.5 font-bold text-primary">
-                        <span>
-                          Tiền phòng tháng đầu ({firstMonthProration.stayedDays}/30 ngày ·{' '}
-                          {firstMonthProration.stayedPercent}%):
-                        </span>
-                        <span>{formatVnd(currentDebt.roomRentAmount)}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="py-2.5 space-y-2">
@@ -309,27 +253,21 @@ export default function TenantDebtsPage() {
                       {formatVnd(currentDebt.registeredServicesAmount)}
                     </span>
                   </div>
-                  {firstMonthProration.isFirstMonth ? (
-                    <p className="text-xs italic text-muted-foreground">
-                      Tháng đầu mới nhận phòng chỉ tính tiền phòng theo số ngày hiệu lực hợp đồng.
-                    </p>
-                  ) : (
-                    currentDebt.registeredServices.length > 0 && (
-                      <div className="rounded-xl bg-background p-2.5 space-y-1.5 text-xs">
-                        {currentDebt.registeredServices.map((svc, idx) => (
-                          <div
-                            key={`${svc.name}-${idx}`}
-                            className="flex items-center justify-between"
-                          >
-                            <span className="inline-flex items-center gap-1.5 text-foreground">
-                              <Sparkles className="size-3 text-primary" />
-                              {svc.name} ({svc.quantity} {svc.unit})
-                            </span>
-                            <span className="font-bold">{formatVnd(svc.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
+                  {currentDebt.registeredServices.length > 0 && (
+                    <div className="rounded-xl bg-background p-2.5 space-y-1.5 text-xs">
+                      {currentDebt.registeredServices.map((svc, idx) => (
+                        <div
+                          key={`${svc.name}-${idx}`}
+                          className="flex items-center justify-between"
+                        >
+                          <span className="inline-flex items-center gap-1.5 text-foreground">
+                            <Sparkles className="size-3 text-primary" />
+                            {svc.name} ({svc.quantity} {svc.unit})
+                          </span>
+                          <span className="font-bold">{formatVnd(svc.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 
@@ -340,27 +278,20 @@ export default function TenantDebtsPage() {
                       {formatVnd(currentDebt.unpaidUtilityAmount)}
                     </span>
                   </div>
-                  {firstMonthProration.isFirstMonth ? (
-                    <div className="rounded-xl bg-background p-2.5 text-xs text-muted-foreground">
-                      Tháng đầu dọn vào ở <strong className="text-foreground">không tính điện nước</strong>.
-                      Chi phí điện & nước sinh hoạt sẽ được chốt chỉ số và tính vào kỳ tháng sau.
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-background p-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        <Zap className="size-3.5 text-warning" /> Tiền điện:
+                      </span>
+                      <span className="font-bold">{formatVnd(currentDebt.electricityAmount)}</span>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-background p-2.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Zap className="size-3.5 text-warning" /> Tiền điện:
-                        </span>
-                        <span className="font-bold">{formatVnd(currentDebt.electricityAmount)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Droplets className="size-3.5 text-info" /> Tiền nước:
-                        </span>
-                        <span className="font-bold">{formatVnd(currentDebt.waterAmount)}</span>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        <Droplets className="size-3.5 text-info" /> Tiền nước:
+                      </span>
+                      <span className="font-bold">{formatVnd(currentDebt.waterAmount)}</span>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -411,9 +342,7 @@ export default function TenantDebtsPage() {
                   <div>
                     <dt className="text-muted-foreground">Tiền đặt cọc</dt>
                     <dd className="font-bold">
-                      {formatVnd(
-                        currentDebt.contractDepositAmount ?? firstMonthProration.baseRoomRent,
-                      )}
+                      {formatVnd(currentDebt.contractDepositAmount ?? currentDebt.roomRentAmount)}
                     </dd>
                   </div>
                 </dl>
@@ -421,21 +350,19 @@ export default function TenantDebtsPage() {
             </div>
           </div>
 
-          {/* Lịch sử trễ hạn thanh toán theo từng kỳ của hợp đồng */}
+          {/* Lịch sử công nợ theo từng kỳ của hợp đồng */}
           <section className="rounded-2xl border border-border bg-surface p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-base font-bold">
                   <History className="size-4 text-primary" />
-                  Lịch sử trễ hạn thanh toán ({currentDebt.contractNumber || 'Đang thuê'})
+                  Lịch sử công nợ theo hợp đồng ({currentDebt.contractNumber || 'Đang thuê'})
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Thời hạn hợp đồng: <strong className="text-foreground">{contractStartLabel}</strong>{' '}
-                  → <strong className="text-foreground">{contractEndLabel}</strong> · Bạn đã{' '}
-                  {currentOpen ? 'đang' : 'từng'} trễ hẹn thanh toán {totalLateDays} ngày.
+                  → <strong className="text-foreground">{contractEndLabel}</strong> ({periodRows.length} kỳ)
                 </p>
               </div>
-
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 font-bold text-danger">
                   <AlertTriangle className="size-3.5" />
@@ -448,9 +375,9 @@ export default function TenantDebtsPage() {
               </div>
             </div>
 
-            {!currentOpen && lateHistory.length === 0 ? (
-              <p className="rounded-xl bg-success/10 px-3 py-2 text-xs font-medium text-success">
-                Bạn chưa có lần trễ hạn thanh toán nào. Hãy giữ đúng hạn để tránh bị nhắc nợ.
+            {periodRows.length === 0 ? (
+              <p className="rounded-xl bg-surface px-3 py-2 text-xs text-muted-foreground">
+                Chưa có kỳ hoá đơn nào của hợp đồng này.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -459,73 +386,80 @@ export default function TenantDebtsPage() {
                     <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="whitespace-nowrap pb-3 pr-4">Kỳ</th>
                       <th className="whitespace-nowrap pb-3 pr-4">Hạn trả</th>
-                      <th className="whitespace-nowrap pb-3 pr-4">Ngày trễ</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Tổng tiền</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Đã trả</th>
                       <th className="whitespace-nowrap pb-3 pr-4">Còn nợ</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Trễ</th>
                       <th className="whitespace-nowrap pb-3 pr-4">Số lần nhắc</th>
                       <th className="whitespace-nowrap pb-3 pr-4">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {currentOpen && (
-                      <tr className="bg-danger/5">
-                        <td className="whitespace-nowrap py-3 pr-4 font-bold">
-                          Kỳ {currentDebt.period}
-                          <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[11px] font-bold text-primary">
-                            Kỳ hiện tại
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4">{dateOnly(currentDebt.dueDate)}</td>
-                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
-                          {currentDebt.overdueDays} ngày
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
-                          {formatVnd(currentDebt.remainingAmount)}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4">{currentDebt.reminderCount ?? 0}</td>
-                        <td className="whitespace-nowrap py-3 pr-4">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 text-xs font-bold text-danger">
-                            <AlertTriangle className="size-3.5" />
-                            Chưa tất toán
-                          </span>
-                        </td>
-                      </tr>
-                    )}
-                    {lateHistory.map((row) => (
-                      <tr key={row.id}>
-                        <td className="whitespace-nowrap py-3 pr-4 font-medium">Kỳ {row.period}</td>
-                        <td className="whitespace-nowrap py-3 pr-4">
-                          {row.dueDate ? dateOnly(row.dueDate) : '—'}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
-                          {row.lateDays} ngày
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4">
-                          {formatVnd(row.remainingAmount)}
-                        </td>
-                        <td className="whitespace-nowrap py-3 pr-4">{row.reminderCount}</td>
-                        <td className="whitespace-nowrap py-3 pr-4">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                              row.status === 'SETTLED'
-                                ? 'bg-success/15 text-success'
-                                : 'bg-danger/15 text-danger'
+                    {periodRows.map((row) => {
+                      const isCurrent = row.period === currentDebt.period && row.invoiceId === currentDebt.id
+                      const paid = row.status === 'PAID' || row.remainingAmount === 0
+                      const days = Math.max(row.lateDays, row.overdueDays)
+                      return (
+                        <tr key={row.invoiceId || row.period} className={isCurrent ? 'bg-primary-soft/25' : ''}>
+                          <td className="whitespace-nowrap py-3 pr-4 font-bold">
+                            Kỳ {row.period}
+                            {isCurrent && (
+                              <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[11px] font-bold text-primary">
+                                Kỳ hiện tại
+                              </span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap py-3 pr-4">
+                            {row.dueDate ? dateOnly(row.dueDate) : '—'}
+                          </td>
+                          <td className="whitespace-nowrap py-3 pr-4">{formatVnd(row.totalAmount)}</td>
+                          <td className="whitespace-nowrap py-3 pr-4 text-success">{formatVnd(row.paidAmount)}</td>
+                          <td
+                            className={`whitespace-nowrap py-3 pr-4 font-bold ${
+                              row.remainingAmount > 0 ? 'text-danger' : 'text-muted-foreground'
                             }`}
                           >
-                            {row.status === 'SETTLED' ? (
-                              <>
-                                <CheckCircle2 className="size-3.5" />
-                                Đã tất toán
-                              </>
+                            {formatVnd(row.remainingAmount)}
+                          </td>
+                          <td className="whitespace-nowrap py-3 pr-4">
+                            {days > 0 ? (
+                              <span className="font-bold text-danger">{days} ngày</span>
                             ) : (
-                              <>
-                                <AlertTriangle className="size-3.5" />
-                                Chưa tất toán
-                              </>
+                              <span className="text-muted-foreground">—</span>
                             )}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="whitespace-nowrap py-3 pr-4">{row.reminderCount}</td>
+                          <td className="whitespace-nowrap py-3 pr-4">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                paid
+                                  ? 'bg-success/15 text-success'
+                                  : days > 0
+                                    ? 'bg-danger/15 text-danger'
+                                    : 'bg-warning/15 text-warning'
+                              }`}
+                            >
+                              {paid ? (
+                                <>
+                                  <CheckCircle2 className="size-3.5" />
+                                  Đã trả đủ
+                                </>
+                              ) : days > 0 ? (
+                                <>
+                                  <AlertTriangle className="size-3.5" />
+                                  Trễ hạn
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="size-3.5" />
+                                  Chưa trả
+                                </>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

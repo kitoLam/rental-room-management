@@ -3,13 +3,8 @@ import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
 import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
-import {
-  branchTenantsService,
-  computeFirstMonthProration,
-  type TenantDebtItem,
-} from '@/services/branch-tenants'
-import { queryClient } from '@/services/query-client'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { branchTenantsService, type TenantDebtItem } from '@/services/branch-tenants'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   BellRing,
@@ -19,7 +14,6 @@ import {
   FileText,
   History,
   Home,
-  RotateCcw,
   Search,
   Sparkles,
   UserRound,
@@ -29,36 +23,42 @@ import { useMemo, useState } from 'react'
 import { ManagerPage } from './components'
 import { useManager } from './context'
 
-const LATE_STATUS_LABEL: Record<string, string> = {
-  OPEN: 'Chưa tất toán',
-  SETTLED: 'Đã tất toán',
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  PAID: 'Đã trả đủ',
+  PARTIALLY_PAID: 'Trả một phần',
+  OVERDUE: 'Trễ hạn',
+  ISSUED: 'Chưa trả',
 }
 
-/** Lịch sử trễ hạn từng kỳ do job nhắc nợ ghi lại (số ngày trễ, số lần đã nhắc, trạng thái). */
-function LatePaymentHistorySection({ item }: { item: TenantDebtItem }) {
-  const rows = item.latePaymentHistory ?? []
-  const currentOpen = item.overdue && item.remainingAmount > 0
-  const totalLateDays = rows.reduce((sum, r) => sum + r.lateDays, 0) + (currentOpen ? item.overdueDays : 0)
-  const totalReminders = rows.reduce((sum, r) => sum + r.reminderCount, 0) + (item.reminderCount ?? 0)
+/** Lịch sử các kỳ có công nợ của hợp đồng theo thời gian (mới nhất trước). */
+function DebtPeriodHistorySection({ item }: { item: TenantDebtItem }) {
+  const rows = item.periodHistory ?? []
+  if (rows.length === 0) return null
 
-  if (rows.length === 0 && !currentOpen) return null
+  const totalRemaining = rows.reduce((sum, r) => sum + r.remainingAmount, 0)
+  const totalLateDays = rows.reduce((sum, r) => sum + r.lateDays, 0)
+  const totalReminders = rows.reduce((sum, r) => sum + r.reminderCount, 0)
 
   return (
     <div className="rounded-xl border border-border bg-surface p-3.5 space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
           <History className="size-3.5" />
-          4. Lịch sử trễ hạn thanh toán
+          4. Lịch sử công nợ theo hợp đồng ({rows.length} kỳ)
         </h3>
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 font-bold text-danger">
-            <AlertTriangle className="size-3" />
-            Tổng {totalLateDays} ngày trễ
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 font-bold text-warning">
-            <BellRing className="size-3" />
-            Đã nhắc {totalReminders} lần
-          </span>
+          {totalLateDays > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 font-bold text-danger">
+              <AlertTriangle className="size-3" />
+              Tổng {totalLateDays} ngày trễ
+            </span>
+          )}
+          {totalReminders > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 font-bold text-warning">
+              <BellRing className="size-3" />
+              Đã nhắc {totalReminders} lần
+            </span>
+          )}
         </div>
       </div>
 
@@ -68,52 +68,80 @@ function LatePaymentHistorySection({ item }: { item: TenantDebtItem }) {
             <tr className="border-b border-border uppercase tracking-wider text-muted-foreground">
               <th className="whitespace-nowrap py-2 pr-3">Kỳ</th>
               <th className="whitespace-nowrap py-2 pr-3">Hạn trả</th>
+              <th className="whitespace-nowrap py-2 pr-3">Tổng tiền</th>
+              <th className="whitespace-nowrap py-2 pr-3">Đã trả</th>
+              <th className="whitespace-nowrap py-2 pr-3">Còn nợ</th>
               <th className="whitespace-nowrap py-2 pr-3">Trễ</th>
               <th className="whitespace-nowrap py-2 pr-3">Số lần nhắc</th>
               <th className="whitespace-nowrap py-2 pr-3">Trạng thái</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {currentOpen && (
-              <tr className="bg-danger/5">
-                <td className="whitespace-nowrap py-2 pr-3 font-bold">
-                  {item.period}
-                  <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                    Kỳ hiện tại
-                  </span>
-                </td>
-                <td className="whitespace-nowrap py-2 pr-3">{dateOnly(item.dueDate)}</td>
-                <td className="whitespace-nowrap py-2 pr-3 font-bold text-danger">
-                  {item.overdueDays} ngày
-                </td>
-                <td className="whitespace-nowrap py-2 pr-3">{item.reminderCount ?? 0}</td>
-                <td className="whitespace-nowrap py-2 pr-3">
-                  <span className="rounded-full bg-danger/15 px-2 py-0.5 font-bold text-danger">
-                    Chưa tất toán
-                  </span>
-                </td>
-              </tr>
-            )}
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td className="whitespace-nowrap py-2 pr-3 font-medium">{row.period}</td>
-                <td className="whitespace-nowrap py-2 pr-3">{row.dueDate ? dateOnly(row.dueDate) : '—'}</td>
-                <td className="whitespace-nowrap py-2 pr-3 font-bold text-danger">{row.lateDays} ngày</td>
-                <td className="whitespace-nowrap py-2 pr-3">{row.reminderCount}</td>
-                <td className="whitespace-nowrap py-2 pr-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 font-bold ${
-                      row.status === 'SETTLED'
-                        ? 'bg-success/15 text-success'
-                        : 'bg-danger/15 text-danger'
+            {rows.map((row) => {
+              const isCurrent = row.period === item.period && row.invoiceId === item.id
+              const paid = row.status === 'PAID' || row.remainingAmount === 0
+              return (
+                <tr key={row.invoiceId ?? row.period} className={isCurrent ? 'bg-primary-soft/25' : ''}>
+                  <td className="whitespace-nowrap py-2 pr-3 font-bold">
+                    {row.period}
+                    {isCurrent && (
+                      <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        Kỳ hiện tại
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3">{row.dueDate ? dateOnly(row.dueDate) : '—'}</td>
+                  <td className="whitespace-nowrap py-2 pr-3">{formatVnd(row.totalAmount)}</td>
+                  <td className="whitespace-nowrap py-2 pr-3 text-success">{formatVnd(row.paidAmount)}</td>
+                  <td
+                    className={`whitespace-nowrap py-2 pr-3 font-bold ${
+                      row.remainingAmount > 0 ? 'text-danger' : 'text-muted-foreground'
                     }`}
                   >
-                    {LATE_STATUS_LABEL[row.status] ?? row.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                    {formatVnd(row.remainingAmount)}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3">
+                    {row.lateDays > 0 || row.overdueDays > 0 ? (
+                      <span className="font-bold text-danger">
+                        {Math.max(row.lateDays, row.overdueDays)} ngày
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap py-2 pr-3">{row.reminderCount}</td>
+                  <td className="whitespace-nowrap py-2 pr-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-bold ${
+                        paid
+                          ? 'bg-success/15 text-success'
+                          : row.overdueDays > 0
+                            ? 'bg-danger/15 text-danger'
+                            : 'bg-warning/15 text-warning'
+                      }`}
+                    >
+                      {paid
+                        ? 'Đã trả đủ'
+                        : row.overdueDays > 0
+                          ? 'Trễ hạn'
+                          : (INVOICE_STATUS_LABEL[row.status ?? ''] ?? 'Chưa trả')}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
+          {totalRemaining > 0 && (
+            <tfoot>
+              <tr className="border-t border-border font-bold">
+                <td className="py-2 pr-3" colSpan={4}>
+                  Tổng còn nợ ({rows.length} kỳ)
+                </td>
+                <td className="py-2 pr-3 text-danger">{formatVnd(totalRemaining)}</td>
+                <td className="py-2 pr-3" colSpan={3} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -143,22 +171,6 @@ export function ManagerDebts() {
         },
         feature,
       ),
-  })
-
-  const payMutation = useMutation({
-    mutationFn: (debtId: string) => branchTenantsService.payDebt(debtId, feature),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['manager-tenant-debts'] })
-      await queryClient.invalidateQueries({ queryKey: ['tenant-own-debts'] })
-    },
-  })
-
-  const unpayMutation = useMutation({
-    mutationFn: (debtId: string) => branchTenantsService.unpayDebt(debtId, feature),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['manager-tenant-debts'] })
-      await queryClient.invalidateQueries({ queryKey: ['tenant-own-debts'] })
-    },
   })
 
   const items = useMemo(() => debtsQuery.data?.content ?? [], [debtsQuery.data])
@@ -454,127 +466,81 @@ export function ManagerDebts() {
             {/* Bố cục 2 cột ngang để không phải cuộn dọc */}
             <div className="grid gap-3.5 lg:grid-cols-2">
               {/* Cột trái: Bóc tách chi phí công nợ */}
-              {(() => {
-                const proration = computeFirstMonthProration(selectedItem)
-                return (
-                  <div className="rounded-xl border border-border bg-surface p-3.5 space-y-2.5">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-primary">
-                      1. Bóc tách công nợ kỳ {selectedItem.period}
-                    </h3>
+              <div className="rounded-xl border border-border bg-surface p-3.5 space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-primary">
+                  1. Bóc tách công nợ kỳ {selectedItem.period}
+                </h3>
 
-                    <div className="divide-y divide-border text-xs">
-                      {/* Chi phí phòng */}
-                      <div className="py-2 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-foreground">
-                            Chi phí phòng ({selectedItem.roomNumber})
-                          </span>
-                          <span className="text-sm font-bold">
-                            {formatVnd(selectedItem.roomRentAmount)}
-                          </span>
-                        </div>
-                        {proration.isFirstMonth && (
-                          <div className="rounded-lg bg-background px-2.5 py-2 space-y-1">
-                            <div className="flex items-center justify-between text-muted-foreground">
-                              <span>Giá phòng tiêu chuẩn (30 ngày · 100%)</span>
-                              <span className="font-bold text-foreground">
-                                {formatVnd(proration.baseRoomRent)}
-                              </span>
-                            </div>
-                            {proration.unoccupiedDays > 0 && (
-                              <div className="flex items-center justify-between text-danger">
-                                <span>
-                                  Trừ {proration.unoccupiedDays}/30 ngày chưa ở (-
-                                  {proration.deductedPercent}%)
-                                </span>
-                                <span className="font-bold">
-                                  -{formatVnd(proration.deductedAmount)}
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between text-primary font-bold">
-                              <span>
-                                Thực ở tháng đầu ({proration.stayedDays}/30 ngày ·{' '}
-                                {proration.stayedPercent}%)
-                              </span>
-                              <span>{formatVnd(selectedItem.roomRentAmount)}</span>
-                            </div>
+                <div className="divide-y divide-border text-xs">
+                  {/* Chi phí phòng */}
+                  <div className="py-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-foreground">
+                        Chi phí phòng ({selectedItem.roomNumber})
+                      </span>
+                      <span className="text-sm font-bold">
+                        {formatVnd(selectedItem.roomRentAmount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dịch vụ đã đăng ký */}
+                  <div className="py-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-foreground">Dịch vụ đã đăng ký</span>
+                      <span className="text-sm font-bold">
+                        {formatVnd(selectedItem.registeredServicesAmount)}
+                      </span>
+                    </div>
+                    {selectedItem.registeredServices.length > 0 && (
+                      <div className="rounded-lg bg-background px-2.5 py-2 space-y-1">
+                        {selectedItem.registeredServices.map((svc, idx) => (
+                          <div
+                            key={`${svc.name}-${idx}`}
+                            className="flex items-center justify-between text-muted-foreground"
+                          >
+                            <span className="inline-flex items-center gap-1.5 text-foreground">
+                              <Sparkles className="size-3 text-primary" />
+                              {svc.name} ({svc.quantity} {svc.unit})
+                            </span>
+                            <span className="font-bold text-foreground">
+                              {formatVnd(svc.amount)}
+                            </span>
                           </div>
-                        )}
+                        ))}
                       </div>
+                    )}
+                  </div>
 
-                      {/* Dịch vụ đã đăng ký */}
-                      <div className="py-2 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-foreground">Dịch vụ đã đăng ký</span>
-                          <span className="text-sm font-bold">
-                            {formatVnd(selectedItem.registeredServicesAmount)}
-                          </span>
-                        </div>
-                        {proration.isFirstMonth ? (
-                          <p className="text-[11px] italic text-muted-foreground">
-                            Tháng đầu dọn vào ở chỉ tính tiền phòng theo ngày hiệu lực hợp đồng.
-                          </p>
-                        ) : (
-                          selectedItem.registeredServices.length > 0 && (
-                            <div className="rounded-lg bg-background px-2.5 py-2 space-y-1">
-                              {selectedItem.registeredServices.map((svc, idx) => (
-                                <div
-                                  key={`${svc.name}-${idx}`}
-                                  className="flex items-center justify-between text-muted-foreground"
-                                >
-                                  <span className="inline-flex items-center gap-1.5 text-foreground">
-                                    <Sparkles className="size-3 text-primary" />
-                                    {svc.name} ({svc.quantity} {svc.unit})
-                                  </span>
-                                  <span className="font-bold text-foreground">
-                                    {formatVnd(svc.amount)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )
-                        )}
+                  {/* Điện & nước */}
+                  <div className="pt-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-foreground">Điện & nước chưa trả</span>
+                      <span className="text-sm font-bold text-warning">
+                        {formatVnd(selectedItem.unpaidUtilityAmount)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 rounded-lg bg-background px-2.5 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Zap className="size-3 text-warning" /> Điện:
+                        </span>
+                        <span className="font-bold">
+                          {formatVnd(selectedItem.electricityAmount)}
+                        </span>
                       </div>
-
-                      {/* Tổng tiền điện nước chưa trả */}
-                      <div className="pt-2 space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-foreground">Điện & nước chưa trả</span>
-                          <span className="text-sm font-bold text-warning">
-                            {formatVnd(selectedItem.unpaidUtilityAmount)}
-                          </span>
-                        </div>
-                        {proration.isFirstMonth ? (
-                          <p className="rounded-lg bg-background px-2.5 py-1.5 text-[11px] italic text-muted-foreground">
-                            Tháng đầu mới nhận phòng chưa tính điện nước (sẽ chốt và tính vào kỳ
-                            tháng sau).
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-2 gap-2 rounded-lg bg-background px-2.5 py-2">
-                            <div className="flex items-center justify-between">
-                              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                <Zap className="size-3 text-warning" /> Điện:
-                              </span>
-                              <span className="font-bold">
-                                {formatVnd(selectedItem.electricityAmount)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                <Droplets className="size-3 text-info" /> Nước:
-                              </span>
-                              <span className="font-bold">
-                                {formatVnd(selectedItem.waterAmount)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Droplets className="size-3 text-info" /> Nước:
+                        </span>
+                        <span className="font-bold">
+                          {formatVnd(selectedItem.waterAmount)}
+                        </span>
                       </div>
                     </div>
                   </div>
-                )
-              })()}
+                </div>
+              </div>
 
               {/* Cột phải: Thông tin người thuê & hợp đồng (đã lược bỏ thông tin thừa) */}
               <div className="rounded-xl border border-border bg-surface p-3.5 space-y-3">
@@ -636,36 +602,14 @@ export function ManagerDebts() {
               </div>
             </div>
 
-            {/* Lịch sử trễ hạn theo kỳ của hợp đồng */}
-            <LatePaymentHistorySection item={selectedItem} />
+            {/* Lịch sử công nợ theo kỳ của hợp đồng */}
+            <DebtPeriodHistorySection item={selectedItem} />
 
             {/* Footer actions */}
-            <div className="flex items-center justify-end gap-2 border-t border-border pt-2.5">
+            <div className="flex items-center justify-end border-t border-border pt-2.5">
               <Button type="button" size="sm" variant="outline" onClick={() => setSelectedId(null)}>
                 Đóng
               </Button>
-              {selectedItem.remainingAmount > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  loading={payMutation.isPending && payMutation.variables === selectedItem.id}
-                  onClick={() => payMutation.mutate(selectedItem.id)}
-                >
-                  <CheckCircle2 className="size-4" />
-                  Xác nhận đã thu ({formatVnd(selectedItem.remainingAmount)})
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  loading={unpayMutation.isPending && unpayMutation.variables === selectedItem.id}
-                  onClick={() => unpayMutation.mutate(selectedItem.id)}
-                >
-                  <RotateCcw className="size-4 text-warning" />
-                  Đặt lại chưa thu
-                </Button>
-              )}
             </div>
           </div>
         )}

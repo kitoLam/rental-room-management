@@ -19,6 +19,7 @@ import com.kitolam.rentalroommanagement.modules.contracttenant.repository.Contra
 import com.kitolam.rentalroommanagement.modules.invoice.document.Invoice;
 import com.kitolam.rentalroommanagement.modules.invoice.document.InvoiceItem;
 import com.kitolam.rentalroommanagement.modules.invoice.document.LatePaymentRecord;
+import com.kitolam.rentalroommanagement.modules.invoice.dto.response.DebtPeriodHistoryResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.LatePaymentHistoryResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.TenantDebtResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.TenantDebtServiceItemResponse;
@@ -123,7 +124,8 @@ public class TenantDebtService {
             TenantDebtResponse item = toDebtItem(contract, invoice, tenant, room,
                     scope.branchById().get(room.getBranchId()), today,
                     scope.tenancyIdByContract().get(contractId),
-                    lateByContract.getOrDefault(contractId, List.of()));
+                    lateByContract.getOrDefault(contractId, List.of()),
+                    contractInvoices);
             if (overdueOnly && !item.overdue()) continue;
             if (!needle.isEmpty() && !matches(item, needle)) continue;
             items.add(item);
@@ -142,7 +144,7 @@ public class TenantDebtService {
 
     private TenantDebtResponse toDebtItem(Contract contract, Invoice invoice, Tenant tenant, Room room,
                                           BranchResponse branch, LocalDate today, String contractTenantId,
-                                          List<LatePaymentRecord> records) {
+                                          List<LatePaymentRecord> records, List<Invoice> contractInvoices) {
         List<InvoiceItem> items = invoice.getItems() == null ? List.of() : invoice.getItems();
 
         BigDecimal roomRent = sumOf(items, InvoiceItemType.ROOM_RENT);
@@ -175,6 +177,7 @@ public class TenantDebtService {
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .map(this::toHistory)
                 .toList();
+        List<DebtPeriodHistoryResponse> periodHistory = periodHistory(contractInvoices, records, today);
 
         String status = overdue ? "OVERDUE"
                 : nz(invoice.getPaidAmount()).signum() > 0 ? "PARTIAL" : "UNPAID";
@@ -219,8 +222,36 @@ public class TenantDebtService {
                 status,
                 record == null ? 0 : record.getLateDays(),
                 record == null ? 0 : record.getReminderCount(),
-                history
+                history,
+                periodHistory
         );
+    }
+
+    /** Các kỳ hoá đơn có công nợ của hợp đồng, mới nhất trước; ghép thêm dữ liệu trễ hạn nếu có. */
+    private List<DebtPeriodHistoryResponse> periodHistory(List<Invoice> contractInvoices,
+                                                          List<LatePaymentRecord> records, LocalDate today) {
+        Map<String, LatePaymentRecord> recordByPeriod = records.stream()
+                .filter(r -> r.getPeriod() != null)
+                .collect(Collectors.toMap(LatePaymentRecord::getPeriod, r -> r, (a, b) -> a));
+        return contractInvoices.stream()
+                .filter(i -> i.getPeriod() != null && i.getStatus() != InvoiceStatus.CANCELLED)
+                .sorted(Comparator.comparing(Invoice::getPeriod,
+                        Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .map(inv -> {
+                    LatePaymentRecord r = recordByPeriod.get(inv.getPeriod());
+                    long days = inv.getDueDate() != null && inv.getDueDate().isBefore(today)
+                            && nz(inv.getRemainingAmount()).signum() > 0
+                            ? ChronoUnit.DAYS.between(inv.getDueDate(), today) : 0;
+                    return new DebtPeriodHistoryResponse(inv.getId(), inv.getInvoiceNumber(), inv.getPeriod(),
+                            inv.getDueDate(), inv.getIssueDate(), nz(inv.getTotalAmount()), nz(inv.getPaidAmount()),
+                            nz(inv.getRemainingAmount()),
+                            inv.getStatus() == null ? null : inv.getStatus().name(),
+                            days,
+                            r == null ? 0 : r.getLateDays(),
+                            r == null ? 0 : r.getReminderCount(),
+                            r == null ? null : r.getStatus() == null ? null : r.getStatus().name());
+                })
+                .toList();
     }
 
     private boolean matches(TenantDebtResponse item, String needle) {
@@ -295,6 +326,8 @@ public class TenantDebtService {
                             .map(ContractTenant::getId).findFirst().orElse(null);
                     return toDebtItem(contract, invoice, tenant, room, branch, today, contractTenantId,
                             latePaymentRepository.findByContractIdInAndIsDeletedFalse(
+                                    List.of(invoice.getContractId())),
+                            invoiceRepository.findByContractIdInAndIsDeletedFalse(
                                     List.of(invoice.getContractId())));
                 });
     }

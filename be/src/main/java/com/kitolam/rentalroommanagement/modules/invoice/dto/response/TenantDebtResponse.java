@@ -47,6 +47,8 @@ public record TenantDebtResponse(
         /** Số lần hệ thống đã gửi nhắc nhở cho kỳ này. */
         int reminderCount,
         /** Lịch sử trễ hạn của các kỳ trước của hợp đồng. */
-        List<LatePaymentHistoryResponse> latePaymentHistory
+        List<LatePaymentHistoryResponse> latePaymentHistory,
+        /** Toàn bộ các kỳ hoá đơn có công nợ của hợp đồng theo thời gian (mới nhất trước). */
+        List<DebtPeriodHistoryResponse> periodHistory
 ) {
 }
