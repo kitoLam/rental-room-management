@@ -633,26 +633,27 @@ export const contractService = {
     request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
 }
 export const profileService = {
-  get: async (): Promise<User> => {
-    if (provider('auth') === 'real' || provider('profile') === 'real') {
-      try {
-        return await request('auth', '/api/v1/auth/me', userSchema)
-      } catch {
-        const currentUser = useSession.getState().user
-        if (currentUser) return currentUser
-        throw new ApiError('Không thể tải thông tin hồ sơ.', 500)
-      }
-    }
-    return request('profile', '/api/me', userSchema)
-  },
+  get: (): Promise<User> =>
+    provider('auth') === 'real' || provider('profile') === 'real'
+      ? request('auth', '/api/v1/auth/me', userSchema)
+      : request('profile', '/api/me', userSchema),
   update: async (value: unknown): Promise<User> => {
-    if (provider('auth') === 'real' || provider('profile') === 'real') {
-      const updated = await request('auth', '/api/v1/auth/me', userSchema, write('PATCH', value))
-      useSession.getState().updateUser(updated)
-      return updated
+    const updated = provider('auth') === 'real' || provider('profile') === 'real'
+      ? await request('auth', '/api/v1/auth/me', userSchema, write('PATCH', value))
+      : await request('profile', '/api/me', userSchema, write('PATCH', value))
+    const current = useSession.getState().user
+    if (current?.id === updated.id) {
+      useSession.getState().updateUser({
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        phone: updated.phone,
+        dateOfBirth: null,
+        gender: null,
+        roles: updated.roles,
+        status: updated.status,
+      })
     }
-    const updated = await request('profile', '/api/me', userSchema, write('PATCH', value))
-    useSession.getState().updateUser(updated)
     return updated
   },
 }
