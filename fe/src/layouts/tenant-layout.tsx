@@ -11,48 +11,34 @@ import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   House,
-  FileText,
   ReceiptText,
-  Wallet,
   Plug,
   Droplets,
   Wrench,
   Bell,
-  CalendarDays,
-  KeyRound,
-  UserRound,
+  FileSignature,
+  ArrowRight,
 } from 'lucide-react'
 import { useSession } from '@/features/auth/session-store'
 import { tenantApi } from '@/services/tenant'
 import { useTenancySelection, isActive, tenantLink } from '@/features/tenant/context'
 import { Notice, QueryState } from '@/components/common/page'
 import { Container } from '@/components/common/container'
+import { Button } from '@/components/ui/button'
 import { dashboardPath } from '@/features/auth/navigation'
 
+// Account pages (profile, viewings, bookings, payments, contracts) live in UserLayout,
+// reached from the header avatar — the rental space only holds tenancy-scoped pages.
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
-  ['/tenant/appointments', 'Lịch xem', CalendarDays],
-  ['/tenant/bookings', 'Giữ phòng', KeyRound],
   ['/tenant/my-room', 'Phòng của tôi', House],
-  // Per-slot contracts: submit the signed copy of each one (account page, no tenancy needed).
-  ['/user/contracts', 'Hợp đồng', FileText],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
-  ['/user/payments', 'Thanh toán', Wallet],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Điện & nước', Droplets],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
   ['/notifications', 'Thông báo', Bell],
-  ['/profile', 'Hồ sơ', UserRound],
 ] as const
-const accountPages = [
-  '/tenant/dashboard',
-  '/tenant/appointments',
-  '/tenant/bookings',
-  '/user/contracts',
-  '/user/payments',
-  '/profile',
-  '/notifications',
-]
+const accountPages = ['/tenant/dashboard', '/notifications']
 const needsTenancy = (path: string) =>
   path.startsWith('/tenant/') &&
   !['/tenant/appointments', '/tenant/bookings'].some(
@@ -88,6 +74,35 @@ export function TenantLayout() {
     )?.[0] || '/tenant/dashboard'
   const href = (path: string) => (needsTenancy(path) && tenancy ? tenantLink(path, tenancy) : path)
   if (!user.roles.includes('TENANT')) return <Navigate replace to={dashboardPath(user.roles)} />
+  // No approved slot yet: show one call-to-action screen instead of an empty rental space.
+  if (list.isSuccess && tenancies.length === 0 && location.pathname !== '/notifications')
+    return (
+      <Container className="py-16 sm:py-24">
+        <div className="mx-auto max-w-xl rounded-2xl border border-border bg-surface p-8 text-center shadow-sm sm:p-12">
+          <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary-soft text-primary">
+            <FileSignature size={32} />
+          </div>
+          <h1 className="mt-5 text-2xl font-bold text-foreground sm:text-3xl">
+            Bạn chưa có không gian thuê
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            Không gian thuê chỉ mở sau khi hợp đồng của bạn được ký kết. Hãy ký và nộp bản hợp đồng
+            đã ký; khi quản lý duyệt xong, chỗ ở của bạn sẽ xuất hiện tại đây.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button asChild>
+              <Link to="/user/contracts">
+                Đến hợp đồng của tôi
+                <ArrowRight size={18} />
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/rooms">Tìm phòng</Link>
+            </Button>
+          </div>
+        </div>
+      </Container>
+    )
   return (
     <Container wide className="py-7 sm:py-10">
       <div className="grid min-w-0 gap-8 lg:grid-cols-[210px_minmax(0,1fr)]">
