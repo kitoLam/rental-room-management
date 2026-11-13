@@ -28,4 +28,11 @@ public interface RoomService {
     RoomResponse update(String id, RoomUpdateRequest request, AuthPrincipal principal);
 
     void delete(String id, AuthPrincipal principal);
+
+    /** Slots of a room with whether each one is busy (staff of the room's branch). */
+    java.util.List<com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse> slots(String roomId, AuthPrincipal principal);
+
+    /** Manually set when a free slot can be rented from; refused while the slot is busy. */
+    com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse updateSlotAvailableFrom(
+            String roomId, String slotId, java.time.LocalDate availableFrom, AuthPrincipal principal);
 }
