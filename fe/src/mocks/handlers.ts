@@ -461,10 +461,10 @@ export const handlers = [
         return ok(record)
       }
       if (path === '/api/notifications/unread-count')
-        return ok({ count: db.notifications(user.id).filter((n) => !n.read).length })
+        return ok({ count: db.notifications(user.id).filter((n) => n.referenceType !== 'APPOINTMENT' && !n.read).length })
       if (path === '/api/notifications/mark-all-read' && method === 'PUT') {
         db.state.notifications
-          .filter((n) => n.recipientUserId === user.id)
+          .filter((n) => n.recipientUserId === user.id && n.referenceType !== 'APPOINTMENT')
           .forEach((n) => {
             n.read = true
           })
@@ -495,6 +495,7 @@ export const handlers = [
               ? []
               : db
                   .notifications(user.id)
+                  .filter((n) => n.referenceType !== 'APPOINTMENT')
                   .filter((n) => !params.has('read') || n.read === (params.get('read') === 'true'))
                   .filter((n) => !params.has('type') || n.type === params.get('type')),
             params,

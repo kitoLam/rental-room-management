@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router'
 import { Bell, Menu, ArrowUpRight, LogOut } from 'lucide-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { Popover } from 'radix-ui'
 import { Container } from '@/components/common/container'
 import { Logo } from '@/components/common/logo'
 import { InlineError, Modal } from '@/components/common/page'
@@ -9,12 +10,13 @@ import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
 import { dashboardPath } from '@/features/auth/navigation'
 import { authService, notificationService } from '@/services/guest-user'
-import { viewingDependenciesService } from '@/services/viewing-dependencies'
+import { inboxService } from '@/services/inbox'
 import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
 import { hasMocks, provider } from '@/services/config'
+import { dateTime } from '@/lib/activity'
 import { cn } from '@/lib/utils'
 import { useHeaderOverlay } from './use-header-overlay'
 
@@ -23,6 +25,7 @@ export function SiteHeader() {
   const isHome = pathname === '/'
   const overlay = useHeaderOverlay(isHome)
   const [menu, setMenu] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const user = useSession((s) => s.user)
   const isStaffOnly = Boolean(
     user &&
@@ -37,13 +40,25 @@ export function SiteHeader() {
     retry: false,
   })
   const unread = useQuery({
-    queryKey: ['viewing-notifications', 'unread', user?.id],
+    queryKey: ['notifications', user?.id, 'unread'],
     queryFn: async () =>
-      provider('viewing') === 'real'
-        ? { count: (await viewingDependenciesService.notifications(false)).totalElements }
+      provider('notifications') === 'real'
+        ? { count: (await inboxService.list(false, 1, 1)).totalElements }
         : notificationService.unread(),
     enabled: !!user && !isStaffOnly,
     refetchInterval: 30000,
+  })
+  const preview = useQuery({
+    queryKey: ['notifications', user?.id, 'preview'],
+    queryFn: async () => {
+      if (provider('notifications') === 'real') {
+        const page = await inboxService.list(undefined, 1, 5)
+        return page.content.map((item) => ({ ...item, read: Boolean(item.readAt) }))
+      }
+      const page = await notificationService.list()
+      return page.content.slice(0, 5)
+    },
+    enabled: notificationsOpen && !!user && !isStaffOnly,
   })
   const assignments = useQuery({
     queryKey: ['manager-branches', user?.id],
@@ -123,18 +138,69 @@ export function SiteHeader() {
                   </Link>
                 )}
                 {!isStaffOnly && (
-                  <Link
-                    to="/notifications"
-                    aria-label={`Thông báo${unread.data?.count ? `, ${unread.data.count} chưa đọc` : ''}`}
-                    className="relative flex size-11 items-center justify-center rounded-lg hover:bg-primary/10"
-                  >
-                    <Bell size={20} />
-                    {(unread.data?.count || 0) > 0 && (
-                      <span className="absolute top-0 right-0 rounded-full bg-primary px-1.5 text-xs text-white">
-                        {unread.data!.count}
-                      </span>
-                    )}
-                  </Link>
+                  <Popover.Root open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+                    <Popover.Trigger
+                      type="button"
+                      aria-label={`Thông báo${unread.data?.count ? `, ${unread.data.count} chưa đọc` : ''}`}
+                      className="relative flex size-11 items-center justify-center rounded-lg hover:bg-primary/10"
+                    >
+                      <Bell size={20} aria-hidden="true" />
+                      {!!unread.data?.count && (
+                        <span className="absolute top-0 right-0 rounded-full bg-primary px-1.5 text-xs text-white">
+                          {unread.data.count}
+                        </span>
+                      )}
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content
+                        align="end"
+                        sideOffset={8}
+                        collisionPadding={12}
+                        aria-label="Thông báo gần đây"
+                        className="z-40 flex max-h-[var(--radix-popover-content-available-height)] w-88 max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border bg-surface text-foreground shadow-lg"
+                      >
+                        <h2 className="shrink-0 border-b border-border px-4 py-3 font-bold">Thông báo</h2>
+                        <div className="min-h-0 overflow-y-auto" aria-busy={preview.isPending}>
+                          {preview.isPending ? (
+                            <p className="p-4 text-sm text-muted-foreground">Đang tải thông báo…</p>
+                          ) : preview.isError ? (
+                            <div className="p-4">
+                              <InlineError error={preview.error} />
+                              <Button variant="outline" className="mt-3" onClick={() => void preview.refetch()}>
+                                Thử lại
+                              </Button>
+                            </div>
+                          ) : preview.data.length === 0 ? (
+                            <p className="p-4 text-sm text-muted-foreground">Chưa có thông báo.</p>
+                          ) : (
+                            <ul className="divide-y divide-border">
+                              {preview.data.map((item) => (
+                                <li key={item.id} className={cn('px-4 py-3', !item.read && 'bg-primary-soft')}>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="line-clamp-1 text-sm font-semibold">{item.title}</p>
+                                    {!item.read && (
+                                      <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Chưa đọc" role="img" />
+                                    )}
+                                  </div>
+                                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.message}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{dateTime(item.createdAt)}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                        <Popover.Close asChild>
+                          <Link
+                            to="/notifications"
+                            className="flex min-h-11 shrink-0 items-center justify-center gap-2 border-t border-border px-4 text-sm font-bold text-primary hover:bg-primary-soft"
+                          >
+                            Xem chi tiết thông báo
+                            <ArrowUpRight size={16} aria-hidden="true" />
+                          </Link>
+                        </Popover.Close>
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
                 )}
                 <Button
                   asChild

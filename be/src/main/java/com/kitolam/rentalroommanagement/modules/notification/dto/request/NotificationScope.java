@@ -3,6 +3,13 @@ package com.kitolam.rentalroommanagement.modules.notification.dto.request;
 import java.util.Set;
 
 /** Scope comes from the caller's trusted authentication adapter, never an HTTP request body. */
-public record NotificationScope(String accountId, Set<String> manageableBranchIds) {
-    public NotificationScope { manageableBranchIds = Set.copyOf(manageableBranchIds); }
+public record NotificationScope(String accountId, Set<String> manageableBranchIds, Set<String> kinds) {
+    public NotificationScope(String accountId, Set<String> manageableBranchIds) {
+        this(accountId, manageableBranchIds, Set.of());
+    }
+
+    public NotificationScope {
+        manageableBranchIds = Set.copyOf(manageableBranchIds);
+        kinds = Set.copyOf(kinds);
+    }
 }

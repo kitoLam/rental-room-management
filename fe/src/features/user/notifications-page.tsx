@@ -10,9 +10,9 @@ import { dateTime, referenceLink } from '@/lib/activity'
 import { useSession } from '@/features/auth/session-store'
 import { provider } from '@/services/config'
 import { SendNotificationDialog } from './send-notification-dialog'
-import ViewingNotificationsPage from '@/features/leasing/viewing-notifications-page'
+import InboxPage from './inbox-page'
 export default function NotificationsPage() {
-  if (provider('notifications') === 'real') return <ViewingNotificationsPage />
+  if (provider('notifications') === 'real') return <InboxPage />
   return <DemoNotificationsPage />
 }
 function DemoNotificationsPage() {
@@ -49,14 +49,9 @@ function DemoNotificationsPage() {
     <Page
       title="Những cập nhật dành cho bạn."
       eyebrow="THÔNG BÁO"
-      description="Theo dõi phản hồi lịch xem phòng, giữ chỗ và trạng thái thanh toán."
+      description="Theo dõi thông báo hợp đồng và các cập nhật dành cho bạn."
       actions={
         <div className="flex flex-wrap gap-2">
-          {provider('viewing') === 'real' && (
-            <Button asChild variant="outline">
-              <Link to="/notifications/viewing">Thông báo lịch xem</Link>
-            </Button>
-          )}
           {canSend && (
             <Button onClick={() => setSendOpen(true)}>
               <Send size={16} />
@@ -137,7 +132,7 @@ function DemoNotificationsPage() {
         emptyMessage={
           read === 'false'
             ? 'Bạn đã đọc hết thông báo. Những cập nhật mới sẽ xuất hiện ở đây.'
-            : 'Chưa có thông báo phù hợp. Các cập nhật về lịch hẹn và giữ chỗ sẽ xuất hiện ở đây.'
+            : 'Chưa có thông báo phù hợp.'
         }
       >
         {list.data && (
