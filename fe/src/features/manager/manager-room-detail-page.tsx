@@ -69,7 +69,7 @@ export function ManagerRoomDetail() {
                   Người thuê / lịch sử
                 </ManagerLink>
                 <Button variant="ghost" className="text-danger" onClick={() => setDeleting(true)}>
-                  Xóa khi đủ điều kiện
+                  Xoá phòng
                 </Button>
               </div>
             </Panel>
@@ -87,7 +87,7 @@ export function ManagerRoomDetail() {
         )}
       </QueryState>
       <ActionDialog
-        title="Xóa phòng chưa có hồ sơ liên quan?"
+        title={`Xoá phòng ${query.data?.code ?? ''}?`}
         open={deleting}
         onOpenChange={setDeleting}
         pending={mutation.isPending}
@@ -95,7 +95,12 @@ export function ManagerRoomDetail() {
         onConfirm={() =>
           mutation.mutate({ resource: 'rooms', id: roomId, value: {}, method: 'DELETE' })
         }
-      />
+      >
+        <p className="text-sm leading-6 text-muted-foreground">
+          Chỉ xoá được khi không chỗ nào của phòng đang có người ở, đang được giữ chỗ, có yêu cầu giữ chỗ chờ xử lý
+          hoặc có hợp đồng chưa kết thúc. Nếu chưa đủ điều kiện, hệ thống sẽ báo rõ chỗ nào đang bận.
+        </p>
+      </ActionDialog>
     </ManagerPage>
   )
 }

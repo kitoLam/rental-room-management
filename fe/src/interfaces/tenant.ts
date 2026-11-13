@@ -24,11 +24,6 @@ export const tenantContractSchema = z.object({
   tenantAddress: z.string().nullable().optional(),
   roomAddress: z.string().nullable().optional(),
   roomSlotIds: z.array(databaseId).optional(),
-  electricityInitialReading: z.number().nullable().optional(),
-  waterInitialReading: z.number().nullable().optional(),
-  electricityRate: z.number().nullable().optional(),
-  waterRate: z.number().nullable().optional(),
-  parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
   services: z.array(z.object({
     serviceId: z.string(),
@@ -48,7 +43,7 @@ export const tenantContractSchema = z.object({
   firstBillingStartDate: date.nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
   evidenceHistory: z.array(z.object({
-    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED', 'CONTRACT_EXPIRED']),
     at: z.string().nullable(),
     note: z.string().nullable(),
   })).optional(),
@@ -258,6 +253,7 @@ export type ReportInput = z.infer<typeof reportInputSchema>
 export const reportSchema = reportInputSchema.extend({
   id: z.string(),
   contractTenantId: z.string(),
+  roomId: z.string().nullable().optional(),
   roomName: z.string().nullable().optional(),
   assetName: z.string(),
   status: z.enum([

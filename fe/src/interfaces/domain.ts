@@ -189,6 +189,7 @@ export const bookingSchema = z.object({
   hasRentalDates: z.boolean().default(true),
   /** Ngày dọn vào chốt từ slot khi đặt cọc; null với booking cũ, backend khi đó lùi 1 ngày sau evidence. */
   expectedMoveInDate: z.string().nullable().optional(),
+  slotMoveInDates: z.record(z.string(), z.iso.date()).nullish(),
   rentalMode: modeSchema,
   startDate: z.string(),
   endDate: z.string(),
@@ -296,6 +297,7 @@ export type BookingInput = {
   acknowledged?: boolean
 }
 export type BookingHoldInput = {
+  slotMoveInDates?: Record<string, string | null>
   roomSlotIds: string[]
   selectedServices: { serviceId: string; quantity?: number }[]
   roomId: string

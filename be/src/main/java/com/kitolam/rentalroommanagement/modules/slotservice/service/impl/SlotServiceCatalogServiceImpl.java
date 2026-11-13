@@ -19,9 +19,17 @@ import org.bson.types.ObjectId;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
+import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.document.SlotServiceRequest;
+import com.kitolam.rentalroommanagement.modules.slotservicerequest.enums.SlotServiceRequestStatus;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -80,6 +88,27 @@ public class SlotServiceCatalogServiceImpl implements SlotServiceCatalogService 
     public void delete(String id, AuthPrincipal principal) {
         SlotService item = getEntity(id);
         staffAccess.requireBranch(item.getBranchId(), principal);
+        ObjectId serviceId = MongoQueryHelper.toObjectId(item.getId());
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        // Tenants still using it on a draft / running contract.
+        List<String> users = mongoTemplate.find(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                        Criteria.where("status").in(ContractStatus.DRAFT.name(), ContractStatus.ACTIVE.name()),
+                        Criteria.where("activeSlotServices.slotServiceId").is(serviceId))), Contract.class).stream()
+                .filter(c -> c.getActiveSlotServices().stream().anyMatch(s -> item.getId().equals(s.getSlotServiceId())
+                        && (s.getEndDate() == null || s.getEndDate().isAfter(today))))
+                .map(c -> Objects.toString(c.getTenantName(), "Người thuê") + " (" + Objects.toString(c.getContractNumber(), c.getId()) + ")")
+                .toList();
+        long pending = mongoTemplate.count(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                Criteria.where("slotServiceId").is(serviceId),
+                Criteria.where("status").is(SlotServiceRequestStatus.PENDING.name()))), SlotServiceRequest.class);
+        if (!users.isEmpty() || pending > 0) {
+            StringBuilder message = new StringBuilder("Không thể xoá dịch vụ tự chọn “" + item.getName() + "” vì");
+            if (!users.isEmpty()) message.append(" còn ").append(users.size()).append(" người đang đăng ký: ").append(String.join(", ", users));
+            if (!users.isEmpty() && pending > 0) message.append(";");
+            if (pending > 0) message.append(" còn ").append(pending).append(" yêu cầu đăng ký / huỷ đang chờ duyệt");
+            message.append(". Hãy xử lý các đăng ký / yêu cầu này trước (hoặc chuyển dịch vụ sang ngừng hoạt động).");
+            throw new ConflictException(message.toString());
+        }
         item.markDeleted();
         repository.save(item);
     }

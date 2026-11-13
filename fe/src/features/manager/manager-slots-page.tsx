@@ -1,179 +1,124 @@
-import { InlineError, Modal, Notice, QueryState } from '@/components/common/page'
+import { InlineError, Modal, Notice, Panel, QueryState } from '@/components/common/page'
+import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
-import { slotInputSchema, type ManagerSlot } from '@/interfaces/manager'
-import { dateOnly } from '@/lib/activity'
-import { provider } from '@/services/config'
+import { cn } from '@/lib/utils'
 import { managerApi } from '@/services/manager'
-import { Plus } from 'lucide-react'
+import { roomSlotsApi, type RoomSlotUsage } from '@/services/room-slots'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarClock, Lock } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { ManagerForm, ManagerLink, ManagerPage, ManagerStatus, Records } from './components'
-import { useManagerAction, useManagerList, useManagerQuery } from './context'
+import { ManagerLink, ManagerPage } from './components'
+import { useManagerQuery } from './context'
 
+const statusLabel: Record<RoomSlotUsage['status'], string> = {
+  AVAILABLE: 'Sẵn sàng',
+  OCCUPIED: 'Đang ở',
+  MAINTENANCE: 'Bảo trì',
+  INACTIVE: 'Ngừng',
+}
+
+const today = () => new Date().toLocaleDateString('en-CA')
+const dayLabel = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
+
+/** Slots of a room: who holds what, and the manually editable "rentable from" date of free slots. */
 export function ManagerSlots() {
-  const { roomId = '' } = useParams(),
-    query = useManagerList('slots', { roomId, size: '100' }),
-    room = useManagerQuery('room', (b) => managerApi.get(b, 'rooms', roomId), [roomId]),
-    [selected, setSelected] = useState<ManagerSlot | null | undefined>(undefined),
-    [from, setFrom] = useState(new Date().toISOString().slice(0, 10)),
-    [to, setTo] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10)),
-    availability = useManagerList(
-      'slots',
-      provider('manager') === 'mock'
-        ? { roomId, size: '100', startDate: from, endDate: to }
-        : { roomId, size: '100' },
-    ),
-    mutation = useManagerAction(() => setSelected(undefined))
+  const { roomId = '' } = useParams()
+  const queryClient = useQueryClient()
+  const room = useManagerQuery('room', (b) => managerApi.get(b, 'rooms', roomId), [roomId])
+  const slots = useQuery({ queryKey: ['room-slots', roomId], queryFn: () => roomSlotsApi.list(roomId) })
+  const [editing, setEditing] = useState<RoomSlotUsage | null>(null)
+  const [date, setDate] = useState('')
+  const save = useMutation({
+    mutationFn: () => roomSlotsApi.setAvailableFrom(roomId, editing!.id, date),
+    onSuccess: () => {
+      setEditing(null)
+      void queryClient.invalidateQueries({ queryKey: ['room-slots', roomId] })
+    },
+  })
+  const close = () => {
+    if (save.isPending) return
+    setEditing(null)
+    save.reset()
+  }
+  const free = slots.data?.filter((s) => !s.busy).length ?? 0
+
   return (
     <ManagerPage
       title="Chỗ ở trong phòng"
-      description={room.data?.title}
+      description={
+        room.data
+          ? `Phòng ${room.data.code} · ${room.data.title}. Chỉnh ngày bắt đầu cho thuê của các chỗ còn trống.`
+          : undefined
+      }
       actions={<ManagerLink to={`/manager/rooms/${roomId}`}>Về phòng</ManagerLink>}
     >
-      <QueryState pending={room.isPending} error={room.error} retry={room.refetch}>
-        {room.data?.rentalMode === 'ROOM' ? (
-          <Notice>Phòng nguyên căn không có danh sách chỗ thuê SLOT.</Notice>
-        ) : (
+      <QueryState pending={slots.isPending} error={slots.error} retry={slots.refetch}>
+        {slots.data && (
           <>
-            <div className="flex flex-wrap items-end gap-3">
-              {provider('manager') === 'mock' && (
-                <>
-                  <div>
-                    <label className="mb-2 block text-xs" htmlFor="slot-from">
-                      Từ ngày
-                    </label>
-                    <input
-                      id="slot-from"
-                      type="date"
-                      className="input"
-                      value={from}
-                      onChange={(e) => setFrom(e.target.value)}
-                    />
+            <Notice>
+              {free} / {slots.data.length} chỗ đang trống. Ngày bắt đầu cho thuê chỉ chỉnh được khi chỗ chưa có ai ở, giữ
+              chỗ hay chờ hợp đồng.
+            </Notice>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {slots.data.map((slot) => (
+                <Panel key={slot.id} className={cn('flex flex-col gap-3 p-5 sm:p-5', slot.busy && 'bg-muted/30')}>
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-lg font-bold">Chỗ {slot.slotCode}</h2>
+                    <StatusBadge tone={slot.busy ? 'warning' : slot.status === 'AVAILABLE' ? 'success' : 'neutral'}>
+                      {slot.busy ? 'Đang bận' : statusLabel[slot.status]}
+                    </StatusBadge>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-xs" htmlFor="slot-to">
-                      Đến ngày (không gồm)
-                    </label>
-                    <input
-                      id="slot-to"
-                      type="date"
-                      className="input"
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                    />
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Cho thuê từ</p>
+                    <p className="text-base font-semibold">{dayLabel(slot.availableFrom)}</p>
                   </div>
-                </>
-              )}
-              <Button onClick={() => setSelected(null)}>
-                <Plus size={16} />
-                Thêm chỗ
-              </Button>
-            </div>
-            <Records
-              query={availability}
-              page={1}
-              onPage={() => undefined}
-              columns={[
-                {
-                  label: 'Chỗ ở',
-                  render: (s) => (
-                    <button
-                      className="min-h-11 text-left font-bold text-primary"
-                      onClick={() => setSelected(s)}
+                  {slot.busy ? (
+                    <p className="mt-auto flex items-start gap-2 rounded-lg bg-warning/15 p-3 text-sm">
+                      <Lock size={16} className="mt-0.5 shrink-0 text-warning" />
+                      Chỗ này {slot.busyReason}, không chỉnh được ngày.
+                    </p>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="mt-auto"
+                      onClick={() => {
+                        setDate(slot.availableFrom && slot.availableFrom >= today() ? slot.availableFrom : today())
+                        setEditing(slot)
+                      }}
                     >
-                      {s.code} · {s.name}
-                    </button>
-                  ),
-                },
-                ...(provider('manager') === 'real'
-                  ? [
-                      {
-                        label: 'Trạng thái vận hành',
-                        render: (s: ManagerSlot) => <ManagerStatus value={s.operationalStatus} />,
-                      },
-                    ]
-                  : []),
-                ...(provider('manager') === 'mock'
-                  ? [
-                      {
-                        label: 'Khả dụng',
-                        render: (s: ManagerSlot) => (
-                          <ManagerStatus value={s.availability || 'UNKNOWN'} />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(provider('manager') === 'mock'
-                  ? [
-                      {
-                        label: 'Cư trú / lịch sử',
-                        render: (s: ManagerSlot) => (
-                          <div className="grid gap-2">
-                            {s.occupancy?.length
-                              ? s.occupancy!.map((o) => (
-                                  <div key={o.id}>
-                                    <ManagerLink to={`/manager/tenancies/${o.id}`}>
-                                      {o.name}
-                                    </ManagerLink>
-                                    <p className="text-xs text-muted-foreground">
-                                      {dateOnly(o.startDate)} – {dateOnly(o.endDate)} ·{' '}
-                                      <ManagerStatus value={o.status} />
-                                    </p>
-                                  </div>
-                                ))
-                              : 'Chưa có cư trú'}
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-              empty="Phòng chưa có chỗ. Thêm chỗ trong giới hạn sức chứa."
-            />
+                      <CalendarClock size={16} />
+                      Chỉnh ngày cho thuê
+                    </Button>
+                  )}
+                </Panel>
+              ))}
+            </div>
           </>
         )}
       </QueryState>
       <Modal
-        title={selected ? 'Chỉnh sửa chỗ' : 'Thêm chỗ'}
-        open={selected !== undefined}
-        onOpenChange={(v) => {
-          if (!v && !mutation.isPending) setSelected(undefined)
-        }}
+        open={!!editing}
+        onOpenChange={(open) => !open && close()}
+        title={editing ? `Ngày cho thuê chỗ ${editing.slotCode}` : 'Ngày cho thuê'}
+        description="Khách chỉ đặt được chỗ này từ ngày bạn chọn."
       >
-        {selected !== undefined && (
-          <ManagerForm
-            schema={slotInputSchema}
-            defaults={
-              selected ? { ...selected } : { code: '', name: '', operationalStatus: 'ACTIVE' }
-            }
-            fields={[
-              { name: 'code', label: 'Mã chỗ' },
-              { name: 'name', label: 'Tên chỗ' },
-              {
-                name: 'operationalStatus',
-                label: 'Vận hành',
-                kind: 'select',
-                options: [
-                  { value: 'ACTIVE', label: 'Hoạt động' },
-                  { value: 'MAINTENANCE', label: 'Bảo trì' },
-                  { value: 'INACTIVE', label: 'Ngừng sử dụng' },
-                ],
-              },
-            ]}
-            pending={mutation.isPending}
-            error={mutation.error}
-            onSubmit={(value) =>
-              mutation.mutate({
-                resource: 'slots',
-                id: selected?.id,
-                value: { ...value, roomId },
-                method: selected ? 'PATCH' : 'POST',
-              })
-            }
-          />
-        )}
+        <div className="grid gap-4">
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Cho thuê từ ngày</span>
+            <input type="date" className="input" min={today()} value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <InlineError error={save.error} />
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" disabled={save.isPending} onClick={close}>
+              Huỷ
+            </Button>
+            <Button loading={save.isPending} disabled={!date || date < today()} onClick={() => save.mutate()}>
+              Lưu
+            </Button>
+          </div>
+        </div>
       </Modal>
-      <InlineError error={query.error} />
     </ManagerPage>
   )
 }

@@ -8,8 +8,8 @@ import { formatVnd } from '@/lib/format'
 import { bookingService } from '@/services/guest-user'
 import { paymentStatusLabel, tenantProfileApi, type MyContract } from '@/services/tenant-profile'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, CreditCard, Home } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ChevronUp, CreditCard, Home, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 
 /** "Thanh toán" tab: deposits still to pay + payment history. */
@@ -19,6 +19,31 @@ export function PaymentsTab() {
     queryFn: () => bookingService.list('AWAITING_PAYMENT', 1),
   })
   const payments = useQuery({ queryKey: ['profile', 'payments'], queryFn: tenantProfileApi.payments })
+
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+
+  const filtered = useMemo(() => {
+    const all = payments.data || []
+    return all.filter((p) => {
+      if (statusFilter && p.status !== statusFilter) return false
+      if (dateFilter) {
+        const paidDate = (p.paidAt || p.createdAt || '').slice(0, 10)
+        if (paidDate !== dateFilter) return false
+      }
+      if (search) {
+        const q = search.toLowerCase()
+        const content = (p.invoiceId ? 'hoá đơn' : 'tiền cọc giữ chỗ')
+        const code = (p.transactionCode || '').toLowerCase()
+        const method = (p.method || '').toLowerCase()
+        if (!content.includes(q) && !code.includes(q) && !method.includes(q)) return false
+      }
+      return true
+    })
+  }, [payments.data, search, statusFilter, dateFilter])
+
+  const hasFilter = search || statusFilter || dateFilter
 
   return (
     <div className="grid gap-6">
@@ -55,6 +80,48 @@ export function PaymentsTab() {
 
       <Panel>
         <h2 className="mb-4 font-bold">Lịch sử thanh toán</h2>
+
+        {/* Filter bar */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-48 max-w-full flex-1">
+            <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
+            <input
+              className="input pl-10"
+              aria-label="Tìm kiếm"
+              placeholder="Tìm theo mã hoặc tên..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <select
+            aria-label="Trạng thái thanh toán"
+            className="input w-auto"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">Tất cả trạng thái</option>
+            {Object.entries(paymentStatusLabel).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Lọc theo ngày"
+            className="input w-auto"
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          />
+          {hasFilter && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={() => { setSearch(''); setStatusFilter(''); setDateFilter('') }}
+            >
+              Xóa lọc
+            </button>
+          )}
+        </div>
+
         <QueryState
           pending={payments.isPending}
           error={payments.error}
@@ -62,42 +129,41 @@ export function PaymentsTab() {
           empty={payments.data?.length === 0}
           emptyMessage="Chưa có giao dịch nào."
         >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-3 font-bold">Thời gian</th>
-                  <th className="py-2 pr-3 font-bold">Nội dung</th>
-                  <th className="py-2 pr-3 font-bold">Số tiền</th>
-                  <th className="py-2 font-bold">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.data?.map((p) => (
-                  <tr key={p.id} className="border-b border-border/60">
-                    <td className="py-3 pr-3 whitespace-nowrap">{dateTime(p.paidAt || p.createdAt || '')}</td>
-                    <td className="py-3 pr-3">
-                      {p.invoiceId ? 'Hoá đơn' : 'Tiền cọc giữ chỗ'}
-                      {p.bookingId && (
-                        <Link to={`/tenant/bookings/${p.bookingId}`} className="ml-2 text-xs text-primary underline">
-                          Xem
-                        </Link>
-                      )}
-                      <span className="block text-xs text-muted-foreground">
-                        {p.method} {p.transactionCode && `· ${p.transactionCode}`}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-3 font-medium whitespace-nowrap">{formatVnd(p.amount)}</td>
-                    <td className="py-3">
-                      <StatusBadge tone={p.status === 'SUCCESS' ? 'success' : p.status === 'FAILED' ? 'danger' : 'warning'}>
-                        {paymentStatusLabel[p.status] || p.status}
-                      </StatusBadge>
-                    </td>
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">Không tìm thấy giao dịch phù hợp.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-3 font-bold">Thời gian</th>
+                    <th className="py-2 pr-3 font-bold">Nội dung</th>
+                    <th className="py-2 pr-3 font-bold">Số tiền</th>
+                    <th className="py-2 font-bold">Trạng thái</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => (
+                    <tr key={p.id} className="border-b border-border/60">
+                      <td className="py-3 pr-3 whitespace-nowrap">{dateTime(p.paidAt || p.createdAt || '')}</td>
+                      <td className="py-3 pr-3">
+                        {p.invoiceId ? 'Hoá đơn' : 'Tiền cọc giữ chỗ'}
+                        <span className="block text-xs text-muted-foreground">
+                          {p.method} {p.transactionCode && `· ${p.transactionCode}`}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-3 font-medium whitespace-nowrap">{formatVnd(p.amount)}</td>
+                      <td className="py-3">
+                        <StatusBadge tone={p.status === 'SUCCESS' ? 'success' : p.status === 'FAILED' ? 'danger' : 'warning'}>
+                          {paymentStatusLabel[p.status] || p.status}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </QueryState>
       </Panel>
     </div>

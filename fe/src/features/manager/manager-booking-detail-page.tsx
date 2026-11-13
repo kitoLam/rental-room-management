@@ -1,7 +1,7 @@
 import { Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
-import { dateOnly, dateTime } from '@/lib/activity'
+import { bookingMoveInDate, dateOnly, dateTime } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import { managerApi } from '@/services/manager'
 import { bookingService } from '@/services/guest-user'
@@ -35,6 +35,7 @@ export function ManagerBookingDetail() {
     mutation = useManagerAction(() => {
       setDecision('')
     })
+  const moveInDate = bookingMoveInDate(query.data)
   return (
     <ManagerPage
       title="Chi tiết giữ phòng"
@@ -51,12 +52,18 @@ export function ManagerBookingDetail() {
                     `${query.data.roomTitle} · ${query.data.slotLabel || 'Nguyên phòng'}`,
                   ],
                   ['Trạng thái', <ManagerStatus value={query.data.status} />],
-                  ...(query.data.hasRentalDates ? [[
+                  ...(query.data.slotMoveInDates ? [[
+                    'Ngày nhận phòng theo slot',
+                    <ul className="space-y-1">{query.data.roomSlotIds.map((id, index) => {
+                      const date = query.data?.slotMoveInDates?.[id]
+                      return <li key={id}>{query.data?.slotLabels[index]} · {date ? dateOnly(date) : 'Chưa có thông tin'}</li>
+                    })}</ul>,
+                  ] as [string, React.ReactNode]] : query.data.hasRentalDates ? [[
                     'Thời hạn thuê',
                     `${dateOnly(query.data.startDate)} – ${dateOnly(query.data.endDate)}`,
                   ] as [string, string]] : [[
                     'Ngày bắt đầu thuê dự kiến',
-                    dateOnly(query.data.startDate),
+                    moveInDate ? dateOnly(moveInDate) : "Chưa có thông tin",
                   ] as [string, string]]),
                   ['Khoản giữ', formatVnd(query.data.holdAmount)],
                   [

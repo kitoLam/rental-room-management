@@ -1,4 +1,5 @@
 import { dateOnly } from '@/lib/activity'
+import { provider } from '@/services/config'
 import { useState } from 'react'
 import { ManagerLink, ManagerPage, ManagerStatus, Records, SearchBox, ExpiringSoonBadge } from './components'
 import { useManagerList } from './context'
@@ -30,7 +31,9 @@ export function ManagerContracts() {
           <option value="">Tất cả trạng thái</option>
           <option value="DRAFT">Nháp</option>
           <option value="ACTIVE">Hiệu lực</option>
-          <option value="ENDED">Kết thúc</option>
+          {provider('manager') === 'real'
+            ? <option value="EXPIRED">Hết hạn</option>
+            : <option value="ENDED">Kết thúc</option>}
           <option value="CANCELLED">Đã hủy</option>
         </select>
       </div>
@@ -44,7 +47,7 @@ export function ManagerContracts() {
             render: (c) => (
               <>
                 <ManagerLink to={`/manager/contracts/${c.id}`}>{c.code}</ManagerLink>
-                <p className="text-xs text-muted-foreground">{c.roomName}</p>
+                {c.roomName && <p className="text-xs text-muted-foreground">{c.roomName}</p>}
               </>
             ),
           },

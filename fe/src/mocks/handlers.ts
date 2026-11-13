@@ -369,15 +369,20 @@ export const handlers = [
       if (path === '/api/me' || path === '/api/v1/auth/me') {
         if (method === 'PATCH') {
           const input = profileSchema.parse(await payload())
-          Object.assign(user, {
-            ...input,
-            phone: input.phone || null,
-            dateOfBirth: input.dateOfBirth || null,
-            gender: input.gender || null,
-          })
+          user.fullName = input.fullName
+          user.phone = input.phone || null
+          if (input.dateOfBirth !== undefined) user.dateOfBirth = input.dateOfBirth || null
+          if (input.gender !== undefined) user.gender = input.gender || null
+          if (input.permanentAddress) user.permanentAddress = input.permanentAddress
+          if (input.cccdNumber) user.cccdNumber = input.cccdNumber
+          if (input.cccdIssueDate) user.cccdIssueDate = input.cccdIssueDate
+          if (input.cccdIssuePlace) user.cccdIssuePlace = input.cccdIssuePlace
           db.save()
         }
-        return ok(userSchema.parse(user))
+        return ok(userSchema.parse({
+          ...user,
+          cccdNumber: user.cccdNumber ? '•••• ' + user.cccdNumber.slice(-4) : null,
+        }))
       }
       if (path === '/api/appointments') {
         if (method === 'POST')
@@ -461,10 +466,10 @@ export const handlers = [
         return ok(record)
       }
       if (path === '/api/notifications/unread-count')
-        return ok({ count: db.notifications(user.id).filter((n) => !n.read).length })
+        return ok({ count: db.notifications(user.id).filter((n) => n.referenceType !== 'APPOINTMENT' && !n.read).length })
       if (path === '/api/notifications/mark-all-read' && method === 'PUT') {
         db.state.notifications
-          .filter((n) => n.recipientUserId === user.id)
+          .filter((n) => n.recipientUserId === user.id && n.referenceType !== 'APPOINTMENT')
           .forEach((n) => {
             n.read = true
           })
@@ -495,6 +500,7 @@ export const handlers = [
               ? []
               : db
                   .notifications(user.id)
+                  .filter((n) => n.referenceType !== 'APPOINTMENT')
                   .filter((n) => !params.has('read') || n.read === (params.get('read') === 'true'))
                   .filter((n) => !params.has('type') || n.type === params.get('type')),
             params,

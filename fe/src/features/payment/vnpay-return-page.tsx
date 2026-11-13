@@ -154,7 +154,7 @@ export function VnPayReturnPage() {
                 </Button>
               </Link>
               {data.orderInfo?.startsWith('Thanh toan hoa don') ? (
-                <Link to="/tenant/my-room" className="flex-1">
+                <Link to="/tenant/invoices" className="flex-1">
                   <Button className="w-full">
                     Về hoá đơn của tôi
                     <ArrowRight size={18} />

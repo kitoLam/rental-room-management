@@ -50,7 +50,7 @@ export default function RoomDetailPage() {
   const [params] = useSearchParams()
   const [gallery, setGallery] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
-  const [selectedSlots, setSelectedSlots] = useState<string[]>(() =>
+  const [requestedSlots, setSelectedSlots] = useState<string[]>(() =>
     readJson(params.get('slots'), []),
   )
   const room = useQuery({
@@ -93,6 +93,9 @@ export default function RoomDetailPage() {
     )
   const r = room.data
   const badge = r ? getRoomBadge(r) : null
+  const selectedSlots = requestedSlots.filter((id) =>
+    available.data?.slots.some((slot) => slot.id === id && slot.available),
+  )
   const bookable =
     r &&
     available.data?.available &&
@@ -109,7 +112,7 @@ export default function RoomDetailPage() {
   const earliestAvailableFrom =
     (available.data?.slots ?? [])
       .flatMap((s) =>
-        (s.available || s.availableFrom) && s.availableFrom ? [s.availableFrom] : [],
+        s.available && s.availableFrom ? [s.availableFrom] : [],
       )
       .sort()[0] ?? null
   return (
@@ -317,19 +320,14 @@ export default function RoomDetailPage() {
                         {available.data.slots.map((s) => (
                           <label
                             key={s.id}
-                            className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'} ${!s.available ? 'text-muted-foreground' : ''}`}
+                            className={`flex min-h-12 items-start gap-2 rounded-lg border p-3 text-sm ${!s.available ? 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600' : selectedSlots.includes(s.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}
                           >
                             <input
                               type="checkbox"
-                              className="mt-0.5 accent-primary"
+                              className={s.available ? 'mt-0.5 accent-primary' : 'mt-0.5 accent-gray-500'}
                               value={s.id}
                               checked={selectedSlots.includes(s.id)}
-                              disabled={
-                                !s.available &&
-                                !viewing.data?.slots.some(
-                                  (slot) => slot.id === s.id && slot.selectable,
-                                )
-                              }
+                              disabled={!s.available}
                               onChange={(event) =>
                                 setSelectedSlots((current) =>
                                   event.target.checked
@@ -341,10 +339,10 @@ export default function RoomDetailPage() {
                             <span className="grid gap-0.5 leading-snug">
                               <span className="font-medium">{s.label}</span>
                               {!s.available ? (
-                                <span className="text-xs text-muted-foreground">Đã được đặt</span>
+                                <span className="w-fit rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Đã được đặt</span>
                               ) : s.availableFrom ? (
                                 <span className="text-xs text-muted-foreground">
-                                  Từ {dateOnly(s.availableFrom)}
+                                  Từ {s.availableFrom.slice(8, 10)}/{s.availableFrom.slice(5, 7)}/{s.availableFrom.slice(2, 4)}
                                 </span>
                               ) : null}
                             </span>
@@ -405,7 +403,7 @@ export default function RoomDetailPage() {
                   )}
                   {selectedSlots.length > 0 && viewing.data?.canReceiveRequest && (
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Slot đang thuê vẫn chọn được để xem trong tương lai. Ngày và ca xem sẽ được
+                      Ngày và ca xem của các slot đã chọn sẽ được
                       kiểm tra ở bước tiếp theo.
                     </p>
                   )}

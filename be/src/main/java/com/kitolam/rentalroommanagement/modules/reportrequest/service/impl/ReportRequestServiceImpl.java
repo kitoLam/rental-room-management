@@ -525,7 +525,7 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         return getById(report.getId(), principal);
     }
 
-    /** Manager từ chối yêu cầu hỗ trợ kèm lý do (chuyển từ PENDING/IN_PROGRESS/WAITING_INFO sang REJECTED). */
+    /** Manager từ chối yêu cầu hỗ trợ kèm lý do (chuyển từ PENDING/WAITING_INFO sang REJECTED). */
     @Override
     @Transactional
     public ReportRequestResponse reject(String id, ReportRequestRejectRequest request, AuthPrincipal principal) {
@@ -533,9 +533,8 @@ public class ReportRequestServiceImpl implements ReportRequestService {
         ensureCanManage(report, principal);
 
         if (report.getStatus() != ReportRequestStatus.PENDING &&
-                report.getStatus() != ReportRequestStatus.IN_PROGRESS &&
                 report.getStatus() != ReportRequestStatus.WAITING_INFO) {
-            throw new BadRequestException("Chỉ có thể từ chối yêu cầu khi đang ở trạng thái Chờ xử lý, Đang xử lý hoặc Chờ bổ sung.");
+            throw new BadRequestException("Chỉ có thể từ chối yêu cầu khi đang ở trạng thái Chờ xử lý hoặc Chờ bổ sung.");
         }
 
         ReportRequestStatus previousStatus = report.getStatus();

@@ -27,14 +27,21 @@ export const invoiceItemSchema = z.object({
   quantity: money.nullish(),
   unitPrice: money.nullish(),
   amount: money,
+  warning: z.string().nullish(),
 })
 export type InvoiceItem = z.infer<typeof invoiceItemSchema>
 
 export const billingInvoiceSchema = z.object({
   id: z.string().nullish(),
-  contractId: z.string(),
+  contractId: z.string().nullish().transform((v) => v ?? ''),
   tenantId: z.string().nullish(),
   branchId: z.string().nullish(),
+  roomId: z.string().nullish(),
+  roomNumber: z.string().nullish(),
+  roomSlotId: z.string().nullish(),
+  slotCode: z.string().nullish(),
+  tenantName: z.string().nullish(),
+  contractNumber: z.string().nullish(),
   invoiceNumber: z.string().nullish(),
   period: z.string(),
   kind: z.enum(['MONTHLY', 'SUPPLEMENTARY']).nullish(),
@@ -75,6 +82,50 @@ const generateResultSchema = z.object({
 })
 export type GenerateResult = z.infer<typeof generateResultSchema>
 
+const slotEstimateSchema = z.object({
+  contractId: z.string(),
+  contractNumber: z.string().nullish(),
+  roomSlotId: z.string().nullish(),
+  slotCode: z.string().nullish(),
+  tenantName: z.string().nullish(),
+  stayFrom: z.string(),
+  stayTo: z.string(),
+  rentAmount: money,
+  roomServiceAmount: money,
+  personalServiceAmount: money,
+  electricityAmount: money,
+  slotServiceAmount: money,
+  totalAmount: money,
+  electricityUnchanged: z.boolean(),
+  warnings: z.array(z.string()),
+  items: z.array(invoiceItemSchema),
+})
+export type SlotEstimate = z.infer<typeof slotEstimateSchema>
+
+const estimateSchema = z.object({
+  branchId: z.string(),
+  period: z.string(),
+  currentPeriod: z.string(),
+  invoicedCount: z.number(),
+  totalAmount: money,
+  rooms: z.array(
+    z.object({
+      roomId: z.string(),
+      roomNumber: z.string().nullish(),
+      title: z.string().nullish(),
+      occupants: z.number(),
+      totalAmount: money,
+      slots: z.array(slotEstimateSchema),
+    }),
+  ),
+})
+export type InvoiceEstimate = z.infer<typeof estimateSchema>
+
+const confirmResultSchema = z.object({
+  created: z.array(billingInvoiceSchema),
+  skippedContractIds: z.array(z.string()),
+})
+
 const paymentUrlSchema = z.object({ paymentUrl: z.string() })
 
 /** VNPay rejects amounts under 5.000 ₫. */
@@ -111,6 +162,16 @@ export const billingApi = {
     ),
 
   // ----- staff (owner / manager / admin)
+  /** Invoices of one branch for a month, sorted by room then slot. */
+  branchInvoices: (branchId: string, period: string) =>
+    request('manager', `/api/v1/invoices?${new URLSearchParams({ branchId, period })}`, z.array(billingInvoiceSchema)),
+  /** Preview (not stored) for slots without an invoice for the month yet. */
+  estimate: (branchId: string, period: string) =>
+    request('manager', `/api/v1/invoices/estimate?${new URLSearchParams({ branchId, period })}`, estimateSchema),
+  /** contractIds omitted = every pending slot of the branch. */
+  confirmEstimate: (branchId: string, period: string, contractIds?: string[]) =>
+    request('manager', '/api/v1/invoices/estimate/confirm', confirmResultSchema,
+      write('POST', { branchId, period, contractIds: contractIds ?? [] })),
   invoicesOfMonth: async (period: string) =>
     (
       await request(
@@ -160,7 +221,9 @@ export const invoiceStatusTone: Record<InvoiceStatus, 'success' | 'warning' | 'd
 export const itemTypeLabel: Record<string, string> = {
   ROOM_RENT: 'Tiền phòng',
   ROOM_SERVICE: 'Dịch vụ phòng',
-  SLOT_SERVICE: 'Dịch vụ theo chỗ',
+  PERSONAL_SERVICE: 'Dịch vụ cá nhân',
+  ELECTRICITY: 'Tiền điện',
+  SLOT_SERVICE: 'Dịch vụ tự chọn',
   DEPOSIT: 'Tiền cọc',
   PENALTY: 'Phụ thu',
   OTHER: 'Khác',

@@ -53,6 +53,9 @@ app:
       enabled: ${AUTH_SEED_ENABLED:false}
     services:
       enabled: ${SERVICE_SEED_ENABLED:false}
+    # Wipes and rebuilds all electricity meter readings (last 6 months). Turn off after one run.
+    meter-readings:
+      enabled: ${METER_SEED_ENABLED:false}
     rooms:
       enabled: ${ROOM_SEED_ENABLED:false}
       # Empty = oldest ACTIVE branch

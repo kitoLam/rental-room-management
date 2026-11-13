@@ -65,6 +65,8 @@ public class VnPayServiceImpl implements VnPayService {
                 ? VnPayUtil.getRandomNumber(8) : request.getTransactionCode();
         String clientIp = VnPayUtil.getIpAddress(httpRequest);
 
+        if (request.getInvoiceId() != null && !request.getInvoiceId().isBlank()) requirePayableInvoice(request);
+
         // Lưu bản ghi Payment trạng thái PENDING
         Payment payment = paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef).orElse(null);
         if (payment == null) {
@@ -448,6 +450,21 @@ public class VnPayServiceImpl implements VnPayService {
             }
         }
         return cleanParams;
+    }
+
+    /** The invoice must still be owed and the amount must be within what is left to pay. */
+    private void requirePayableInvoice(VnPayCreatePaymentRequest request) {
+        var invoice = invoiceRepository.findByIdAndIsDeletedFalse(request.getInvoiceId())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy hoá đơn cần thanh toán"));
+        if (invoice.getStatus() != InvoiceStatus.ISSUED && invoice.getStatus() != InvoiceStatus.PARTIALLY_PAID
+                && invoice.getStatus() != InvoiceStatus.OVERDUE) {
+            throw new IllegalArgumentException("Hoá đơn " + invoice.getInvoiceNumber() + " không ở trạng thái chờ thanh toán");
+        }
+        BigDecimal remaining = invoice.getRemainingAmount() != null ? invoice.getRemainingAmount() : invoice.getTotalAmount();
+        if (request.getAmount() == null || request.getAmount().signum() <= 0
+                || (remaining != null && request.getAmount().compareTo(remaining) > 0)) {
+            throw new IllegalArgumentException("Số tiền thanh toán phải lớn hơn 0 và không vượt quá số còn phải trả của hoá đơn");
+        }
     }
 
     private void updateInvoiceIfPresent(Payment payment) {

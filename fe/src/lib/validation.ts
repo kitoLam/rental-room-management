@@ -94,12 +94,22 @@ export const changePasswordSchema = z
     message: 'Mật khẩu mới không được trùng với mật khẩu cũ.',
   })
 export const profileSchema = z.object({
-  fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(255),
+  fullName: z.string().trim().min(2, 'Nhập họ và tên.').max(100, 'Họ và tên tối đa 100 ký tự.'),
   phone: z.string().regex(/^(?:\+?[0-9 ]{9,15})?$/, 'Số điện thoại chưa hợp lệ.'),
   dateOfBirth: z
     .string()
-    .refine((v) => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && v < today()), 'Ngày sinh chưa hợp lệ.'),
+    .refine((v) => !v || (isValidIsoDate(v) && v < today()), 'Ngày sinh chưa hợp lệ.'),
   gender: z.enum(['', 'MALE', 'FEMALE', 'OTHER']),
+  permanentAddress: z.string().trim().refine((v) => !v || (v.length >= 5 && v.length <= 255),
+    'Địa chỉ thường trú phải từ 5 đến 255 ký tự.').optional(),
+  cccdNumber: z.string().trim().regex(/^(?:[0-9]{12})?$/, 'Số CCCD phải gồm đúng 12 chữ số.').optional(),
+  cccdIssueDate: z.string().refine((v) => !v || (isValidIsoDate(v) && v <= today()),
+    'Ngày cấp CCCD không hợp lệ hoặc ở tương lai.').optional(),
+  cccdIssuePlace: z.string().trim().refine((v) => !v || (v.length >= 2 && v.length <= 150),
+    'Nơi cấp CCCD phải từ 2 đến 150 ký tự.').optional(),
+}).refine((v) => !v.dateOfBirth || !v.cccdIssueDate || v.cccdIssueDate > v.dateOfBirth, {
+  path: ['cccdIssueDate'],
+  message: 'Ngày cấp CCCD phải sau ngày sinh.',
 })
 export function safeRedirect(value: string | null, fallback = '/user/dashboard') {
   if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value))

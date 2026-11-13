@@ -5,7 +5,7 @@ import { reportInputSchema, type ReportInput } from '@/interfaces/tenant'
 import { tenantApi } from '@/services/tenant'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Upload, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { imageAttachment, MAX_ATTACHMENT_COUNT } from './attachments'
@@ -42,6 +42,12 @@ export function CreateMaintenancePage() {
       attachments: [],
     },
   })
+
+  // Tự động gán thông tin phòng khi đổi phòng ở ô không gian thuê
+  useEffect(() => {
+    setSelectedTenancyId(defaultTenancy.id)
+    form.setValue('assetId', '')
+  }, [defaultTenancy.id, form])
   const category = useWatch({ control: form.control, name: 'category' })
   const attachments = useWatch({ control: form.control, name: 'attachments' })
 
@@ -163,7 +169,6 @@ export function CreateMaintenancePage() {
                       <option value="SERVICE">Dịch vụ</option>
                       <option value="COMPLAINT">Khiếu nại</option>
                       <option value="MAINTENANCE">Bảo trì</option>
-                      <option value="CONTRACT">Gia hạn / Hợp đồng</option>
                       <option value="OTHER">Khác</option>
                     </select>
                   </Field>

@@ -181,6 +181,7 @@ public class PaymentServiceImpl implements PaymentService {
         Set<String> bookingIds = new LinkedHashSet<>();
 
         if (!tenantActorIds.isEmpty()) {
+            ctIds.addAll(tenantActorIds);
             List<Object> actorValues = toIdValues(tenantActorIds);
 
             for (ContractTenant ct : mongo.find(

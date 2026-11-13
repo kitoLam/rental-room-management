@@ -140,9 +140,6 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
       description="Tra cứu phản hồi, thời hạn duyệt và lịch sử các yêu cầu trong phạm vi của bạn."
       actions={
         <div className="flex flex-wrap gap-3">
-          <Button asChild variant="outline">
-            <Link to="/notifications/viewing">Thông báo lịch xem</Link>
-          </Button>
           <Button asChild>
             <Link to="/rooms">Tìm phòng</Link>
           </Button>
