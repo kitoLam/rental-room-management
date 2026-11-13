@@ -65,6 +65,7 @@ export function ManagerRoomEditor() {
       name: 'operationalStatus',
       label: 'Vận hành',
       kind: 'select',
+      hint: 'Chỉ chuyển sang Bảo trì / Ngừng hoạt động được khi phòng không còn ai ở hay giữ chỗ.',
       options: [
         { value: 'ACTIVE', label: 'Hoạt động' },
         { value: 'MAINTENANCE', label: 'Bảo trì' },

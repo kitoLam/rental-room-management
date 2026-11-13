@@ -33,6 +33,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -155,7 +156,21 @@ public class RoomServiceImpl implements RoomService {
         if (request.images() != null) room.setImages(new ArrayList<>(request.images()));
         if (request.rules() != null) room.setRules(request.rules());
         if (request.roomServiceIds() != null) room.setRoomServiceIds(validRoomServices(room.getBranchId(), request.roomServiceIds()));
-        if (request.status() != null) room.setStatus(request.status());
+        if (request.status() != null && request.status() != room.getStatus()) {
+            boolean closing = request.status() == RoomStatus.MAINTENANCE || request.status() == RoomStatus.INACTIVE;
+            if (closing) {
+                // A room can only leave "active" once nobody lives in / holds any of its slots.
+                List<RoomSlot> slots = roomSlotRepository.findByRoomIdAndIsDeletedFalse(room.getId());
+                Map<String, String> busy = busySlots(slots);
+                if (!busy.isEmpty()) {
+                    throw new BadRequestException("Không thể chuyển phòng " + room.getRoomNumber() + " sang "
+                            + (request.status() == RoomStatus.MAINTENANCE ? "bảo trì" : "ngừng hoạt động")
+                            + " vì còn " + busy.size() + " chỗ đang có người ở hoặc được giữ: " + describe(slots, busy)
+                            + ". Phòng chỉ đổi trạng thái được khi không còn ai ở.");
+                }
+            }
+            room.setStatus(request.status());
+        }
         ensureUniqueNumber(room);
         syncSlots(room);
         return mapper.toResponse(roomRepository.save(room));

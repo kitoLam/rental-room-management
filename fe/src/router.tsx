@@ -623,8 +623,8 @@ export const router = createBrowserRouter([
               {
                 path: 'invoices/:invoiceId',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/invoice-detail-page'))
-                    .InvoiceDetailPage,
+                  Component: (await import('@/features/tenant/monthly-invoice-detail-page'))
+                    .MonthlyInvoiceDetailPage,
                 }),
               },
               {
