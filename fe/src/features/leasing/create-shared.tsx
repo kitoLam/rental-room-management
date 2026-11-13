@@ -18,10 +18,9 @@ const readJson = <T,>(raw: string | null, fallback: T): T => {
 export function BookingForm({ room }: { room: Room }) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [selectedSlots, setSelectedSlots] = useState<string[]>(() => readJson(params.get('slots'), []))
+  const [requestedSlots, setSelectedSlots] = useState<string[]>(() => readJson(params.get('slots'), []))
   const serviceSelection = readJson<ServiceSelection>(params.get('services'), {})
   const today = new Date().toISOString().slice(0, 10)
-  const roomDetailUrl = `/rooms/${room.id}?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
   const available = useQuery({
     queryKey: ['availability', room.id, today],
     queryFn: () => bookingService.availabilityForRoom(room.id, today, '9999-12-31'),
@@ -30,19 +29,21 @@ export function BookingForm({ room }: { room: Room }) {
     queryKey: ['room-services', room.id],
     queryFn: () => catalogService.services(room),
   })
+  const selectedSlots = requestedSlots.filter((id) =>
+    available.data?.slots.some((slot) => slot.id === id && slot.available),
+  )
+  const roomDetailUrl = `/rooms/${room.id}?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
   const selectedSlotsAvailable = selectedSlots.length > 0 && selectedSlots.every((id) =>
     available.data?.slots.some((slot) => slot.id === id && slot.available),
   )
-  // Ngày nhận phòng dự kiến = slot chọn sẵn sàng muộn nhất (khớp cách máy chủ chốt ngày bắt đầu thuê).
-  const expectedMoveInDate = (available.data?.slots ?? [])
-    .filter((slot) => selectedSlots.includes(slot.id) && slot.available && slot.availableFrom)
-    .map((slot) => slot.availableFrom as string)
-    .sort()
-    .at(-1) ?? null
+  const selectedAvailableSlots = available.data?.slots.filter((slot) =>
+    selectedSlots.includes(slot.id) && slot.available,
+  ) ?? []
   const create = useMutation({
     mutationFn: () => bookingService.create({
       roomId: room.id,
       roomSlotIds: selectedSlots,
+      slotMoveInDates: Object.fromEntries(selectedAvailableSlots.map((slot) => [slot.id, slot.availableFrom ?? null])),
       selectedServices: Object.entries(serviceSelection)
         .filter(([, quantity]) => quantity > 0)
         .map(([serviceId, quantity]) => ({ serviceId, quantity })),
@@ -66,7 +67,7 @@ export function BookingForm({ room }: { room: Room }) {
           <Field id="booking-slots" label="Slot muốn thuê">
             <div className="grid gap-2 sm:grid-cols-2">
               {available.data?.slots.map((slot) => (
-                <label key={slot.id} className={`flex min-h-12 items-start gap-3 rounded-lg border p-3 text-sm ${selectedSlots.includes(slot.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}>
+                <label key={slot.id} className={`flex min-h-12 items-start gap-3 rounded-lg border p-3 text-sm ${!slot.available ? 'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600' : selectedSlots.includes(slot.id) ? 'border-primary bg-primary-soft' : 'border-border'}`}>
                   <input
                     type="checkbox"
                     className="mt-0.5"
@@ -79,11 +80,9 @@ export function BookingForm({ room }: { room: Room }) {
                   <span className="grid gap-0.5 leading-snug">
                     <span className="font-medium">{slot.label}</span>
                     {!slot.available ? (
-                      slot.availableFrom
-                        ? <span className="text-xs text-warning">Đang thuê · nhận phòng từ {dateOnly(slot.availableFrom)}</span>
-                        : <span className="text-xs text-muted-foreground">Đã giữ hoặc đang ở</span>
+                      <span className="w-fit rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">Đã được đặt</span>
                     ) : slot.availableFrom ? (
-                      <span className="text-xs text-muted-foreground">Từ {dateOnly(slot.availableFrom)}</span>
+                      <span className="text-xs text-muted-foreground">Từ {slot.availableFrom.slice(8, 10)}/{slot.availableFrom.slice(5, 7)}/{slot.availableFrom.slice(2, 4)}</span>
                     ) : null}
                   </span>
                 </label>
@@ -129,10 +128,17 @@ export function BookingForm({ room }: { room: Room }) {
           <h2 className="font-bold">Thông tin phòng</h2>
           <p className="mt-4 text-sm text-muted-foreground">Giá thuê tham khảo mỗi slot</p>
           <p className="mt-1 font-bold">{room.price.toLocaleString('vi-VN')} ₫ / tháng</p>
-          {expectedMoveInDate && (
+          {selectedAvailableSlots.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm text-muted-foreground">Ngày nhận phòng dự kiến</p>
-              <p className="mt-1 font-bold text-primary">{dateOnly(expectedMoveInDate)}</p>
+              <p className="text-sm text-muted-foreground">Ngày nhận phòng theo slot</p>
+              <dl className="mt-2 space-y-1 text-sm">
+                {selectedAvailableSlots.map((slot) => (
+                  <div key={slot.id} className="flex justify-between gap-3">
+                    <dt>{slot.label}</dt>
+                    <dd className="font-semibold">{slot.availableFrom ? dateOnly(slot.availableFrom) : 'Chưa có thông tin'}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           )}
           <p className="mt-4 text-sm text-muted-foreground">Tiền cọc được tính ở máy chủ từ mức cọc của phòng nhân số slot đã chọn.</p>

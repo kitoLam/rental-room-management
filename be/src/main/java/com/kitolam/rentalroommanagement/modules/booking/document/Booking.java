@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -46,6 +47,9 @@ public class Booking extends BaseDocument {
     private LocalDate expectedMoveInDate;
 
     private LocalDate expectedMoveOutDate;
+
+    /** Slot start dates fixed when the booking is created. Null for existing bookings. */
+    private Map<String, LocalDate> slotMoveInDates;
 
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal holdingDepositAmount;

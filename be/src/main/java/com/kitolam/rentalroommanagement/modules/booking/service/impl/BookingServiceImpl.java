@@ -44,6 +44,7 @@ import com.kitolam.rentalroommanagement.modules.payment.repository.PaymentReposi
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
+import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.support.RoomSlotAvailabilityRoller;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
@@ -57,6 +58,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -81,6 +83,8 @@ import org.springframework.beans.factory.annotation.Value;
 @Service
 @RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
+
+    private static final LocalDate OPEN_ENDED_SEARCH = LocalDate.of(9999, 12, 31);
 
     private final BookingRepository bookingRepository;
     private final ContractRepository contractRepository;
@@ -144,17 +148,19 @@ public class BookingServiceImpl implements BookingService {
             tenant.addBranch(targetRoom.getBranchId());
             tenantRepository.save(tenant);
         }
-        // Mốc so sánh ngày nhả phòng phải theo giờ Việt Nam, không theo UTC của clock.
         LocalDate todayVietnam = todayVietnam();
-        LocalDate holdStart = todayVietnam;
-        for (String slotId : slotIds) ensureNoOccupancyOverlap(slotId, holdStart, null, null);
-        // Ngày bắt đầu thuê lấy theo slot sẵn sàng muộn nhất; slot sắp hết hạn thuê dùng ngày phòng thực sự trống.
-        Map<String, LocalDate> nextFree = nextFreeDates(slotIds);
-        LocalDate availableFrom = slots.stream()
-                .map(slot -> effectiveAvailableFrom(slot, nextFree.get(slot.getId()), todayVietnam))
-                .filter(Objects::nonNull)
-                .max(LocalDate::compareTo)
-                .orElse(null);
+        var occupancies = blockingOccupancies(slotIds);
+        Map<String, LocalDate> slotMoveInDates = new LinkedHashMap<>();
+        for (RoomSlot slot : slots) {
+            var availability = slotAvailability(slot, todayVietnam, OPEN_ENDED_SEARCH,
+                    todayVietnam, occupancies.getOrDefault(slot.getId(), List.of()));
+            if (!availability.available()) throw new ConflictException(availability.reason());
+            ensureNoOccupancyOverlap(slot.getId(), availability.availableFrom(), null, null);
+            slotMoveInDates.put(slot.getId(), availability.availableFrom());
+        }
+        if (request.slotMoveInDates() != null && !request.slotMoveInDates().equals(slotMoveInDates))
+            throw new ConflictException("Ngày nhận phòng đã thay đổi. Vui lòng tải lại để xác nhận ngày mới.");
+        LocalDate availableFrom = slotMoveInDates.values().stream().max(LocalDate::compareTo).orElseThrow();
         // One shared payment: deposit of every slot (room deposit split per slot).
         BigDecimal deposit = slots.stream().map(slot -> {
             BigDecimal perSlot = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.deposit(room(slot.getRoomId()));
@@ -167,6 +173,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setRoomSlotId(slots.getFirst().getId());
         booking.setRoomSlotIds(slotIds);
         booking.setExpectedMoveInDate(availableFrom);
+        booking.setSlotMoveInDates(slotMoveInDates);
         booking.setHoldingDepositAmount(deposit);
         Instant deadline = clock.instant().plusSeconds(24 * 60 * 60);
         booking.setPaymentDeadline(deadline);
@@ -182,16 +189,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public RoomAvailabilityResponse checkAvailability(String roomSlotId, LocalDate startDate, LocalDate endDate) {
-        expireOverdueBookings();
-        validateRange(startDate, endDate);
-        RoomSlot slot = roomSlot(roomSlotId);
-        boolean available = !hasOccupancyOverlap(roomSlotId, startDate, endDate, null);
-        Map<String, LocalDate> nextFree = nextFreeDates(List.of(roomSlotId));
-        // Slot trống: ngày theo availableFrom của slot. Slot đang thuê: chỉ biết ngày nhận phòng khi lượt ở có endDate.
-        LocalDate availableFrom = available ? effectiveAvailableFrom(slot, null, todayVietnam())
-                : nextFree.get(roomSlotId);
-        return new RoomAvailabilityResponse(roomSlotId, slot.getSlotCode(), startDate, endDate, available,
-                available ? null : releaseReason(nextFree.get(roomSlotId), availableFrom), availableFrom);
+        return checkAvailability(List.of(roomSlotId), startDate, endDate).getFirst();
     }
 
     @Override
@@ -208,61 +206,50 @@ public class BookingServiceImpl implements BookingService {
                 .collect(Collectors.toMap(RoomSlot::getId, slot -> slot));
         if (slots.size() != ids.size()) throw new NotFoundException("Không tìm thấy một hoặc nhiều slot");
 
-        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
-        List<RoomSlotOccupancy> overlapping = new ArrayList<>(roomSlotOccupancyRepository
-                .findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
-                        ids, blockingStatuses, endDate, startDate));
-        overlapping.addAll(roomSlotOccupancyRepository
-                .findByRoomSlotIdInAndStatusInAndStartDateLessThanAndEndDateIsNullAndIsDeletedFalse(
-                        ids, blockingStatuses, endDate));
-        // Lượt ở sắp hết hạn được nhả trước 14 ngày, không còn chặn nếu ngày đặt mới rơi vào sau mốc nhả.
-        var blockedSlotIds = overlapping.stream()
-                .filter(occupancy -> occupancy.getEndDate() == null
-                        || !RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), startDate))
-                .map(RoomSlotOccupancy::getRoomSlotId).collect(Collectors.toSet());
-
-        Map<String, LocalDate> nextFree = nextFreeDates(ids);
-        LocalDate todayVietnam = todayVietnam();
-        return ids.stream().map(id -> {
-            RoomSlot slot = slots.get(id);
-            boolean available = !blockedSlotIds.contains(id);
-            // Slot trống: ngày theo availableFrom của slot. Slot đang thuê: chỉ biết ngày nhận phòng khi lượt ở có endDate.
-            LocalDate availableFrom = available ? effectiveAvailableFrom(slot, null, todayVietnam) : nextFree.get(id);
-            return new RoomAvailabilityResponse(id, slot.getSlotCode(), startDate, endDate, available,
-                    available ? null : releaseReason(nextFree.get(id), availableFrom), availableFrom);
-        }).toList();
+        var occupancies = blockingOccupancies(ids);
+        LocalDate today = todayVietnam();
+        return ids.stream().map(id -> slotAvailability(slots.get(id), startDate, endDate, today,
+                occupancies.getOrDefault(id, List.of()))).toList();
     }
 
-    /** Ngày phòng thực sự trống theo lượt ở hiện tại (endDate muộn nhất); null nếu không có lượt ở hữu hạn. */
-    private Map<String, LocalDate> nextFreeDates(Collection<String> roomSlotIds) {
-        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
-        return roomSlotOccupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(roomSlotIds, blockingStatuses)
-                .stream()
-                .filter(occupancy -> occupancy.getEndDate() != null)
-                .collect(Collectors.toMap(RoomSlotOccupancy::getRoomSlotId, RoomSlotOccupancy::getEndDate,
-                        (a, b) -> a.isAfter(b) ? a : b));
+    private Map<String, List<RoomSlotOccupancy>> blockingOccupancies(Collection<String> ids) {
+        return roomSlotOccupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(
+                ids, List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE))
+                .stream().collect(Collectors.groupingBy(RoomSlotOccupancy::getRoomSlotId));
     }
 
-    /**
-     * Ngày bắt đầu thuê hiệu dụng của slot: availableFrom trên slot (đã dời +7 nếu quá khứ) và, nếu slot đang
-     * có lượt ở, ngày phòng thực sự trống — lấy mốc muộn hơn để không bao giờ nhận phòng khi còn người thuê.
-     */
-    private LocalDate effectiveAvailableFrom(RoomSlot slot, LocalDate nextFreeDate, LocalDate todayVietnam) {
-        LocalDate rolled = RoomSlotAvailabilityRoller.rollForward(slot.getAvailableFrom(), todayVietnam);
-        if (nextFreeDate == null) return rolled;
-        LocalDate freeAt = nextFreeDate.isBefore(todayVietnam) ? todayVietnam : nextFreeDate;
-        return rolled == null || freeAt.isAfter(rolled) ? freeAt : rolled;
+    private RoomAvailabilityResponse slotAvailability(RoomSlot slot, LocalDate start, LocalDate end, LocalDate today,
+                                                       List<RoomSlotOccupancy> occupancies) {
+        if (slot.getStatus() == RoomSlotStatus.MAINTENANCE || slot.getStatus() == RoomSlotStatus.INACTIVE)
+            return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
+                    "Chỗ hiện không nhận đặt.", null);
+        LocalDate availableFrom = RoomSlotAvailabilityRoller.rollForward(slot.getAvailableFrom(), today);
+        String reason = null;
+        for (RoomSlotOccupancy occupancy : occupancies) {
+            LocalDate occupiedUntil = occupancy.getEndDate();
+            if (occupiedUntil != null && occupiedUntil.isBefore(today)) continue;
+            if (occupancy.getStatus() == OccupancyStatus.RESERVED || occupiedUntil == null) {
+                return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
+                        "Chỗ đang được giữ hoặc chưa xác định ngày trống.", null);
+            }
+            LocalDate freeFrom = occupiedUntil.plusDays(1);
+            if (availableFrom == null || freeFrom.isAfter(availableFrom)) availableFrom = freeFrom;
+            if (!RoomSlotAvailabilityRoller.releasesBefore(occupiedUntil, today))
+                reason = "Chỗ chưa mở đặt cọc cho kỳ thuê tiếp theo.";
+        }
+        if (slot.getStatus() == RoomSlotStatus.OCCUPIED && occupancies.isEmpty())
+            return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
+                    "Chưa có thông tin ngày nhận phòng.", null);
+        if (availableFrom == null) reason = "Chưa có thông tin ngày nhận phòng.";
+        else if (!availableFrom.isBefore(end)
+                || (!end.equals(OPEN_ENDED_SEARCH) && start.isBefore(availableFrom)))
+            reason = "Khoảng thuê yêu cầu bắt đầu trước khi chỗ trống hoặc không còn ngày thuê phù hợp.";
+        return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, reason == null,
+                reason, availableFrom);
     }
 
     private LocalDate todayVietnam() {
         return RoomSlotAvailabilityRoller.todayVietnam(clock);
-    }
-
-    private String releaseReason(LocalDate nextFreeDate, LocalDate availableFrom) {
-        if (nextFreeDate == null) return "Chỗ đã có lượt ở/giữ chỗ trùng hoặc hiện không nhận đặt.";
-        return "Chỗ đang có người thuê; có thể đặt cọc từ "
-                + RoomSlotAvailabilityRoller.releaseDate(nextFreeDate) + " (nhả trước "
-                + RoomSlotAvailabilityRoller.RELEASE_LEAD_DAYS + " ngày), nhận phòng từ " + availableFrom + ".";
     }
 
     @Override
@@ -364,6 +351,8 @@ public class BookingServiceImpl implements BookingService {
         }
 
         LocalDate start = request.expectedMoveInDate() == null ? booking.getExpectedMoveInDate() : request.expectedMoveInDate();
+        if (booking.getSlotMoveInDates() != null && !Objects.equals(start, booking.getExpectedMoveInDate()))
+            throw new BadRequestException("Không thể đổi ngày bắt đầu thuê đã chốt cho các slot.");
         LocalDate end = request.expectedMoveOutDate() == null ? booking.getExpectedMoveOutDate() : request.expectedMoveOutDate();
         validateRange(start, end);
         BigDecimal amount = request.holdingDepositAmount();
@@ -379,7 +368,8 @@ public class BookingServiceImpl implements BookingService {
                 || request.checkInDeadline().isBefore(start.atStartOfDay(java.time.ZoneOffset.UTC).toInstant()))
             throw new BadRequestException("Hạn check-in phải ở tương lai và không trước ngày bắt đầu thuê");
         claimBookingSlots(booking);
-        for (String slotId : bookingSlotIds(booking)) ensureNoOccupancyOverlap(slotId, start, end, booking.getId());
+        for (String slotId : bookingSlotIds(booking)) ensureNoOccupancyOverlap(slotId, booking.getSlotMoveInDates() == null
+                ? start : booking.getSlotMoveInDates().get(slotId), end, booking.getId());
 
         booking.setExpectedMoveInDate(start);
         booking.setExpectedMoveOutDate(end);
@@ -391,7 +381,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setRejectReason(null);
         booking.setStatus(BookingStatus.AWAITING_PAYMENT);
         booking.setDepositStatus(DepositStatus.UNPAID);
-        updateReservationRange(booking.getId(), start, end);
+        updateReservationRange(booking, start, end);
         return response(saveTransition(booking, previous, previous == BookingStatus.REQUESTED
                 ? "Owner duyệt yêu cầu và gửi điều khoản giữ chỗ."
                 : "Owner cập nhật và gửi lại điều khoản giữ chỗ."));
@@ -671,36 +661,10 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private boolean hasOccupancyOverlap(String roomSlotId, LocalDate start, LocalDate end, String excludeBookingId) {
-        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
-        if (end == null) {
-            return roomSlotOccupancyRepository.findByRoomSlotIdAndStatusInAndIsDeletedFalse(roomSlotId, blockingStatuses)
-                    .stream()
-                    .filter(occupancy -> excludeBookingId == null || !excludeBookingId.equals(occupancy.getBookingId()))
-                    .anyMatch(occupancy -> occupancy.getEndDate() == null
-                            || (occupancy.getEndDate().isAfter(start)
-                                && !RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), start)));
-        }
-        return getOverlappingOccupancies(roomSlotId, start, end, excludeBookingId).stream()
-                .anyMatch(occupancy -> occupancy.getEndDate() == null
-                        || !RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), start));
-    }
-
-    /**
-     * Các lượt ở hiện chặn khoảng ngày [start, end). Một lượt ở sắp hết hạn được coi là đã nhả cho khách mới
-     * kể từ {@code endDate - 14 ngày}, nên nếu ngày đặt mới rơi vào sau mốc đó thì lượt ở không còn chặn.
-     */
-    private List<RoomSlotOccupancy> getOverlappingOccupancies(String roomSlotId, LocalDate start, LocalDate end,
-                                                               String excludeBookingId) {
-        List<OccupancyStatus> blockingStatuses = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
-        List<RoomSlotOccupancy> overlapping = new ArrayList<>(roomSlotOccupancyRepository
-                .findByRoomSlotIdAndStatusInAndStartDateLessThanAndEndDateGreaterThanAndIsDeletedFalse(
-                        roomSlotId, blockingStatuses, end, start));
-        overlapping.addAll(roomSlotOccupancyRepository
-                .findByRoomSlotIdAndStatusInAndStartDateLessThanAndEndDateIsNullAndIsDeletedFalse(
-                        roomSlotId, blockingStatuses, end));
-        return overlapping.stream()
+        return blockingOccupancies(List.of(roomSlotId)).getOrDefault(roomSlotId, List.of()).stream()
                 .filter(occupancy -> excludeBookingId == null || !excludeBookingId.equals(occupancy.getBookingId()))
-                .toList();
+                .anyMatch(occupancy -> (occupancy.getEndDate() == null || !occupancy.getEndDate().isBefore(start))
+                        && (end == null || occupancy.getStartDate() == null || !occupancy.getStartDate().isAfter(end)));
     }
 
     private RoomSlot claimSlot(String roomSlotId) {
@@ -781,6 +745,8 @@ public class BookingServiceImpl implements BookingService {
             contract.setRoomSlotId(slot.getId());
             contract.setRoomSlotIds(List.of(slot.getId()));
             contract.setBookingId(booking.getId());
+            if (booking.getSlotMoveInDates() != null)
+                contract.setStartDate(booking.getSlotMoveInDates().get(slot.getId()));
             contract.setTenantId(booking.getTenantId());
             contract.setManagerId(managerAccountId);
             contract.setContractNumber(contractService.nextContractNumber());
@@ -828,7 +794,7 @@ public class BookingServiceImpl implements BookingService {
         RoomSlotOccupancy occupancy = new RoomSlotOccupancy();
         occupancy.setRoomSlotId(slotId);
         occupancy.setBookingId(booking.getId());
-        occupancy.setStartDate(booking.getExpectedMoveInDate() == null ? LocalDate.now(clock) : booking.getExpectedMoveInDate());
+        occupancy.setStartDate(booking.getSlotMoveInDates().get(slotId));
         occupancy.setEndDate(booking.getExpectedMoveOutDate());
         occupancy.setStatus(OccupancyStatus.RESERVED);
         return occupancy;
@@ -847,12 +813,14 @@ public class BookingServiceImpl implements BookingService {
             throw new ConflictException("Không tìm thấy reservation của booking trong RoomSlotOccupancy");
     }
 
-    private void updateReservationRange(String bookingId, LocalDate start, LocalDate end) {
+    private void updateReservationRange(Booking booking, LocalDate start, LocalDate end) {
+        String bookingId = booking.getId();
         List<RoomSlotOccupancy> reservations = roomSlotOccupancyRepository.findByBookingIdAndIsDeletedFalse(bookingId).stream()
                 .filter(occupancy -> occupancy.getStatus() == OccupancyStatus.RESERVED).toList();
         if (reservations.isEmpty()) throw new ConflictException("Không tìm thấy reservation của booking trong RoomSlotOccupancy");
         reservations.forEach(occupancy -> {
-            occupancy.setStartDate(start);
+            if (booking.getSlotMoveInDates() == null)
+                occupancy.setStartDate(start);
             occupancy.setEndDate(end);
             roomSlotOccupancyRepository.save(occupancy);
         });
@@ -956,7 +924,7 @@ public class BookingServiceImpl implements BookingService {
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(b.getTenantId()).orElse(null);
         User user = tenant == null ? null : userRepository.findByEmailAndIsDeletedFalse(tenant.getEmail()).orElse(null);
-        return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), bookingSlotIds(b), slots.stream().map(RoomSlot::getSlotCode).toList(), b.getExpectedMoveInDate(),
+        return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), bookingSlotIds(b), slots.stream().map(RoomSlot::getSlotCode).toList(), b.getExpectedMoveInDate(), b.getSlotMoveInDates(),
                 b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(), b.getCheckInDeadline(), b.getContractId(),
                 b.getContractIds() == null ? List.of() : List.copyOf(b.getContractIds()),
                 b.getCancellationPolicy(), b.getDepositStatus(), b.getRejectReason(), b.getStatus(),
