@@ -20,6 +20,8 @@ public interface ContractRepository extends BaseRepository<Contract> {
 
     java.util.List<Contract> findByRoomIdInAndIsDeletedFalse(java.util.Collection<String> roomIds);
 
+    java.util.List<Contract> findByTenantIdAndIsDeletedFalse(String tenantId);
+
     java.util.List<Contract> findByStatusAndEvidenceDeadlineLessThanEqualAndIsDeletedFalse(
             com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus status, java.time.Instant deadline);
 

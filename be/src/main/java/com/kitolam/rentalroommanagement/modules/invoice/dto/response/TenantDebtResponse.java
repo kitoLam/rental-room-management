@@ -41,7 +41,12 @@ public record TenantDebtResponse(
         BigDecimal totalAmount,
         BigDecimal paidAmount,
         BigDecimal remainingAmount,
-        String status
+        String status,
+        /** Số ngày trễ đã ghi nhận cho kỳ này trước lần nhắc gần nhất (0 nếu chưa từng trễ). */
+        long recordedLateDays,
+        /** Số lần hệ thống đã gửi nhắc nhở cho kỳ này. */
+        int reminderCount,
+        /** Lịch sử trễ hạn của các kỳ trước của hợp đồng. */
+        List<LatePaymentHistoryResponse> latePaymentHistory
 ) {
 }
-

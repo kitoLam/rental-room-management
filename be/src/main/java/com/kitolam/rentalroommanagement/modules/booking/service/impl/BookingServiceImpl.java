@@ -51,6 +51,7 @@ import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomS
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
+import com.kitolam.rentalroommanagement.modules.tenant.enums.TenantStatus;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -142,8 +143,7 @@ public class BookingServiceImpl implements BookingService {
         if (slots.stream().anyMatch(slot -> !roomId.equals(slot.getRoomId())))
             throw new BadRequestException("Các slot cần thuộc cùng một phòng");
         Room targetRoom = room(roomId);
-        if (tenant.isInactiveInBranch(targetRoom.getBranchId()))
-            throw new ForbiddenException("Tài khoản của bạn hiện đang tạm ngưng hoạt động tại cơ sở này");
+        ensureTenantActiveAtBranch(tenant, targetRoom.getBranchId());
         if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(targetRoom.getBranchId())) {
             tenant.addBranch(targetRoom.getBranchId());
             tenantRepository.save(tenant);
@@ -865,8 +865,23 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy slot"));
     }
 
-    private Tenant tenant(AuthPrincipal principal) {
-        if (principal.email() == null) throw new ForbiddenException("Tài khoản không có email");
+    /**
+     * Tenant bị tạm ngưng (INACTIVE/LOCKED) hoặc bị chặn tại đúng chi nhánh đó thì không được đặt phòng
+     * ở chi nhánh này. Chặn tại tầng nghiệp vụ để mọi luồng tạo booking đều đi qua một chỗ.
+     */
+    private void ensureTenantActiveAtBranch(Tenant tenant, String branchId) {
+        if (tenant.getStatus() == TenantStatus.INACTIVE) {
+            throw new ForbiddenException("Tài khoản người thuê đang bị tạm ngưng, không thể đặt phòng");
+        }
+        if (tenant.getStatus() == TenantStatus.LOCKED) {
+            throw new ForbiddenException("Tài khoản người thuê đang bị khoá, không thể đặt phòng");
+        }
+        if (tenant.isInactiveInBranch(branchId)) {
+            throw new ForbiddenException("Tài khoản của bạn hiện đang tạm ngưng hoạt động tại cơ sở này");
+        }
+    }
+
+    private Tenant tenant(AuthPrincipal principal) {        if (principal.email() == null) throw new ForbiddenException("Tài khoản không có email");
         return tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElseGet(() -> {
             User user = userRepository.findByEmailAndIsDeletedFalse(principal.email())
                     .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));

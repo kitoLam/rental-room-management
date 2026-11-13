@@ -17,8 +17,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CalendarClock,
+  BellRing,
   CheckCircle2,
-  Clock,
   CreditCard,
   Droplets,
   FileText,
@@ -27,7 +27,7 @@ import {
   UserRound,
   Zap,
 } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import { Link } from 'react-router'
 
 function matchesTenancy(item: TenantDebtItem, t: Tenancy): boolean {
@@ -117,50 +117,6 @@ export function TenantOverdueGate({ children }: { children?: ReactNode }) {
   )
 }
 
-interface ContractDebtHistoryRow {
-  index: number
-  period: string
-  monthLabel: string
-  isCurrentPeriod: boolean
-  isFirstMonthPeriod: boolean
-  stayedDays?: number
-  stayedPercent?: number
-  dueDate: string
-  roomRentAmount: number
-  servicesAmount: number
-  utilityAmount: number | null
-  utilityNote?: string
-  totalAmount: number
-  paidAmount: number
-  remainingAmount: number
-  overdue: boolean
-  overdueDays: number
-  status: 'PAID' | 'OVERDUE' | 'UNPAID' | 'UPCOMING'
-}
-
-function parseYearMonth(dateOrPeriod?: string | null): { year: number; month: number } | null {
-  if (!dateOrPeriod) return null
-  const match = /^(\d{4})-(\d{2})/.exec(dateOrPeriod.trim())
-  if (!match) return null
-  const year = Number(match[1])
-  const month = Number(match[2])
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null
-  return { year, month }
-}
-
-function addMonths(ym: { year: number; month: number }, offset: number): { year: number; month: number } {
-  const total = ym.year * 12 + (ym.month - 1) + offset
-  return {
-    year: Math.floor(total / 12),
-    month: (total % 12) + 1,
-  }
-}
-
-function compareYm(a: { year: number; month: number }, b: { year: number; month: number }): number {
-  if (a.year !== b.year) return a.year - b.year
-  return a.month - b.month
-}
-
 export default function TenantDebtsPage() {
   const user = useSession((s) => s.user)
   const tenantCtx = useTenant() as { tenancy?: Tenancy; tenancies?: Tenancy[] } | undefined
@@ -175,7 +131,6 @@ export default function TenantDebtsPage() {
   const tenancies = contextTenancies ?? fallbackTenanciesQuery.data ?? []
 
   const debtsQuery = useTenantDebtsQuery(Boolean(user))
-  const [issuedOnly, setIssuedOnly] = useState(false)
 
   const currentDebt = useMemo(() => {
     const raw = debtsQuery.data?.content ?? []
@@ -195,149 +150,10 @@ export default function TenantDebtsPage() {
     [currentDebt],
   )
 
-  const contractHistory = useMemo<ContractDebtHistoryRow[]>(() => {
-    if (!currentDebt || !firstMonthProration) return []
-
-    const currentYm = parseYearMonth(currentDebt.period) ?? {
-      year: new Date().getFullYear(),
-      month: new Date().getMonth() + 1,
-    }
-    const startDateStr = currentDebt.contractStartDate || activeTenancy?.startDate
-    const endDateStr = currentDebt.contractEndDate || activeTenancy?.endDate
-
-    let startYm = parseYearMonth(startDateStr) ?? addMonths(currentYm, -2)
-    let endYm = parseYearMonth(endDateStr) ?? addMonths(startYm, 5)
-
-    if (compareYm(currentYm, startYm) < 0) startYm = currentYm
-    if (compareYm(currentYm, endYm) > 0) endYm = currentYm
-
-    const startDay = startDateStr ? Math.min(30, Math.max(1, Number(startDateStr.slice(8, 10)) || 1)) : 1
-    const endDay = endDateStr ? Number(endDateStr.slice(8, 10)) : 0
-    const rawMonths = (endYm.year - startYm.year) * 12 + (endYm.month - startYm.month)
-    const totalPeriods =
-      rawMonths > 1 && startDay > 0 && endDay > 0 && endDay <= startDay
-        ? Math.max(1, rawMonths)
-        : Math.max(1, rawMonths + 1)
-
-    const dueDayNum = currentDebt.paymentDueDay ?? 5
-    const standardMonthlyRent = firstMonthProration.baseRoomRent
-    const firstMonthStayedDays = 30 - (startDay - 1)
-    const firstMonthStayedPercent = Math.round((firstMonthStayedDays / 30) * 1000) / 10
-    const firstMonthProratedRent = Math.round((standardMonthlyRent * firstMonthStayedDays) / 30)
-
-    const rows: ContractDebtHistoryRow[] = []
-
-    for (let idx = 0; idx < totalPeriods; idx++) {
-      const ym = addMonths(startYm, idx)
-      const monthStr = String(ym.month).padStart(2, '0')
-      const period = `${ym.year}-${monthStr}`
-      const maxDayInMonth = new Date(ym.year, ym.month, 0).getDate()
-      const clampedDueDay = String(Math.min(dueDayNum, maxDayInMonth)).padStart(2, '0')
-      const cmp = compareYm(ym, currentYm)
-      const isFirstContractPeriod = idx === 0
-
-      if (cmp === 0) {
-        rows.push({
-          index: idx + 1,
-          period,
-          monthLabel: `Tháng ${monthStr}/${ym.year}`,
-          isCurrentPeriod: true,
-          isFirstMonthPeriod: firstMonthProration.isFirstMonth,
-          stayedDays: firstMonthProration.isFirstMonth ? firstMonthProration.stayedDays : 30,
-          stayedPercent: firstMonthProration.isFirstMonth ? firstMonthProration.stayedPercent : 100,
-          dueDate: currentDebt.dueDate,
-          roomRentAmount: currentDebt.roomRentAmount,
-          servicesAmount: currentDebt.registeredServicesAmount,
-          utilityAmount: currentDebt.electricityAmount + currentDebt.waterAmount,
-          utilityNote: firstMonthProration.isFirstMonth ? 'Tính vào tháng sau' : undefined,
-          totalAmount: currentDebt.totalAmount,
-          paidAmount: currentDebt.paidAmount,
-          remainingAmount: currentDebt.remainingAmount,
-          overdue: currentDebt.overdue,
-          overdueDays: currentDebt.overdueDays,
-          status:
-            currentDebt.remainingAmount === 0
-              ? 'PAID'
-              : currentDebt.overdue
-                ? 'OVERDUE'
-                : 'UNPAID',
-        })
-      } else if (cmp < 0) {
-        // Kỳ trước trong thời hạn hợp đồng (đã thanh toán)
-        const roomRentAmount = isFirstContractPeriod ? firstMonthProratedRent : standardMonthlyRent
-        const servicesAmount = isFirstContractPeriod ? 0 : currentDebt.registeredServicesAmount
-        const baseUtility = currentDebt.electricityAmount + currentDebt.waterAmount || 350000
-        const variation = (((idx + 1) * 17) % 5) - 2
-        const utilityAmount = isFirstContractPeriod
-          ? 0
-          : Math.max(120000, baseUtility + variation * 15000)
-        const totalAmount = roomRentAmount + servicesAmount + utilityAmount
-        rows.push({
-          index: idx + 1,
-          period,
-          monthLabel: `Tháng ${monthStr}/${ym.year}`,
-          isCurrentPeriod: false,
-          isFirstMonthPeriod: isFirstContractPeriod,
-          stayedDays: isFirstContractPeriod ? firstMonthStayedDays : 30,
-          stayedPercent: isFirstContractPeriod ? firstMonthStayedPercent : 100,
-          dueDate: `${ym.year}-${monthStr}-${clampedDueDay}`,
-          roomRentAmount,
-          servicesAmount,
-          utilityAmount,
-          utilityNote: isFirstContractPeriod ? 'Tính vào tháng sau' : undefined,
-          totalAmount,
-          paidAmount: totalAmount,
-          remainingAmount: 0,
-          overdue: false,
-          overdueDays: 0,
-          status: 'PAID',
-        })
-      } else {
-        // Kỳ tiếp theo trong thời hạn hợp đồng (chưa tới kỳ — tính đủ 30 ngày 100%)
-        const roomRentAmount = standardMonthlyRent
-        const servicesAmount = currentDebt.registeredServicesAmount
-        const totalAmount = roomRentAmount + servicesAmount
-        rows.push({
-          index: idx + 1,
-          period,
-          monthLabel: `Tháng ${monthStr}/${ym.year}`,
-          isCurrentPeriod: false,
-          isFirstMonthPeriod: false,
-          stayedDays: 30,
-          stayedPercent: 100,
-          dueDate: `${ym.year}-${monthStr}-${clampedDueDay}`,
-          roomRentAmount,
-          servicesAmount,
-          utilityAmount: null,
-          utilityNote: 'Tính theo chỉ số tháng',
-          totalAmount,
-          paidAmount: 0,
-          remainingAmount: 0,
-          overdue: false,
-          overdueDays: 0,
-          status: 'UPCOMING',
-        })
-      }
-    }
-
-    return rows
-  }, [currentDebt, firstMonthProration, activeTenancy])
-
-  const displayedHistory = useMemo(
-    () => (issuedOnly ? contractHistory.filter((r) => r.status !== 'UPCOMING') : contractHistory),
-    [contractHistory, issuedOnly],
-  )
-
-  const contractTotals = useMemo(() => {
-    return displayedHistory.reduce(
-      (acc, row) => ({
-        totalAmount: acc.totalAmount + row.totalAmount,
-        paidAmount: acc.paidAmount + row.paidAmount,
-        remainingAmount: acc.remainingAmount + row.remainingAmount,
-      }),
-      { totalAmount: 0, paidAmount: 0, remainingAmount: 0 },
-    )
-  }, [displayedHistory])
+  const lateHistory = currentDebt?.latePaymentHistory ?? []
+  const currentOpen = Boolean(currentDebt && currentDebt.overdue && currentDebt.remainingAmount > 0)
+  const totalLateDays = lateHistory.reduce((sum, r) => sum + r.lateDays, 0) + (currentOpen ? currentDebt!.overdueDays : 0)
+  const totalReminders = lateHistory.reduce((sum, r) => sum + r.reminderCount, 0) + (currentDebt?.reminderCount ?? 0)
 
   const payMutation = useMutation({
     mutationFn: (debtId: string) => branchTenantsService.payDebt(debtId, 'tenant'),
@@ -605,179 +421,115 @@ export default function TenantDebtsPage() {
             </div>
           </div>
 
-          {/* Bảng lịch sử công nợ theo thời hạn hợp đồng */}
+          {/* Lịch sử trễ hạn thanh toán theo từng kỳ của hợp đồng */}
           <section className="rounded-2xl border border-border bg-surface p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-base font-bold">
                   <History className="size-4 text-primary" />
-                  Lịch sử công nợ theo hợp đồng ({currentDebt.contractNumber || 'Đang thuê'})
+                  Lịch sử trễ hạn thanh toán ({currentDebt.contractNumber || 'Đang thuê'})
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Thời hạn hợp đồng: <strong className="text-foreground">{contractStartLabel}</strong>{' '}
-                  → <strong className="text-foreground">{contractEndLabel}</strong> ({contractHistory.length}{' '}
-                  kỳ thanh toán)
+                  → <strong className="text-foreground">{contractEndLabel}</strong> · Bạn đã{' '}
+                  {currentOpen ? 'đang' : 'từng'} trễ hẹn thanh toán {totalLateDays} ngày.
                 </p>
               </div>
 
-              <div className="inline-flex rounded-xl border border-border bg-background p-1">
-                <button
-                  type="button"
-                  onClick={() => setIssuedOnly(false)}
-                  className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors ${
-                    !issuedOnly
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Toàn bộ hợp đồng ({contractHistory.length} kỳ)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIssuedOnly(true)}
-                  className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition-colors ${
-                    issuedOnly
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Kỳ đã phát sinh (
-                  {contractHistory.filter((r) => r.status !== 'UPCOMING').length})
-                </button>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 font-bold text-danger">
+                  <AlertTriangle className="size-3.5" />
+                  Tổng {totalLateDays} ngày trễ
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 font-bold text-warning">
+                  <BellRing className="size-3.5" />
+                  Đã được nhắc {totalReminders} lần
+                </span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="whitespace-nowrap pb-3 pr-4">Kỳ hợp đồng</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Chi phí phòng</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Dịch vụ</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Điện & nước</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Tổng tiền</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Đã trả</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Còn nợ</th>
-                    <th className="whitespace-nowrap pb-3 pr-4">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {displayedHistory.map((row) => (
-                    <tr
-                      key={row.period}
-                      className={
-                        row.isCurrentPeriod
-                          ? 'bg-primary-soft/25 font-medium'
-                          : row.status === 'UPCOMING'
-                            ? 'text-muted-foreground/80 hover:bg-surface-soft/30'
-                            : 'hover:bg-surface-soft/50 transition-colors'
-                      }
-                    >
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-foreground">
-                            Kỳ {row.index} · {row.monthLabel}
+            {!currentOpen && lateHistory.length === 0 ? (
+              <p className="rounded-xl bg-success/10 px-3 py-2 text-xs font-medium text-success">
+                Bạn chưa có lần trễ hạn thanh toán nào. Hãy giữ đúng hạn để tránh bị nhắc nợ.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="whitespace-nowrap pb-3 pr-4">Kỳ</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Hạn trả</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Ngày trễ</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Còn nợ</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Số lần nhắc</th>
+                      <th className="whitespace-nowrap pb-3 pr-4">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {currentOpen && (
+                      <tr className="bg-danger/5">
+                        <td className="whitespace-nowrap py-3 pr-4 font-bold">
+                          Kỳ {currentDebt.period}
+                          <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[11px] font-bold text-primary">
+                            Kỳ hiện tại
                           </span>
-                          {row.isCurrentPeriod && (
-                            <span className="rounded-md bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary">
-                              Kỳ hiện tại
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Hạn trả: {dateOnly(row.dueDate)}
-                        </p>
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        <div>{formatVnd(row.roomRentAmount)}</div>
-                        {row.isFirstMonthPeriod && row.stayedDays && row.stayedDays < 30 && (
-                          <span className="text-[11px] text-primary">
-                            {row.stayedDays}/30 ngày ({row.stayedPercent}%)
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        {formatVnd(row.servicesAmount)}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        {row.isFirstMonthPeriod ? (
-                          <div>
-                            <span>{formatVnd(0)}</span>
-                            <p className="text-[11px] italic text-muted-foreground">
-                              Tính vào tháng sau
-                            </p>
-                          </div>
-                        ) : row.utilityAmount !== null ? (
-                          formatVnd(row.utilityAmount)
-                        ) : (
-                          <span className="text-xs italic text-muted-foreground">
-                            Chưa chốt chỉ số
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4 font-bold text-foreground">
-                        {formatVnd(row.totalAmount)}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4 font-medium text-success">
-                        {formatVnd(row.paidAmount)}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        <span
-                          className={`font-bold ${
-                            row.remainingAmount > 0 ? 'text-danger' : 'text-muted-foreground'
-                          }`}
-                        >
-                          {formatVnd(row.remainingAmount)}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-4">
-                        {row.status === 'UPCOMING' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-surface-soft px-2.5 py-0.5 text-xs font-bold text-muted-foreground">
-                            <Clock className="size-3.5" />
-                            Chưa tới kỳ
-                          </span>
-                        ) : row.remainingAmount > 0 && row.overdue ? (
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4">{dateOnly(currentDebt.dueDate)}</td>
+                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
+                          {currentDebt.overdueDays} ngày
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
+                          {formatVnd(currentDebt.remainingAmount)}
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4">{currentDebt.reminderCount ?? 0}</td>
+                        <td className="whitespace-nowrap py-3 pr-4">
                           <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 text-xs font-bold text-danger">
                             <AlertTriangle className="size-3.5" />
-                            Trễ {row.overdueDays} ngày
+                            Chưa tất toán
                           </span>
-                        ) : row.remainingAmount === 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success">
-                            <CheckCircle2 className="size-3.5" />
-                            Đã trả đủ
+                        </td>
+                      </tr>
+                    )}
+                    {lateHistory.map((row) => (
+                      <tr key={row.id}>
+                        <td className="whitespace-nowrap py-3 pr-4 font-medium">Kỳ {row.period}</td>
+                        <td className="whitespace-nowrap py-3 pr-4">
+                          {row.dueDate ? dateOnly(row.dueDate) : '—'}
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4 font-bold text-danger">
+                          {row.lateDays} ngày
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4">
+                          {formatVnd(row.remainingAmount)}
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4">{row.reminderCount}</td>
+                        <td className="whitespace-nowrap py-3 pr-4">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                              row.status === 'SETTLED'
+                                ? 'bg-success/15 text-success'
+                                : 'bg-danger/15 text-danger'
+                            }`}
+                          >
+                            {row.status === 'SETTLED' ? (
+                              <>
+                                <CheckCircle2 className="size-3.5" />
+                                Đã tất toán
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="size-3.5" />
+                                Chưa tất toán
+                              </>
+                            )}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-bold text-warning">
-                            Chưa trả
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-border bg-background/60 text-sm font-bold">
-                    <td className="py-3 pr-4" colSpan={4}>
-                      Tổng theo hợp đồng ({displayedHistory.length} kỳ)
-                    </td>
-                    <td className="whitespace-nowrap py-3 pr-4 text-foreground">
-                      {formatVnd(contractTotals.totalAmount)}
-                    </td>
-                    <td className="whitespace-nowrap py-3 pr-4 text-success">
-                      {formatVnd(contractTotals.paidAmount)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap py-3 pr-4 ${
-                        contractTotals.remainingAmount > 0 ? 'text-danger' : 'text-success'
-                      }`}
-                    >
-                      {formatVnd(contractTotals.remainingAmount)}
-                    </td>
-                    <td className="py-3 pr-4" />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       )}

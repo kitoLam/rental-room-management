@@ -77,9 +77,10 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
   if (
-    (feature === 'manager' || feature === 'owner' || feature === 'tenant' || feature === 'guestUser') &&
+    (feature === 'manager' || feature === 'owner' || feature === 'tenant') &&
     ((pathname === '/api/v1/invoices/debts' && verb === 'GET') ||
-      (matches('/api/v1/invoices/debts/[^/]+/(pay|unpay)') && verb === 'POST'))
+      (matches('/api/v1/invoices/debts/[^/]+/(pay|unpay)') && verb === 'POST') ||
+      (matches('/api/v1/invoices/contracts/[^/]+/late-payments') && verb === 'GET'))
   )
     return null
   if (

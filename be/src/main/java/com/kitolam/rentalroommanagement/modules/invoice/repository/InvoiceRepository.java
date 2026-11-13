@@ -11,4 +11,6 @@ public interface InvoiceRepository extends BaseRepository<Invoice> {
     List<Invoice> findByContractIdInAndPeriodAndIsDeletedFalse(Collection<String> contractIds, String period);
 
     List<Invoice> findByBranchIdAndPeriodAndIsDeletedFalse(String branchId, String period);
+
+    List<Invoice> findByContractIdInAndIsDeletedFalse(Collection<String> contractIds);
 }

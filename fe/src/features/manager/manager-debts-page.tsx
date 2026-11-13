@@ -1,7 +1,7 @@
 import { Modal } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
-import { dateOnly, vnDateKey } from '@/lib/activity'
+import { dateOnly } from '@/lib/activity'
 import { formatVnd } from '@/lib/format'
 import {
   branchTenantsService,
@@ -12,10 +12,12 @@ import { queryClient } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  BellRing,
   CalendarClock,
   CheckCircle2,
   Droplets,
   FileText,
+  History,
   Home,
   RotateCcw,
   Search,
@@ -27,14 +29,95 @@ import { useMemo, useState } from 'react'
 import { ManagerPage } from './components'
 import { useManager } from './context'
 
-const DAY_MS = 86_400_000
+const LATE_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Chưa tất toán',
+  SETTLED: 'Đã tất toán',
+}
 
-/** Backend value when present; otherwise derived from dueDate (mock data) in Vietnam time. */
-function overdueDays(invoice: { overdueDays?: number; dueDate: string; financialStatus: string }) {
-  if (invoice.overdueDays !== undefined) return invoice.overdueDays
-  if (invoice.financialStatus === 'PAID' || !invoice.dueDate) return 0
-  const diff = Date.parse(`${vnDateKey(new Date().toISOString())}T00:00:00Z`) - Date.parse(`${invoice.dueDate}T00:00:00Z`)
-  return Number.isNaN(diff) ? 0 : Math.max(0, Math.floor(diff / DAY_MS))
+/** Lịch sử trễ hạn từng kỳ do job nhắc nợ ghi lại (số ngày trễ, số lần đã nhắc, trạng thái). */
+function LatePaymentHistorySection({ item }: { item: TenantDebtItem }) {
+  const rows = item.latePaymentHistory ?? []
+  const currentOpen = item.overdue && item.remainingAmount > 0
+  const totalLateDays = rows.reduce((sum, r) => sum + r.lateDays, 0) + (currentOpen ? item.overdueDays : 0)
+  const totalReminders = rows.reduce((sum, r) => sum + r.reminderCount, 0) + (item.reminderCount ?? 0)
+
+  if (rows.length === 0 && !currentOpen) return null
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3.5 space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+          <History className="size-3.5" />
+          4. Lịch sử trễ hạn thanh toán
+        </h3>
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 font-bold text-danger">
+            <AlertTriangle className="size-3" />
+            Tổng {totalLateDays} ngày trễ
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-0.5 font-bold text-warning">
+            <BellRing className="size-3" />
+            Đã nhắc {totalReminders} lần
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr className="border-b border-border uppercase tracking-wider text-muted-foreground">
+              <th className="whitespace-nowrap py-2 pr-3">Kỳ</th>
+              <th className="whitespace-nowrap py-2 pr-3">Hạn trả</th>
+              <th className="whitespace-nowrap py-2 pr-3">Trễ</th>
+              <th className="whitespace-nowrap py-2 pr-3">Số lần nhắc</th>
+              <th className="whitespace-nowrap py-2 pr-3">Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {currentOpen && (
+              <tr className="bg-danger/5">
+                <td className="whitespace-nowrap py-2 pr-3 font-bold">
+                  {item.period}
+                  <span className="ml-1.5 rounded bg-primary-soft px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                    Kỳ hiện tại
+                  </span>
+                </td>
+                <td className="whitespace-nowrap py-2 pr-3">{dateOnly(item.dueDate)}</td>
+                <td className="whitespace-nowrap py-2 pr-3 font-bold text-danger">
+                  {item.overdueDays} ngày
+                </td>
+                <td className="whitespace-nowrap py-2 pr-3">{item.reminderCount ?? 0}</td>
+                <td className="whitespace-nowrap py-2 pr-3">
+                  <span className="rounded-full bg-danger/15 px-2 py-0.5 font-bold text-danger">
+                    Chưa tất toán
+                  </span>
+                </td>
+              </tr>
+            )}
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td className="whitespace-nowrap py-2 pr-3 font-medium">{row.period}</td>
+                <td className="whitespace-nowrap py-2 pr-3">{row.dueDate ? dateOnly(row.dueDate) : '—'}</td>
+                <td className="whitespace-nowrap py-2 pr-3 font-bold text-danger">{row.lateDays} ngày</td>
+                <td className="whitespace-nowrap py-2 pr-3">{row.reminderCount}</td>
+                <td className="whitespace-nowrap py-2 pr-3">
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-bold ${
+                      row.status === 'SETTLED'
+                        ? 'bg-success/15 text-success'
+                        : 'bg-danger/15 text-danger'
+                    }`}
+                  >
+                    {LATE_STATUS_LABEL[row.status] ?? row.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export function ManagerDebts() {
@@ -552,6 +635,9 @@ export function ManagerDebts() {
                 </div>
               </div>
             </div>
+
+            {/* Lịch sử trễ hạn theo kỳ của hợp đồng */}
+            <LatePaymentHistorySection item={selectedItem} />
 
             {/* Footer actions */}
             <div className="flex items-center justify-end gap-2 border-t border-border pt-2.5">

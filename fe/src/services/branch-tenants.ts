@@ -74,6 +74,24 @@ export const tenantDebtServiceItemSchema = z.object({
   mandatory: z.boolean().optional().default(false),
 })
 
+export const latePaymentHistorySchema = z.object({
+  id: z.string(),
+  invoiceId: z.string().nullable().optional(),
+  period: z.string(),
+  dueDate: z.string().nullable().optional(),
+  firstOverdueDate: z.string().nullable().optional(),
+  lateDays: z.number(),
+  status: z.string(),
+  totalAmount: z.coerce.number().optional().default(0),
+  paidAmount: z.coerce.number().optional().default(0),
+  remainingAmount: z.coerce.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  lastReminderAt: z.string().nullable().optional(),
+  settledAt: z.string().nullable().optional(),
+})
+
+export type LatePaymentHistoryItem = z.infer<typeof latePaymentHistorySchema>
+
 export const tenantDebtItemSchema = z.object({
   id: z.string(),
   contractId: z.string().nullable().optional(),
@@ -112,6 +130,9 @@ export const tenantDebtItemSchema = z.object({
   paidAmount: z.coerce.number().optional().default(0),
   remainingAmount: z.coerce.number(),
   status: z.string().optional().default('OVERDUE'),
+  recordedLateDays: z.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  latePaymentHistory: z.array(latePaymentHistorySchema).optional().default([]),
 })
 
 export type TenantDebtItem = z.infer<typeof tenantDebtItemSchema>
@@ -549,6 +570,9 @@ export const branchTenantsService = {
           paidAmount: 0,
           remainingAmount: 4020000,
           status: 'OVERDUE',
+          recordedLateDays: 6,
+          reminderCount: 1,
+          latePaymentHistory: [],
         },
       ]
       const filtered = mockDebts.filter((d) => {
@@ -618,6 +642,17 @@ export const branchTenantsService = {
       number: Math.max(0, raw.number - 1),
     }
   },
+  latePaymentHistory: async (
+    contractId: string,
+    feature: Feature = 'manager',
+  ): Promise<LatePaymentHistoryItem[]> => {
+    if (provider(feature) === 'mock') return []
+    return request(
+      feature,
+      `/api/v1/invoices/contracts/${encodeURIComponent(contractId)}/late-payments`,
+      z.array(latePaymentHistorySchema),
+    )
+  },
   payDebt: async (
     debtId: string,
     feature: Feature = 'manager',
@@ -650,6 +685,9 @@ export const branchTenantsService = {
         paidAmount: 4020000,
         remainingAmount: 0,
         status: 'PAID',
+        recordedLateDays: 0,
+        reminderCount: 0,
+        latePaymentHistory: [],
       }
     }
     return request(

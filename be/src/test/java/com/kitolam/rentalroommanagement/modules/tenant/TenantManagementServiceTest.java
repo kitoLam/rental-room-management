@@ -112,6 +112,7 @@ class TenantManagementServiceTest {
 
         authService = new AuthServiceImpl(
                 userRepository,
+                tenantRepository,
                 verificationRepository,
                 refreshTokenRepository,
                 tokenStore,
