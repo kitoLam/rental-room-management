@@ -256,9 +256,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       {
         path: 'notifications/viewing',
-        lazy: async () => ({
-          Component: (await import('@/features/leasing/viewing-notifications-page')).default,
-        }),
+        element: <Navigate to="/notifications" replace />,
       },
       {
         path: 'preview',
