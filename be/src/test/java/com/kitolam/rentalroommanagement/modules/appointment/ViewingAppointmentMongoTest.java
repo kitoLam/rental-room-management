@@ -421,8 +421,9 @@ class ViewingAppointmentMongoTest {
         var cancelled = appointments.findById(slot.id()).orElseThrow();
         assertEquals(AppointmentStatus.CANCELLED, cancelled.getStatus());
         assertEquals(Appointment.CancellationCause.OFFICIAL_BOOKING, cancelled.getCancellationCause());
-        assertEquals(List.of("official-booking-test"), cancelled.getHistory().getLast().relatedBookingIds());
-        assertEquals("inventory-test-v2", cancelled.getHistory().getLast().sourceRevision());
+        // A room-wide booking reference cannot identify which selected slot was held.
+        assertEquals(List.of(), cancelled.getHistory().getLast().relatedBookingIds());
+        assertTrue(cancelled.getHistory().getLast().sourceRevision().startsWith("inventory-test-v2:"));
         assertNull(cancelled.getHistory().getLast().actorAccountId());
         assertEquals(AppointmentStatus.PENDING, appointments.findById(otherRoom.id()).orElseThrow().getStatus());
         doReturn(snapshot(ROOM2, 4, 0, 0, 0, true, true)).when(inventory).getRoom(ROOM2);
