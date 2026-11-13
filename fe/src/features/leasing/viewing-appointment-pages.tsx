@@ -135,6 +135,7 @@ export function AppointmentsPage({ management = false }: { management?: boolean 
   }
   return (
     <Page
+      embedded={management}
       title={management ? 'Quản lý lịch xem phòng' : 'Lịch xem phòng'}
       eyebrow={management ? 'XỬ LÝ LỊCH XEM' : 'THEO DÕI YÊU CẦU'}
       description="Tra cứu phản hồi, thời hạn duyệt và lịch sử các yêu cầu trong phạm vi của bạn."
@@ -486,6 +487,7 @@ export function AppointmentDetailPage({ management = false }: { management?: boo
   }
   return (
     <Page
+      embedded={management}
       title="Chi tiết lịch xem phòng"
       eyebrow="YÊU CẦU XEM PHÒNG"
       back={viewingAppointmentsPath(context.data?.roles ?? [], { branchId: record?.branchId })}

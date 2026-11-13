@@ -34,14 +34,14 @@ import { dashboardPath } from '@/features/auth/navigation'
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
-  ['/user/payments', 'Thanh toán', Wallet],
+  ['/tenant/account/payments', 'Thanh toán', Wallet],
   ['/tenant/debts', 'Công nợ', AlertTriangle],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Tiền điện', Zap],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
-  ['/notifications', 'Thông báo', Bell],
+  ['/tenant/notifications', 'Thông báo', Bell],
 ] as const
-const accountPages = ['/tenant/dashboard', '/notifications']
+const accountPages = ['/tenant/dashboard', '/tenant/notifications']
 const needsTenancy = (path: string) =>
   path.startsWith('/tenant/') &&
   !['/tenant/appointments', '/tenant/bookings'].some(
@@ -107,7 +107,7 @@ export function TenantLayout() {
   const href = (path: string) => (needsTenancy(path) && tenancy ? spaceLink(path, tenancy, space?.slotId || null) : path)
   if (!user.roles.includes('TENANT')) return <Navigate replace to={dashboardPath(user.roles)} />
   // No approved slot yet: show one call-to-action screen instead of an empty rental space.
-  if (list.isSuccess && tenancies.length === 0 && location.pathname !== '/notifications')
+  if (list.isSuccess && tenancies.length === 0 && location.pathname !== '/tenant/notifications')
     return (
       <Container className="py-16 sm:py-24">
         <div className="mx-auto max-w-xl rounded-2xl border border-border bg-surface p-8 text-center shadow-sm sm:p-12">
@@ -123,7 +123,7 @@ export function TenantLayout() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild>
-              <Link to="/user/contracts">
+              <Link to="/tenant/account/contracts">
                 Đến hợp đồng của tôi
                 <ArrowRight size={18} />
               </Link>
@@ -237,7 +237,7 @@ export function TenantLayout() {
                   {requested
                     ? 'Không tìm thấy quan hệ thuê thuộc tài khoản trong liên kết này.'
                     : 'Mục này cần hợp đồng thuê đã được duyệt. Nộp bản ký ở mục Hợp đồng; quản lý duyệt xong bạn dùng được mục này.'}{' '}
-                  <Link to="/user/contracts" className="font-semibold underline">
+                  <Link to="/tenant/account/contracts" className="font-semibold underline">
                     Mở hợp đồng
                   </Link>
                 </Notice>

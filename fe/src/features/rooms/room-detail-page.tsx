@@ -105,8 +105,11 @@ export default function RoomDetailPage() {
     available.data?.available &&
     selectedSlots.length > 0 &&
     selectedSlots.every((id) => available.data.slots.some((s) => s.id === id && s.available))
-  const bookingUrl = `/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
-  const viewingUrl = `/rooms/${roomId}/appointments/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
+  const blockedBookingSlots = (available.data?.slots ?? []).filter(
+    (slot) => selectedSlots.includes(slot.id) && !slot.available,
+  )
+  const bookingUrl = `/tenant/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
+  const viewingUrl = `/rooms/${roomId}/viewing?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
   const canView =
     !!viewing.data?.canReceiveRequest &&
     selectedSlots.length > 0 &&
@@ -349,10 +352,11 @@ export default function RoomDetailPage() {
                               <span className="grid gap-0.5 leading-snug">
                                 <span className="font-medium">{s.label}</span>
                                 {!s.available ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    Chưa mở giữ chỗ
+                                  <span className="text-xs leading-5 text-warning">
+                                    {s.reason || 'Chưa mở giữ chỗ'}
                                   </span>
-                                ) : s.availableFrom ? (
+                                ) : null}
+                                {s.availableFrom ? (
                                   <span className="text-xs text-muted-foreground">
                                     Nhận phòng từ {dateOnly(s.availableFrom)}
                                   </span>
@@ -377,17 +381,21 @@ export default function RoomDetailPage() {
                       </div>
                     </fieldset>
                   )}
-                  <div className="my-4 text-xs text-muted-foreground" role="status">
+                  <div className={`my-4 text-xs leading-5 ${blockedBookingSlots.length ? 'text-warning' : 'text-muted-foreground'}`} role="status">
                     {!bookingAvailabilityEnabled
                       ? 'Tính năng kiểm tra lịch trống chưa được bật trong cấu hình API này.'
                       : available.isFetching
                         ? 'Đang kiểm tra lịch trống…'
                         : available.error
                           ? available.error.message
-                          : available.data?.available
-                            ? 'Chọn slot còn trống để giữ trong 24 giờ.'
-                            : available.data?.reason ||
-                              'Không có lịch trống phù hợp với khoảng ngày đã chọn.'}
+                          : blockedBookingSlots.length
+                            ? `${blockedBookingSlots.map((slot) => slot.label).join(', ')} chưa được phép giữ chỗ. Bạn có thể chọn để xem phòng; điều kiện giữ chỗ được kiểm tra riêng.`
+                            : available.data?.available
+                              ? 'Chọn slot đang mở giữ chỗ để tiếp tục.'
+                              : available.data?.slots.length
+                                ? 'Hiện chưa có slot được phép giữ chỗ. Xem lý do dưới từng slot phía trên.'
+                                : available.data?.reason ||
+                                  'Chưa kiểm tra được điều kiện giữ chỗ của phòng.'}
                   </div>
                   <div className="grid gap-3">
                     {bookable && !available.isFetching ? (

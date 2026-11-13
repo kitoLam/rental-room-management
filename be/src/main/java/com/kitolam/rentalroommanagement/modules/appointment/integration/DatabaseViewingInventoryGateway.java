@@ -78,8 +78,9 @@ public class DatabaseViewingInventoryGateway implements ViewingInventoryGateway 
             var intervals = new java.util.ArrayList<Interval>();
             var unitLeases = leases.stream().filter(c -> c.roomSlotIds() != null && c.roomSlotIds().contains(unit.id())).toList();
             var unitOccupancies = occupancy.stream().filter(o -> unit.id().equals(o.roomSlotId())).toList();
+            // An approved lease already allocates this slot, even before its move-in date.
             unitLeases.stream().filter(c -> c.status() == ContractStatus.ACTIVE)
-                    .forEach(c -> intervals.add(new Interval(c.startDate(), c.endDate(), "SLOT_OCCUPIED")));
+                    .forEach(c -> intervals.add(new Interval(today, c.endDate(), "SLOT_OCCUPIED")));
             unitOccupancies.stream().filter(o -> o.status() == OccupancyStatus.ACTIVE)
                     .forEach(o -> intervals.add(new Interval(o.startDate(), o.endDate(), "SLOT_OCCUPIED")));
             for (var hold : holds.stream().filter(b -> bookingSlots(b).contains(unit.id())).toList()) {

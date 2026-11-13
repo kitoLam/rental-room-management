@@ -1,3 +1,4 @@
+import { accountPath, dashboardPath } from '@/features/auth/navigation'
 import { InlineError, Notice, Page, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
@@ -21,14 +22,14 @@ export function ManagerInvitationsPage() {
       },
     })
   return (
-    <Page title="Lời mời quản lý" back="/profile" narrow>
+    <Page title="Lời mời quản lý" back={accountPath(user.roles, 'profile')} narrow>
       <QueryState
         pending={query.isPending}
         error={query.error}
         retry={query.refetch}
         empty={query.data?.length === 0}
         emptyMessage="Bạn chưa có lời mời quản lý."
-        emptyAction={<Link to="/profile">Về hồ sơ</Link>}
+        emptyAction={<Link to={accountPath(user.roles, 'profile')}>Về hồ sơ</Link>}
       >
         <div className="grid gap-5">
           {query.data?.map((i) => (
@@ -57,7 +58,7 @@ export function ManagerInvitationsPage() {
         {mutation.isSuccess && (
           <Notice tone="success">
             Đã xác nhận bằng tài khoản của bạn.{' '}
-            <Link to="/manager/dashboard" className="underline">
+            <Link to={dashboardPath(user.roles)} className="underline">
               Xem phân công
             </Link>
           </Notice>

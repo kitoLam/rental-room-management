@@ -1,3 +1,4 @@
+import { accountPath, dashboardPath } from '@/features/auth/navigation'
 import { Notice, Page, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
@@ -37,7 +38,7 @@ export function OwnerVerificationPage() {
       useSession.getState().updateUser(identity.data)
   }, [identity.data, user.id, user.roles])
   return (
-    <Page title="Xác minh chủ trọ" eyebrow="HỒ SƠ CHỦ TRỌ" narrow back="/user/dashboard">
+    <Page title="Xác minh chủ trọ" eyebrow="HỒ SƠ CHỦ TRỌ" narrow back={dashboardPath(user.roles)}>
       <QueryState pending={query.isPending} error={query.error} retry={query.refetch}>
         {query.data && (
           <Panel>
@@ -61,11 +62,11 @@ export function OwnerVerificationPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               {query.data.eligible ? (
                 <Button asChild>
-                  <Link to="/manager/dashboard">Vào quản lý chi nhánh</Link>
+                  <Link to={dashboardPath(user.roles)}>Vào quản lý chi nhánh</Link>
                 </Button>
               ) : ['NOT_SUBMITTED', 'REJECTED'].includes(query.data.status) ? (
                 <Button asChild>
-                  <Link to="/owner/onboarding">
+                  <Link to={accountPath(user.roles, 'owner-onboarding')}>
                     {query.data.status === 'REJECTED' ? 'Bổ sung và gửi lại' : 'Bắt đầu hồ sơ'}
                   </Link>
                 </Button>

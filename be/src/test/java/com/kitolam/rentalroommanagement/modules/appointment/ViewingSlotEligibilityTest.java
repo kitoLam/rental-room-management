@@ -59,6 +59,45 @@ class ViewingSlotEligibilityTest {
         assertFalse(value.available());
         assertNull(value.availableFrom());
     }
+    @Test void futureApprovedLeaseBlocksBeforeMoveInAndThroughItsEndEvenIfSlotFlagIsAvailable() {
+        futureLease(ContractStatus.ACTIVE, end);
+        for (LocalDate date : List.of(today, today.plusDays(1), end)) {
+            var value = inventory.slotsForViewing("room", date).get(1);
+            assertTrue(value.selectable());
+            assertFalse(value.available());
+            assertEquals("SLOT_OCCUPIED", value.reason());
+            assertEquals(end.plusDays(1), value.availableFrom());
+            assertTrue(value.message().contains("16/12/2026"));
+        }
+        assertTrue(inventory.slotsForViewing("room", end.plusDays(1)).get(1).available());
+    }
+    @Test void futureApprovedLeaseWithoutEndDateDoesNotAllowAnEarlierViewing() {
+        futureLease(ContractStatus.ACTIVE, null);
+        assertFalse(inventory.slotsForViewing("room", today).get(1).available());
+        var later = inventory.slotsForViewing("room", today.plusYears(2)).get(1);
+        assertFalse(later.available());
+        assertNull(later.availableFrom());
+    }
+    @Test void draftLeaseAloneDoesNotAllocateAnOtherwiseVacantSlot() {
+        futureLease(ContractStatus.DRAFT, end);
+        assertTrue(inventory.slotsForViewing("room", today).get(1).available());
+    }
+    @Test void multipleApprovedTermsBlockTheGapBeforeTheNextTermUntilTheLatestEnd() {
+        when(contracts.readForOverview(anyList())).thenReturn(List.of(
+                new ContractService.OverviewContract("first", "room", "tenant", "booking", "HD-1",
+                        ContractStatus.ACTIVE, today.plusDays(1), end, null, List.of("free")),
+                new ContractService.OverviewContract("next", "room", "tenant", "booking2", "HD-2",
+                        ContractStatus.ACTIVE, end.plusDays(3), end.plusMonths(3), null, List.of("free"))));
+        var gap = inventory.slotsForViewing("room", end.plusDays(1)).get(1);
+        assertFalse(gap.available());
+        assertEquals(end.plusMonths(3).plusDays(1), gap.availableFrom());
+        assertTrue(inventory.slotsForViewing("room", end.plusMonths(3).plusDays(1)).get(1).available());
+    }
+    private void futureLease(ContractStatus status, LocalDate endDate) {
+        when(contracts.readForOverview(anyList())).thenReturn(List.of(new ContractService.OverviewContract(
+                "future", "room", "tenant", "booking", "HD-future", status,
+                today.plusDays(1), endDate, null, List.of("free"))));
+    }
     @Test void staleOccupiedFlagDoesNotBlockAfterAKnownLeaseHasEnded() {
         lease(today.minusDays(1));
         assertTrue(inventory.slotsForViewing("room", today).getFirst().available());

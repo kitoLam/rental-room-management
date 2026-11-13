@@ -134,6 +134,7 @@ export const availabilitySchema = z.object({
     id: databaseIdSchema,
     label: z.string(),
     available: z.boolean(),
+    reason: z.string().nullable().optional(),
     availableFrom: z.string().nullable().optional(),
   })),
 })

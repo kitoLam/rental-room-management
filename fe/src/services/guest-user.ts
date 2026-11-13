@@ -552,7 +552,7 @@ export const bookingService = {
       endDate: result.endDate,
       available: result.available,
       reason: result.reason,
-      slots: [{ id: result.roomSlotId, label: result.slotCode, available: result.available }],
+      slots: [{ id: result.roomSlotId, label: result.slotCode, available: result.available, reason: result.reason, availableFrom: result.availableFrom ?? null }],
     }
   },
   availabilityForRoom: async (roomId: string, startDate: string, endDate: string) => {
@@ -567,7 +567,8 @@ export const bookingService = {
       id: slot.roomSlotId,
       label: slot.slotCode,
       available: slot.available,
-      // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
+      reason: slot.reason,
+      // Ngày nhận phòng sớm nhất; điều kiện mở đặt cọc được BE kiểm tra riêng.
       availableFrom: slot.availableFrom ?? null,
     }))
     const available = slotAvailability.some((slot) => slot.available)

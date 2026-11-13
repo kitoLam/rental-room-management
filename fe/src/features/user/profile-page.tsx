@@ -1,3 +1,4 @@
+import { accountPath } from '@/features/auth/navigation'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -420,7 +421,7 @@ export default function ProfilePage() {
                   Lối tắt nhanh
                 </p>
                 <Link
-                  to="/manager-invitations"
+                  to={accountPath(activeUser?.roles || [], 'manager-invitations')}
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >
                   <span>Lời mời làm quản lý</span>
@@ -428,7 +429,7 @@ export default function ProfilePage() {
                 </Link>
                 {!activeUser?.roles?.includes('OWNER') && (
                   <Link
-                    to="/owner/onboarding"
+                    to={accountPath(activeUser?.roles || [], 'owner-onboarding')}
                     className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                   >
                     <span>Đăng ký làm chủ trọ</span>
