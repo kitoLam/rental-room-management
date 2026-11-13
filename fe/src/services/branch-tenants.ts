@@ -157,6 +157,12 @@ function filterMock(
 }
 
 export const branchTenantsService = {
+  get: (branchId: string, tenantId: string) => {
+    if (provider('manager') === 'mock')
+      return Promise.resolve(mockStore.find((item) => item.id === tenantId) ?? null)
+    const query = new URLSearchParams({ branchId })
+    return request('manager', `/api/v1/tenants/${encodeURIComponent(tenantId)}?${query}`, tenantAccountItemSchema)
+  },
   managedBranches: async (feature: Feature = 'manager') => {
     if (provider(feature) === 'mock') {
       return [

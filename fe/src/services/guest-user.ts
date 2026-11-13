@@ -425,7 +425,7 @@ const backendContractSchema = z.object({
   firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
   evidenceHistory: z.array(z.object({
-    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED']),
+    action: z.enum(['SUBMITTED', 'APPROVED', 'RESUBMISSION_REQUESTED', 'EXPIRED', 'CONTRACT_EXPIRED']),
     at: z.string().nullable(), note: z.string().nullable(),
   })).optional(),
   evidenceDeadline: z.string().nullable().optional(),

@@ -89,7 +89,7 @@ export function ManagerContractDetail() {
               </div>}
               <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-4">
                 <ManagerLink to={`/manager/contracts/${contractId}/tenants`}>
-                  Thành viên & nghĩa vụ cá nhân
+                  Người ký và chỗ thuê
                 </ManagerLink>
                 {query.data.renewedToContractId && (
                   <ManagerLink to={`/manager/contracts/${query.data.renewedToContractId}`}>
@@ -104,11 +104,6 @@ export function ManagerContractDetail() {
                 {query.data.status === 'ACTIVE' && !query.data.renewedToContractId && (
                   <Button onClick={() => setAction('renew')}>Gia hạn</Button>
                 )}
-                {query.data.status === 'ACTIVE' && (
-                  <Button variant="outline" onClick={() => setAction('end')}>
-                    Kết thúc khi hết hạn
-                  </Button>
-                )}
               </div>
             </Panel>
             {query.data.status === 'DRAFT' && <Notice>
@@ -116,9 +111,9 @@ export function ManagerContractDetail() {
             </Notice>}
             <Panel>
               <h2 className="mb-5 font-bold">Lịch sử hợp đồng</h2>
-              <History
-                items={query.data.history.map((h) => ({ ...h, note: `${h.actor}: ${h.note}` }))}
-              />
+              {query.data.history.length ? (
+                <History items={query.data.history.map((h) => ({ ...h, note: `${h.actor}: ${h.note}` }))} />
+              ) : <p className="text-sm text-muted-foreground">Chưa có lịch sử hợp đồng.</p>}
             </Panel>
           </>
         )}

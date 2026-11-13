@@ -240,6 +240,7 @@ export function ContractDetailPage({ terms = false }: { terms?: boolean }) {
                         SUBMITTED: 'Bạn đã gửi bằng chứng hợp đồng',
                         APPROVED: 'Manager/admin đã duyệt và kích hoạt hợp đồng',
                         RESUBMISSION_REQUESTED: 'Manager/admin yêu cầu gửi lại bằng chứng',
+                        CONTRACT_EXPIRED: 'Hợp đồng đã hết hạn',
                         EXPIRED: 'Hồ sơ bằng chứng đã hết hạn',
                       }
                       return <li key={`${entry.action}-${entry.at}-${index}`} className="relative">

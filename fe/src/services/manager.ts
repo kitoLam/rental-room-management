@@ -44,6 +44,7 @@ const backendContractDto = z.object({
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
   termMonths: z.number().nullable().optional(), signedDate: z.string().nullable().optional(), firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(),
+  evidenceHistory: z.array(z.object({ action: z.string(), at: z.string(), note: z.string().nullish() })).nullish(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
   roomName: z.string().nullish(),
@@ -54,6 +55,13 @@ const backendContractDto = z.object({
   services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
 }).passthrough()
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
+  const historyLabels: Record<string, { actor: string; note: string }> = {
+    SUBMITTED: { actor: 'Khách thuê', note: 'Đã nộp bản hợp đồng đã ký.' },
+    APPROVED: { actor: 'Quản lý', note: 'Đã duyệt bản ký và kích hoạt hợp đồng.' },
+    RESUBMISSION_REQUESTED: { actor: 'Quản lý', note: 'Yêu cầu nộp lại bản ký.' },
+    EXPIRED: { actor: 'Hệ thống', note: 'Đã quá hạn nộp bản ký.' },
+    CONTRACT_EXPIRED: { actor: 'Hệ thống', note: 'Hợp đồng đã hết hạn.' },
+  }
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomName ?? undefined,
     // Nháp chưa duyệt evidence không có ngày hiệu lực; giữ null để trang tự lấy ngày bắt đầu thuê từ booking gốc.
@@ -72,7 +80,12 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     expiringSoon: value.expiringSoon, renewedFromContractId: value.renewedFromContractId, renewedToContractId: value.renewedToContractId,
     signedFileUrl: value.signedFileUrl,
     rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status,
-    sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
+    sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0,
+    history: (value.evidenceHistory ?? []).map((entry) => ({
+      at: entry.at,
+      actor: historyLabels[entry.action]?.actor ?? 'Hệ thống',
+      note: entry.note ?? historyLabels[entry.action]?.note ?? entry.action,
+    })),
   })
 }
 const slotDto = z.object({
