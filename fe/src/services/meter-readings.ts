@@ -38,6 +38,35 @@ const boardSchema = z.object({
 })
 export type MeterBoard = z.infer<typeof boardSchema>
 
+const nullableMoney = money.nullish()
+const tenantMeterYearSchema = z.object({
+  contractId: z.string(),
+  roomId: z.string().nullish(),
+  roomNumber: z.string().nullish(),
+  year: z.number(),
+  months: z.array(
+    z.object({
+      month: z.number(),
+      period: z.string(),
+      available: z.boolean(),
+      unitPrice: nullableMoney,
+      startReading: nullableMoney,
+      endReading: nullableMoney,
+      usage: nullableMoney,
+      amount: nullableMoney,
+      status: z.enum(['DRAFT', 'CONFIRMED']).nullish(),
+    }),
+  ),
+})
+export type TenantMeterYear = z.infer<typeof tenantMeterYearSchema>
+
+/** Tenant side: 12 months of the room's electricity, limited to months the contract covered. */
+export const tenantMeterApi = {
+  year: (contractId: string, year: number) =>
+    request('tenant', `/api/v1/meter-readings/my?${new URLSearchParams({ contractId, year: String(year) })}`,
+      tenantMeterYearSchema),
+}
+
 export const meterReadingApi = {
   board: (branchId: string, period: string) =>
     request('manager', `/api/v1/meter-readings/board?${new URLSearchParams({ branchId, period })}`, boardSchema),

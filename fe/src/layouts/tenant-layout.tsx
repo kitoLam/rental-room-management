@@ -13,7 +13,7 @@ import {
   House,
   ReceiptText,
   Plug,
-  Droplets,
+  Zap,
   Wrench,
   Bell,
   FileSignature,
@@ -34,7 +34,7 @@ const nav = [
   ['/tenant/my-room', 'Phòng của tôi', House],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
-  ['/tenant/utilities', 'Điện & nước', Droplets],
+  ['/tenant/utilities', 'Tiền điện', Zap],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
   ['/notifications', 'Thông báo', Bell],
 ] as const

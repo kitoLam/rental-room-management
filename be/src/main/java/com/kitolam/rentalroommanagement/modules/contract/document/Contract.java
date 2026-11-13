@@ -65,21 +65,6 @@ public class Contract extends BaseDocument {
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal contractDepositAmount;
 
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal electricityInitialReading;
-
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal waterInitialReading;
-
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal electricityRate;
-
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal waterRate;
-
-    @Field(targetType = FieldType.DECIMAL128)
-    private BigDecimal parkingRate;
-
     private Integer maxOccupants;
 
     private List<ContractServiceSnapshot> services = new ArrayList<>();

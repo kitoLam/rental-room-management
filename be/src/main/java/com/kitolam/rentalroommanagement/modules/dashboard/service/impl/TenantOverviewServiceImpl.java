@@ -121,7 +121,7 @@ public class TenantOverviewServiceImpl implements TenantOverviewService {
         var updates = notifications.list(new NotificationScope(principal.userId(), Set.of()), null, PageRequest.of(0, 3)).getContent();
         if (selected == null) return new TenantOverviewResponse(now, today, null, null, null, null, false,
                 0, 0, null, 0, List.of(), List.of(), null, updates);
-        var bills = invoices.readForTenantOverview(List.of(selected.id()));
+        var bills = invoices.readForTenantOverview(List.of(selected.contractId()));
         var unpaid = bills.stream().filter(i -> i.remainingAmount() != null && i.remainingAmount().signum() > 0).toList();
         boolean incomplete = bills.stream().anyMatch(i -> i.remainingAmount() == null && i.status() != InvoiceStatus.PAID);
         var nextDue = unpaid.stream().filter(i -> i.dueDate() != null)
