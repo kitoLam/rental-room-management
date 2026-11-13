@@ -9,11 +9,16 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.response.*;
 import com.kitolam.rentalroommanagement.modules.auth.repository.*;
 import com.kitolam.rentalroommanagement.modules.auth.service.*;
 import com.kitolam.rentalroommanagement.modules.auth.util.OpaqueTokenProvider;
+import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,6 +30,7 @@ public class AuthServiceImpl implements AuthService {
     private static final String RESEND_MESSAGE =
             "Nếu email có tài khoản chưa xác thực, liên kết xác thực sẽ được gửi. Vui lòng kiểm tra email";
     private final UserRepository users;
+    private final TenantRepository tenants;
     private final VerificationTokenRepository verifications;
     private final RefreshTokenRepository refreshTokens;
     private final AuthTokenStore tokenStore;
@@ -76,11 +82,12 @@ public class AuthServiceImpl implements AuthService {
                 user.getRole().name(), user.isEnabled() && user.isEmailVerified());
     }
 
-    public AuthServiceImpl(UserRepository users, VerificationTokenRepository verifications,
+    public AuthServiceImpl(UserRepository users, TenantRepository tenants, VerificationTokenRepository verifications,
             RefreshTokenRepository refreshTokens, AuthTokenStore tokenStore, PasswordEncoder passwords,
             OpaqueTokenProvider tokens, JwtProvider jwt, SecurityProperties security,
             AuthProperties properties, ApplicationEventPublisher events, Clock clock) {
         this.users = users;
+        this.tenants = tenants;
         this.verifications = verifications;
         this.refreshTokens = refreshTokens;
         this.tokenStore = tokenStore;
@@ -425,7 +432,17 @@ public class AuthServiceImpl implements AuthService {
             user.setPhone(null);
         }
 
+        validateProfileDates(user, request);
+        boolean nameChanged = !Objects.equals(user.getFullName(), request.fullName());
+        boolean addressChanged = request.permanentAddress() != null
+                && !Objects.equals(user.getPermanentAddress(), request.permanentAddress());
+        boolean cccdChanged = request.cccdNumber() != null
+                && !Objects.equals(user.getCccdNumber(), request.cccdNumber());
         user.setFullName(request.fullName().trim());
+        if (addressChanged) user.setPermanentAddress(request.permanentAddress());
+        if (cccdChanged) user.setCccdNumber(request.cccdNumber());
+        if (request.cccdIssueDate() != null) user.setCccdIssueDate(request.cccdIssueDate());
+        if (request.cccdIssuePlace() != null) user.setCccdIssuePlace(request.cccdIssuePlace());
         if (request.dateOfBirth() != null) {
             user.setDateOfBirth(request.dateOfBirth());
         }
@@ -434,7 +451,52 @@ public class AuthServiceImpl implements AuthService {
         }
 
         users.save(user);
+        if ((nameChanged || addressChanged || cccdChanged) && user.getEmail() != null) {
+            tenants.findByEmailAndIsDeletedFalse(user.getEmail()).ifPresent(tenant -> {
+                if (nameChanged) tenant.setFullName(user.getFullName());
+                if (addressChanged) tenant.setAddress(user.getPermanentAddress());
+                if (cccdChanged) tenant.setIdCardNumber(user.getCccdNumber());
+                tenants.save(tenant);
+            });
+        }
         return toProfileResponse(user);
+    }
+
+    private void validateProfileDates(User user, UpdateProfileRequest request) {
+        boolean birthChanged = request.dateOfBirth() != null
+                && !Objects.equals(request.dateOfBirth(), user.getDateOfBirth());
+        boolean issueChanged = request.cccdIssueDate() != null
+                && !Objects.equals(request.cccdIssueDate(), user.getCccdIssueDate());
+        if (!birthChanged && !issueChanged) return;
+
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")));
+        LocalDate birth = parseProfileDate(request.dateOfBirth() == null ? user.getDateOfBirth() : request.dateOfBirth(),
+                "Ngày sinh không hợp lệ");
+        LocalDate issue = parseProfileDate(request.cccdIssueDate() == null ? user.getCccdIssueDate() : request.cccdIssueDate(),
+                "Ngày cấp CCCD không hợp lệ");
+        if (birthChanged && birth != null && !birth.isBefore(today))
+            throw new BadRequestException("Ngày sinh phải trước hôm nay");
+        if (issueChanged && issue.isAfter(today))
+            throw new BadRequestException("Ngày cấp CCCD không được ở tương lai");
+        if (birth != null && issue != null && !issue.isAfter(birth))
+            throw new BadRequestException("Ngày cấp CCCD phải sau ngày sinh");
+    }
+
+    private LocalDate parseProfileDate(String value, String error) {
+        if (value == null || value.isBlank()) return null;
+        if (value.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+            try {
+                return LocalDate.parse(value);
+            } catch (DateTimeParseException ignored) {
+                // Return a field message without exposing the input.
+            }
+        }
+        throw new BadRequestException(error);
+    }
+
+    private String maskedCccd(String number) {
+        if (number == null || number.isBlank()) return null;
+        return number.matches("[0-9]{9,12}") ? "•••• " + number.substring(number.length() - 4) : "••••";
     }
 
     private UserProfileResponse toProfileResponse(User user) {
@@ -447,7 +509,7 @@ public class AuthServiceImpl implements AuthService {
                 user.getDateOfBirth(),
                 user.getGender(),
                 user.getPermanentAddress(),
-                user.getCccdNumber(),
+                maskedCccd(user.getCccdNumber()),
                 user.getCccdIssueDate(),
                 user.getCccdIssuePlace(),
                 user.isEnabled() ? "ACTIVE" : "DISABLED"

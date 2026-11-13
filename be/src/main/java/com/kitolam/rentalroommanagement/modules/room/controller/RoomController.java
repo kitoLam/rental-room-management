@@ -16,6 +16,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import com.kitolam.rentalroommanagement.modules.room.dto.request.SlotAvailableFromRequest;
+import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse;
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -75,6 +78,24 @@ public class RoomController {
     public StandardResponse<RoomResponse> update(@PathVariable String id, @Valid @RequestBody RoomUpdateRequest request,
                                                  @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success("Cập nhật phòng thành công", roomService.update(id, request, principal));
+    }
+
+    @GetMapping("/{id}/slots")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','ADMIN')")
+    @Operation(summary = "Danh sách chỗ ở của phòng kèm tình trạng đang bận")
+    public StandardResponse<List<RoomSlotUsageResponse>> slots(@PathVariable @ValidObjectId String id,
+                                                               @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(roomService.slots(id, principal));
+    }
+
+    @PatchMapping("/{id}/slots/{slotId}/available-from")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER','ADMIN')")
+    @Operation(summary = "Chỉnh ngày bắt đầu cho thuê của một chỗ còn trống")
+    public StandardResponse<RoomSlotUsageResponse> updateSlotAvailableFrom(
+            @PathVariable @ValidObjectId String id, @PathVariable @ValidObjectId String slotId,
+            @Valid @RequestBody SlotAvailableFromRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Đã cập nhật ngày bắt đầu cho thuê",
+                roomService.updateSlotAvailableFrom(id, slotId, request.availableFrom(), principal));
     }
 
     @DeleteMapping("/{id}")

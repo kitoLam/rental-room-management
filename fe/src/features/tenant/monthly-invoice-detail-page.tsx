@@ -8,9 +8,11 @@ import { ArrowLeft, CreditCard } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { TenantPage } from './components'
 import { canPayOnline, usePayInvoice } from '@/features/billing/pay'
+import { tenantLink, useTenant } from './context'
 
 export function MonthlyInvoiceDetailPage() {
   const { invoiceId = '' } = useParams()
+  const { tenancy } = useTenant()
   const invoice = useQuery({
     queryKey: ['billing', 'invoice', invoiceId],
     queryFn: () => billingApi.invoice('tenant', invoiceId),
@@ -25,9 +27,9 @@ export function MonthlyInvoiceDetailPage() {
       description={data?.invoiceNumber || undefined}
       actions={
         <Button asChild variant="outline">
-          <Link to="/tenant/my-room">
+          <Link to={tenantLink('/tenant/invoices', tenancy)}>
             <ArrowLeft size={16} />
-            Phòng của tôi
+            Hoá đơn của tôi
           </Link>
         </Button>
       }

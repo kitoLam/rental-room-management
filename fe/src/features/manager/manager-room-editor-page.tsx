@@ -40,7 +40,9 @@ export function ManagerRoomEditor() {
       label: 'Sức chứa (số người)',
       kind: 'number',
       min: 1,
-      hint: 'Hệ thống tạo đúng số chỗ ở (slot) tương ứng để khách đặt.',
+      hint: roomId
+        ? 'Tăng: thêm chỗ mới. Giảm: chỉ được khi đủ số chỗ đang trống (không ai ở, giữ chỗ hay chờ hợp đồng); hệ thống bỏ bớt các chỗ trống đó.'
+        : 'Hệ thống tạo đúng số chỗ ở (slot) tương ứng để khách đặt.',
     },
     ...(provider('manager') === 'mock' ? [{
       name: 'rentalMode',
@@ -63,13 +65,16 @@ export function ManagerRoomEditor() {
       name: 'operationalStatus',
       label: 'Vận hành',
       kind: 'select',
+      hint: 'Chỉ chuyển sang Bảo trì / Ngừng hoạt động được khi phòng không còn ai ở hay giữ chỗ.',
       options: [
         { value: 'ACTIVE', label: 'Hoạt động' },
         { value: 'MAINTENANCE', label: 'Bảo trì' },
         { value: 'INACTIVE', label: 'Ngừng hoạt động' },
       ],
     },
-    { name: 'isPublic', label: 'Công khai trên trang tìm phòng', kind: 'check' },
+    ...(provider('manager') === 'mock'
+      ? [{ name: 'isPublic', label: 'Công khai trên trang tìm phòng', kind: 'check' } as FieldSpec]
+      : []),
   ]
   return (
     <ManagerPage

@@ -1,366 +1,308 @@
 import { InlineError, Modal, Notice, Panel, QueryState } from '@/components/common/page'
+import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
-import { InvoiceItemsTable, InvoiceStatusBadge, KindBadge } from '@/features/billing/invoice-parts'
 import { formatVnd } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import {
   billingApi,
   currentPeriod,
   dayLabel,
+  itemTypeLabel,
   periodLabel,
-  type BillingContract,
-  type BillingInvoice,
-  type GenerateResult,
+  type InvoiceEstimate,
+  type SlotEstimate,
 } from '@/services/billing'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, FilePlus2, Send, Trash2, Zap } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { AlertTriangle, CheckCircle2, ChevronDown, FilePlus2 } from 'lucide-react'
+import { useState } from 'react'
 import { ManagerPage } from './components'
+import { useManager } from './context'
 
-const BILLABLE_CONTRACT = ['ACTIVE', 'EXPIRED', 'TERMINATED']
+type Room = InvoiceEstimate['rooms'][number]
+type Target = { label: string; contractIds?: string[]; count: number; amount: number }
 
-const skipReason: Record<string, string> = {
-  CONTRACT_NOT_ACTIVE: 'hợp đồng chưa hiệu lực',
-  NOT_IN_PERIOD: 'chưa tới ngày tính tiền phòng trong tháng',
-  ALREADY_ISSUED: 'đã phát hành',
-  ALREADY_EXISTS: 'đã có hoá đơn',
-  NO_ACCESS: 'không thuộc chi nhánh của bạn',
-  SUPPLEMENTARY_DRAFT_PENDING: 'đang có hoá đơn bổ sung nháp',
-}
+const FEES: { key: keyof SlotEstimate; label: string; types: string[] }[] = [
+  { key: 'rentAmount', label: 'Tiền phòng', types: ['ROOM_RENT'] },
+  { key: 'roomServiceAmount', label: 'Dịch vụ phòng', types: ['ROOM_SERVICE'] },
+  { key: 'personalServiceAmount', label: 'Dịch vụ cá nhân', types: ['PERSONAL_SERVICE'] },
+  { key: 'electricityAmount', label: 'Tiền điện', types: ['ELECTRICITY'] },
+  { key: 'slotServiceAmount', label: 'Dịch vụ tự chọn', types: ['SLOT_SERVICE'] },
+]
 
-/** Monthly billing board: which contract has which invoice in a month, create / issue invoices. */
+/**
+ * Invoice estimate: what the month's invoices would look like for slots that have no invoice yet
+ * (nothing is stored). Staff check the 4 fees, then confirm to create the invoices; a slot invoiced
+ * here is skipped by the day-1 job.
+ */
 export function ManagerBilling() {
+  const { branch } = useManager()
   const queryClient = useQueryClient()
   const [period, setPeriod] = useState(currentPeriod())
-  const [creating, setCreating] = useState<BillingContract | null>(null)
-  const [viewing, setViewing] = useState<BillingInvoice | null>(null)
-  const [summary, setSummary] = useState<GenerateResult | null>(null)
-
-  const contracts = useQuery({ queryKey: ['billing', 'contracts'], queryFn: billingApi.contracts })
-  const rooms = useQuery({ queryKey: ['billing', 'rooms'], queryFn: billingApi.rooms })
-  const invoices = useQuery({
-    queryKey: ['billing', 'month', period],
-    queryFn: () => billingApi.invoicesOfMonth(period),
+  const [target, setTarget] = useState<Target | null>(null)
+  const [done, setDone] = useState<string | null>(null)
+  const estimate = useQuery({
+    queryKey: ['invoice-estimate', branch.id, period],
+    queryFn: () => billingApi.estimate(branch.id, period),
     enabled: /^\d{4}-\d{2}$/.test(period),
   })
-
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['billing'] })
-  const issue = useMutation({ mutationFn: billingApi.issue, onSuccess: refresh })
-  const remove = useMutation({ mutationFn: billingApi.removeDraft, onSuccess: refresh })
-  const generate = useMutation({
-    mutationFn: () => billingApi.generateMonth(period),
+  const confirm = useMutation({
+    mutationFn: (t: Target) => billingApi.confirmEstimate(branch.id, period, t.contractIds),
     onSuccess: (result) => {
-      setSummary(result)
-      void refresh()
+      setTarget(null)
+      setDone(
+        `Đã tạo ${result.created.length} hoá đơn ${periodLabel(period).toLowerCase()}` +
+          (result.skippedContractIds.length ? `, bỏ qua ${result.skippedContractIds.length} slot đã có hoá đơn.` : '.'),
+      )
+      void queryClient.invalidateQueries({ queryKey: ['invoice-estimate'] })
+      void queryClient.invalidateQueries({ queryKey: ['branch-invoices'] })
     },
   })
-
-  const roomName = useMemo(() => {
-    const map = new Map((rooms.data || []).map((r) => [r.id, r.roomNumber || '']))
-    return (id?: string | null) => (id && map.get(id) ? `Phòng ${map.get(id)}` : '—')
-  }, [rooms.data])
-
-  const byContract = useMemo(() => {
-    const map = new Map<string, BillingInvoice[]>()
-    for (const invoice of invoices.data || []) {
-      map.set(invoice.contractId, [...(map.get(invoice.contractId) || []), invoice])
-    }
-    return map
-  }, [invoices.data])
-
-  const rows = (contracts.data || []).filter(
-    (c) => BILLABLE_CONTRACT.includes(c.status) || byContract.has(c.id),
-  )
-  const monthTotal = (invoices.data || []).reduce((sum, i) => sum + i.totalAmount, 0)
-  const monthPaid = (invoices.data || []).reduce((sum, i) => sum + (i.paidAmount ?? 0), 0)
-  const actionError = issue.error || remove.error || generate.error
+  const data = estimate.data
+  const slotCount = data?.rooms.reduce((n, r) => n + r.slots.length, 0) ?? 0
+  const warningCount = data?.rooms.reduce((n, r) => n + r.slots.filter((s) => s.warnings.length > 0).length, 0) ?? 0
 
   return (
     <ManagerPage
-      title="Billing theo tháng"
-      description="Mỗi hợp đồng có những hoá đơn nào trong tháng. Lập hoá đơn cho từng hợp đồng hoặc cả tháng, rồi phát hành để người thuê thanh toán."
+      title="Ước tính hoá đơn"
+      description="Xem trước hoá đơn của tháng cho các slot chưa có hoá đơn: tiền phòng theo ngày ở, dịch vụ phòng và tiền điện chia theo số người ở trong tháng, dịch vụ tự chọn. Kiểm tra rồi xác nhận tạo; slot đã tạo sẽ không bị cron đầu tháng sau lập lại."
       actions={
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium">Tháng</span>
-            <input
-              type="month"
-              value={period}
-              onChange={(e) => {
-                setPeriod(e.target.value)
-                setSummary(null)
-              }}
-              className="h-11 rounded-lg border border-border bg-surface px-3"
-            />
-          </label>
-          <Button variant="outline" loading={generate.isPending} onClick={() => generate.mutate()}>
-            <Zap size={16} />
-            Lập nháp cả tháng
-          </Button>
-        </div>
+        <label className="grid gap-1 text-sm">
+          <span className="font-medium">Tháng</span>
+          <input
+            type="month"
+            value={period}
+            max={currentPeriod()}
+            onChange={(e) => e.target.value && e.target.value <= currentPeriod() && setPeriod(e.target.value)}
+            className="h-11 rounded-lg border border-border bg-surface px-3"
+          />
+        </label>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Số hoá đơn" value={String(invoices.data?.length ?? 0)} />
-        <Stat label="Tổng phải thu" value={formatVnd(monthTotal)} />
-        <Stat label="Đã thu" value={formatVnd(monthPaid)} />
-      </div>
-
-      <InlineError error={actionError} />
-      {summary && <GenerateSummary result={summary} />}
-
-      <Panel className="p-0 sm:p-0">
-        <QueryState
-          pending={contracts.isPending || invoices.isPending}
-          error={contracts.error || invoices.error}
-          retry={() => Promise.all([contracts.refetch(), invoices.refetch()])}
-          empty={rows.length === 0}
-          emptyMessage="Chưa có hợp đồng nào đang hiệu lực trong các chi nhánh bạn quản lý."
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-5 py-3 font-bold">Hợp đồng · Người thuê</th>
-                  <th className="px-3 py-3 font-bold">Phòng</th>
-                  <th className="px-3 py-3 font-bold">Hoá đơn {periodLabel(period).toLowerCase()}</th>
-                  <th className="px-5 py-3 text-right font-bold">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((contract) => {
-                  const list = byContract.get(contract.id) || []
-                  return (
-                    <tr key={contract.id} className="border-b border-border/60 align-top">
-                      <td className="px-5 py-4">
-                        <p className="font-bold">{contract.tenantName || 'Người thuê'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {contract.contractNumber} · {dayLabel(contract.startDate)} – {dayLabel(contract.endDate)}
-                        </p>
-                        {contract.status !== 'ACTIVE' && (
-                          <p className="mt-1 text-xs text-muted-foreground">Trạng thái: {contract.status}</p>
-                        )}
-                      </td>
-                      <td className="px-3 py-4">{roomName(contract.roomId)}</td>
-                      <td className="px-3 py-4">
-                        {list.length === 0 ? (
-                          <span className="text-muted-foreground">Chưa có</span>
-                        ) : (
-                          <ul className="grid gap-2">
-                            {list.map((invoice) => (
-                              <li key={invoice.id} className="flex flex-wrap items-center gap-2">
-                                <span className="font-medium">{invoice.invoiceNumber}</span>
-                                <InvoiceStatusBadge status={invoice.status} />
-                                <KindBadge kind={invoice.kind} />
-                                <span className="font-bold">{formatVnd(invoice.totalAmount)}</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label="Xem hoá đơn"
-                                  onClick={() => setViewing(invoice)}
-                                >
-                                  <Eye size={16} />
-                                </Button>
-                                {invoice.status === 'DRAFT' && invoice.id && (
-                                  <>
-                                    <Button
-                                      variant="soft"
-                                      loading={issue.isPending && issue.variables === invoice.id}
-                                      disabled={issue.isPending}
-                                      onClick={() => issue.mutate(invoice.id!)}
-                                    >
-                                      <Send size={14} />
-                                      Phát hành
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      aria-label="Xoá hoá đơn nháp"
-                                      disabled={remove.isPending}
-                                      onClick={() => {
-                                        if (window.confirm(`Xoá hoá đơn nháp ${invoice.invoiceNumber}?`))
-                                          remove.mutate(invoice.id!)
-                                      }}
-                                    >
-                                      <Trash2 size={16} className="text-danger" />
-                                    </Button>
-                                  </>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <Button variant="outline" onClick={() => setCreating(contract)}>
-                          <FilePlus2 size={16} />
-                          Lập hoá đơn
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </QueryState>
-      </Panel>
-
-      {creating && (
-        <CreateInvoiceModal
-          contract={creating}
-          defaultPeriod={period}
-          onClose={() => setCreating(null)}
-          onCreated={(createdPeriod) => {
-            setCreating(null)
-            setPeriod(createdPeriod)
-            void refresh()
-          }}
-        />
-      )}
-
+      {done && <Notice tone="success">{done}</Notice>}
+      <QueryState pending={estimate.isPending} error={estimate.error} retry={estimate.refetch}>
+        {data && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Slot chờ lập hoá đơn" value={String(slotCount)} />
+              <Stat label="Đã có hoá đơn tháng này" value={`${data.invoicedCount} slot`} />
+              <Stat label="Tổng tiền ước tính" value={formatVnd(data.totalAmount)} />
+              <Stat label="Slot cần kiểm tra" value={String(warningCount)} warn={warningCount > 0} />
+            </div>
+            {period === data.currentPeriod && (
+              <Notice>
+                Tháng {periodLabel(period).slice(6)} chưa kết thúc: tiền điện và dịch vụ có thể còn thay đổi. Cron sẽ tự
+                lập hoá đơn tháng này vào ngày 1 tháng sau cho các slot chưa có.
+              </Notice>
+            )}
+            {data.rooms.length === 0 ? (
+              <Panel>
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Không còn slot nào cần lập hoá đơn {periodLabel(period).toLowerCase()}.
+                </p>
+              </Panel>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    {data.rooms.length} phòng · {slotCount} slot
+                  </p>
+                  <Button
+                    onClick={() =>
+                      setTarget({ label: `tất cả ${slotCount} slot`, count: slotCount, amount: data.totalAmount })
+                    }
+                  >
+                    <FilePlus2 size={16} />
+                    Tạo hoá đơn cho tất cả
+                  </Button>
+                </div>
+                <div className="grid gap-4">
+                  {data.rooms.map((room) => (
+                    <RoomCard key={room.roomId} room={room} onCreate={setTarget} />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </QueryState>
       <Modal
-        title={viewing ? `Hoá đơn ${viewing.invoiceNumber}` : 'Hoá đơn'}
-        description={
-          viewing
-            ? `${periodLabel(viewing.period)} · Phát hành ${dayLabel(viewing.issueDate)} · Hạn ${dayLabel(viewing.dueDate)}`
-            : undefined
-        }
-        open={!!viewing}
-        onOpenChange={(open) => !open && setViewing(null)}
+        open={!!target}
+        onOpenChange={(open) => {
+          if (!open && !confirm.isPending) {
+            setTarget(null)
+            confirm.reset()
+          }
+        }}
+        title="Xác nhận tạo hoá đơn"
+        description={target ? `${periodLabel(period)} · ${target.label}` : undefined}
       >
-        {viewing && <InvoiceItemsTable invoice={viewing} />}
+        {target && (
+          <div className="grid gap-4">
+            <p className="text-sm">
+              Tạo <strong>{target.count}</strong> hoá đơn, tổng <strong>{formatVnd(target.amount)}</strong>. Hoá đơn được
+              phát hành ngay để người thuê thanh toán; các slot này sẽ không bị cron lập lại.
+            </p>
+            <InlineError error={confirm.error} />
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" disabled={confirm.isPending} onClick={() => setTarget(null)}>
+                Huỷ
+              </Button>
+              <Button loading={confirm.isPending} onClick={() => confirm.mutate(target)}>
+                <CheckCircle2 size={16} />
+                Xác nhận tạo
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </ManagerPage>
   )
 }
 
-/** Picks a month, previews the invoice (dry run), then creates it as a draft or issues it right away. */
-function CreateInvoiceModal({
-  contract,
-  defaultPeriod,
-  onClose,
-  onCreated,
-}: {
-  contract: BillingContract
-  defaultPeriod: string
-  onClose: () => void
-  onCreated: (period: string) => void
-}) {
-  const [period, setPeriod] = useState(defaultPeriod)
-  const preview = useQuery({
-    queryKey: ['billing', 'preview', contract.id, period],
-    queryFn: () => billingApi.createForContract(contract.id, period, true),
-    enabled: /^\d{4}-\d{2}$/.test(period),
-    retry: false,
-    gcTime: 0,
-  })
-  const create = useMutation({
-    mutationFn: async (issueNow: boolean) => {
-      const created = await billingApi.createForContract(contract.id, period, false)
-      if (issueNow && created.id) await billingApi.issue(created.id)
-      return created
-    },
-    onSuccess: () => onCreated(period),
-  })
-
+function RoomCard({ room, onCreate }: { room: Room; onCreate: (t: Target) => void }) {
+  const [open, setOpen] = useState(true)
+  const flagged = room.slots.some((s) => s.warnings.length > 0)
   return (
-    <Modal
-      title="Lập hoá đơn cho hợp đồng"
-      description={`${contract.tenantName || 'Người thuê'} · ${contract.contractNumber}`}
-      open
-      onOpenChange={(open) => !open && onClose()}
-    >
-      <div className="grid gap-5">
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium">Tháng tính tiền</span>
-          <input
-            type="month"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-            className="h-11 rounded-lg border border-border bg-surface px-3"
-          />
-        </label>
-        <Notice>
-          Chỉ thu những khoản chưa có trong hoá đơn đã phát hành của tháng này. Nếu tháng đã có hoá đơn,
-          hệ thống tạo hoá đơn bổ sung với phần còn thiếu.
-        </Notice>
-        {preview.isPending && <p className="text-sm text-muted-foreground">Đang tính thử...</p>}
-        <InlineError error={preview.error} />
-        {preview.data && (
-          <div className="grid gap-3">
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              Xem trước:
-              <span className="font-bold">
-                {preview.data.kind === 'SUPPLEMENTARY' ? 'Hoá đơn bổ sung' : 'Hoá đơn tháng'}
-              </span>
-              {preview.data.id && <span className="text-muted-foreground">(cập nhật bản nháp hiện có)</span>}
+    <Panel className={cn('p-0 sm:p-0', flagged && 'ring-2 ring-warning/60')}>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <button type="button" className="flex items-center gap-3 text-left" onClick={() => setOpen((v) => !v)}>
+          <ChevronDown size={18} className={cn('transition-transform', !open && '-rotate-90')} />
+          <div>
+            <p className="font-bold">
+              Phòng {room.roomNumber}
+              {room.title && <span className="font-normal text-muted-foreground"> · {room.title}</span>}
             </p>
-            <InvoiceItemsTable invoice={preview.data} />
+            <p className="text-xs text-muted-foreground">
+              {room.slots.length} slot chờ lập · {room.occupants} người ở trong tháng · {formatVnd(room.totalAmount)}
+            </p>
           </div>
-        )}
-        <InlineError error={create.error} />
-        <div className="flex flex-wrap justify-end gap-3">
-          <Button variant="outline" onClick={onClose} disabled={create.isPending}>
-            Huỷ
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!preview.data || create.isPending}
-            loading={create.isPending && create.variables === false}
-            onClick={() => create.mutate(false)}
-          >
-            Lưu nháp
-          </Button>
-          <Button
-            disabled={!preview.data || create.isPending}
-            loading={create.isPending && create.variables === true}
-            onClick={() => create.mutate(true)}
-          >
-            <Send size={16} />
-            Tạo & phát hành
-          </Button>
+          {flagged && (
+            <StatusBadge tone="warning">
+              <AlertTriangle size={12} className="mr-1 inline" />
+              Cần kiểm tra
+            </StatusBadge>
+          )}
+        </button>
+        <Button
+          variant="outline"
+          onClick={() =>
+            onCreate({
+              label: `phòng ${room.roomNumber}`,
+              contractIds: room.slots.map((s) => s.contractId),
+              count: room.slots.length,
+              amount: room.totalAmount,
+            })
+          }
+        >
+          <FilePlus2 size={16} />
+          Tạo cho cả phòng
+        </Button>
+      </div>
+      {open && (
+        <div className="grid gap-4 border-t border-border p-5 xl:grid-cols-2">
+          {room.slots.map((slot) => (
+            <SlotCard key={slot.contractId} slot={slot} roomNumber={room.roomNumber} onCreate={onCreate} />
+          ))}
         </div>
-      </div>
-    </Modal>
+      )}
+    </Panel>
   )
 }
 
-function GenerateSummary({ result }: { result: GenerateResult }) {
+function SlotCard({
+  slot,
+  roomNumber,
+  onCreate,
+}: {
+  slot: SlotEstimate
+  roomNumber?: string | null
+  onCreate: (t: Target) => void
+}) {
   return (
-    <Notice tone={result.failed.length ? 'warning' : 'success'}>
-      <div className="grid gap-1">
-        <p>
-          Đã tạo {result.created.length} hoá đơn nháp, tính lại {result.regenerated.length}, bỏ qua{' '}
-          {result.skipped.length}, lỗi {result.failed.length}.
-        </p>
-        {result.skipped.length > 0 && (
-          <p className="text-xs">
-            Bỏ qua:{' '}
-            {Object.entries(
-              result.skipped.reduce<Record<string, number>>((acc, s) => {
-                acc[s.reason] = (acc[s.reason] || 0) + 1
-                return acc
-              }, {}),
-            )
-              .map(([reason, count]) => `${count} ${skipReason[reason] || reason}`)
-              .join(', ')}
+    <div className={cn('rounded-xl border border-border bg-background p-4', slot.electricityUnchanged && 'border-warning')}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-lg font-bold">
+            Slot {slot.slotCode || '—'} · {slot.tenantName || 'Người thuê'}
           </p>
-        )}
-        {result.failed.map((f) => (
-          <p key={f.contractId} className="text-xs">
-            Hợp đồng {f.contractId.slice(-6)}: {f.error}
+          <p className="text-sm text-muted-foreground">
+            {slot.contractNumber} · ở {dayLabel(slot.stayFrom)} – {dayLabel(slot.stayTo)}
           </p>
-        ))}
+        </div>
+        <Button
+          variant="soft"
+          onClick={() =>
+            onCreate({
+              label: `phòng ${roomNumber}, slot ${slot.slotCode || ''}`,
+              contractIds: [slot.contractId],
+              count: 1,
+              amount: slot.totalAmount,
+            })
+          }
+        >
+          <FilePlus2 size={16} />
+          Tạo hoá đơn
+        </Button>
       </div>
-    </Notice>
+      {slot.warnings.length > 0 && (
+        <ul className="mt-3 grid gap-1 rounded-lg bg-warning/15 p-3 text-sm ring-1 ring-warning/40">
+          {slot.warnings.map((w) => (
+            <li key={w} className="flex gap-2">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" />
+              {w}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 grid gap-4">
+        {FEES.map((fee, index) => {
+          const items = slot.items.filter((i) => fee.types.includes(i.type))
+          return (
+            <div key={fee.key}>
+              <div className="flex justify-between text-base font-bold">
+                <span>
+                  Phí {index + 1}: {fee.label}
+                </span>
+                <span className="tabular-nums">{formatVnd(slot[fee.key] as number)}</span>
+              </div>
+              {items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Không có khoản nào.</p>
+              ) : (
+                <ul className="mt-1.5 grid gap-1">
+                  {items.map((item) => (
+                    <li
+                      key={item.id}
+                      className={cn(
+                        'flex justify-between gap-3 rounded-md px-2.5 py-1.5 text-[15px]',
+                        item.warning ? 'bg-warning/20 font-semibold ring-1 ring-warning/50' : 'text-foreground/80',
+                      )}
+                    >
+                      <span>
+                        {item.warning && <AlertTriangle size={15} className="mr-1.5 inline text-warning" />}
+                        {item.description || itemTypeLabel[item.type]}
+                      </span>
+                      <span className="shrink-0 tabular-nums">{formatVnd(item.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-4 flex justify-between border-t border-border pt-3 text-lg font-bold">
+        <span>Tổng cộng</span>
+        <span className="text-primary tabular-nums">{formatVnd(slot.totalAmount)}</span>
+      </div>
+    </div>
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, warn = false }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="rounded-xl bg-surface p-4 ring-1 ring-border/70">
+    <div className={cn('rounded-xl p-4 ring-1', warn ? 'bg-warning/15 ring-warning/50' : 'bg-surface ring-border/70')}>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-lg font-bold">{value}</p>
+      <p className={cn('mt-1 text-lg font-bold', warn && 'text-warning')}>{value}</p>
     </div>
   )
 }

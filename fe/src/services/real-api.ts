@@ -124,6 +124,10 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   if (
     feature === 'manager' &&
     ((matches('/api/v1/(rooms|room-types)') && verb === 'GET') ||
+      (pathname === '/api/v1/rooms' && verb === 'POST') ||
+      (matches(`/api/v1/rooms/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
+      (matches(`/api/v1/rooms/${id}/slots`) && verb === 'GET') ||
+      (matches(`/api/v1/rooms/${id}/slots/${id}/available-from`) && verb === 'PATCH') ||
       (matches('/api/v1/bookings') && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
@@ -170,6 +174,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     ((pathname === '/api/v1/slot-service-requests' && verb === 'POST') ||
       (pathname === '/api/v1/slot-service-requests/mine' && verb === 'GET') ||
       (pathname === '/api/v1/payments/mine' && verb === 'GET') ||
+      (pathname === '/api/v1/meter-readings/my' && verb === 'GET') ||
       (matches(`/api/v1/slot-service-requests/${id}/cancel`) && verb === 'POST') ||
       (matches(`/api/v1/rooms/${id}`) && verb === 'GET'))
   )
@@ -192,7 +197,9 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/invoices/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
       (matches(`/api/v1/invoices/${id}/issue`) && verb === 'PATCH') ||
       (matches(`/api/v1/invoices/contracts/${id}`) && verb === 'POST') ||
-      (pathname === '/api/v1/invoices/generate' && verb === 'POST'))
+      (pathname === '/api/v1/invoices/generate' && verb === 'POST') ||
+      (pathname === '/api/v1/invoices/estimate' && verb === 'GET') ||
+      (pathname === '/api/v1/invoices/estimate/confirm' && verb === 'POST'))
   )
     return null
   if ((feature === 'manager' || feature === 'owner') && pathname === '/api/v1/dashboard/debts' && verb === 'GET')

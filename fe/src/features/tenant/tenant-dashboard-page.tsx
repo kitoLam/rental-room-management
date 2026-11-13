@@ -111,12 +111,6 @@ export function TenantDashboard() {
                       {lease.address || 'Địa chỉ chưa cập nhật'}
                     </p>
                   </div>
-                  <Link
-                    to={link('/tenant/my-room')}
-                    className="text-sm font-semibold text-primary hover:underline"
-                  >
-                    Xem chỗ ở →
-                  </Link>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-4 text-sm">
                   <span>

@@ -8,13 +8,12 @@ import java.time.LocalDate;
 public record InvoiceItemResponse(
         String id,
         InvoiceItemType type,
-        String roomServiceChargeId,
-        String slotServiceChargeId,
         String description,
         LocalDate fromDate,
         LocalDate toDate,
         BigDecimal quantity,
         BigDecimal unitPrice,
-        BigDecimal amount
+        BigDecimal amount,
+        String warning
 ) {
 }
