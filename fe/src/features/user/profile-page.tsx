@@ -480,20 +480,6 @@ export default function ProfilePage() {
                   Lối tắt nhanh
                 </p>
                 <Link
-                  to="/tenant/appointments"
-                  className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
-                >
-                  <span>Quản lý lịch hẹn xem phòng</span>
-                  <ArrowRight size={13} />
-                </Link>
-                <Link
-                  to="/tenant/bookings"
-                  className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
-                >
-                  <span>Yêu cầu đặt phòng & giữ chỗ</span>
-                  <ArrowRight size={13} />
-                </Link>
-                <Link
                   to="/manager-invitations"
                   className="flex items-center justify-between text-xs font-semibold text-primary hover:underline py-1.5"
                 >

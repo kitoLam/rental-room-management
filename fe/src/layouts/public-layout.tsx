@@ -141,7 +141,10 @@ export function SiteHeader() {
                   variant={overlay ? 'overlay' : 'outline'}
                   className="hidden sm:inline-flex"
                 >
-                  <Link to={dashboardPath(user.roles)}>{user.fullName}</Link>
+                  {/* Tenants / plain users land on their account page; staff keep their workspace. */}
+                  <Link to={isStaffOnly ? dashboardPath(user.roles) : '/profile'}>
+                    {user.fullName}
+                  </Link>
                 </Button>
               </>
             ) : (
