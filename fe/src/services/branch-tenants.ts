@@ -156,90 +156,6 @@ export const tenantDebtItemSchema = z.object({
 
 export type TenantDebtItem = z.infer<typeof tenantDebtItemSchema>
 
-export interface FirstMonthProrationInfo {
-  isFirstMonth: boolean
-  moveInDate: string | null
-  startDay: number
-  stayedDays: number
-  unoccupiedDays: number
-  stayedPercent: number
-  deductedPercent: number
-  baseRoomRent: number
-  deductedAmount: number
-  proratedRoomRent: number
-}
-
-export function computeFirstMonthProration(item: TenantDebtItem): FirstMonthProrationInfo {
-  const moveInDate = item.contractStartDate || item.joinedAt || null
-  const isFirstMonth = Boolean(moveInDate && moveInDate.slice(0, 7) === item.period)
-  if (!isFirstMonth || !moveInDate) {
-    return {
-      isFirstMonth: false,
-      moveInDate,
-      startDay: 1,
-      stayedDays: 30,
-      unoccupiedDays: 0,
-      stayedPercent: 100,
-      deductedPercent: 0,
-      baseRoomRent: item.roomRentAmount,
-      deductedAmount: 0,
-      proratedRoomRent: item.roomRentAmount,
-    }
-  }
-  const startDay = Math.min(30, Math.max(1, Number(moveInDate.slice(8, 10)) || 1))
-  const unoccupiedDays = startDay - 1
-  const stayedDays = 30 - unoccupiedDays
-  const stayedPercent = Math.round((stayedDays / 30) * 1000) / 10
-  const deductedPercent = Math.round((unoccupiedDays / 30) * 1000) / 10
-
-  // Nếu BE chưa khởi động lại (vẫn còn điện nước / dịch vụ > 0 ở tháng đầu), roomRentAmount là giá gốc 30 ngày.
-  // Nếu BE đã tính theo ngày ở (điện nước & dịch vụ = 0), khôi phục giá gốc 30 ngày từ tỷ lệ stayedDays/30.
-  const backendAlreadyProrated =
-    item.electricityAmount === 0 &&
-    item.waterAmount === 0 &&
-    item.registeredServicesAmount === 0
-  const baseRoomRent =
-    backendAlreadyProrated && stayedDays < 30
-      ? Math.round((item.roomRentAmount * 30) / stayedDays / 1000) * 1000
-      : item.roomRentAmount
-  const proratedRoomRent = Math.round((baseRoomRent * stayedDays) / 30)
-  const deductedAmount = Math.max(0, baseRoomRent - proratedRoomRent)
-
-  return {
-    isFirstMonth: true,
-    moveInDate,
-    startDay,
-    stayedDays,
-    unoccupiedDays,
-    stayedPercent,
-    deductedPercent,
-    baseRoomRent,
-    deductedAmount,
-    proratedRoomRent,
-  }
-}
-
-function normalizeFirstMonthDebtItem(item: TenantDebtItem): TenantDebtItem {
-  const info = computeFirstMonthProration(item)
-  if (!info.isFirstMonth) return item
-  const isPaid = item.status === 'PAID' || item.remainingAmount === 0
-  const totalAmount = info.proratedRoomRent
-  const paidAmount = isPaid ? totalAmount : Math.min(item.paidAmount, totalAmount)
-  const remainingAmount = isPaid ? 0 : Math.max(0, totalAmount - paidAmount)
-  return {
-    ...item,
-    roomRentAmount: info.proratedRoomRent,
-    registeredServices: [],
-    registeredServicesAmount: 0,
-    electricityAmount: 0,
-    waterAmount: 0,
-    unpaidUtilityAmount: 0,
-    totalAmount,
-    paidAmount,
-    remainingAmount,
-  }
-}
-
 const managedBranchSchema = z.object({
   id: z.string(),
   ownerAccountId: z.string().nullable().optional(),
@@ -682,7 +598,7 @@ export const branchTenantsService = {
         byTenantAndRoom.set(compositeKey, item)
       }
     }
-    const dedupedContent = Array.from(byTenantAndRoom.values()).map(normalizeFirstMonthDebtItem)
+    const dedupedContent = Array.from(byTenantAndRoom.values())
     return {
       ...raw,
       content: dedupedContent,

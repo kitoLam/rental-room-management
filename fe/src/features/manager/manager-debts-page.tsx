@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   BellRing,
   CalendarClock,
-  CheckCircle2,
   Droplets,
   FileText,
   History,
@@ -36,7 +35,7 @@ function DebtPeriodHistorySection({ item }: { item: TenantDebtItem }) {
   if (rows.length === 0) return null
 
   const totalRemaining = rows.reduce((sum, r) => sum + r.remainingAmount, 0)
-  const totalLateDays = rows.reduce((sum, r) => sum + r.lateDays, 0)
+  const totalLateDays = rows.reduce((sum, r) => sum + r.overdueDays, 0)
   const totalReminders = rows.reduce((sum, r) => sum + r.reminderCount, 0)
 
   return (
@@ -101,10 +100,8 @@ function DebtPeriodHistorySection({ item }: { item: TenantDebtItem }) {
                     {formatVnd(row.remainingAmount)}
                   </td>
                   <td className="whitespace-nowrap py-2 pr-3">
-                    {row.lateDays > 0 || row.overdueDays > 0 ? (
-                      <span className="font-bold text-danger">
-                        {Math.max(row.lateDays, row.overdueDays)} ngày
-                      </span>
+                    {row.overdueDays > 0 ? (
+                      <span className="font-bold text-danger">{row.overdueDays} ngày</span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -156,17 +153,15 @@ export function ManagerDebts() {
   const feature = isOwner ? 'owner' : 'manager'
 
   const [keyword, setKeyword] = useState('')
-  const [overdueOnly, setOverdueOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const debtsQuery = useQuery({
-    queryKey: ['manager-tenant-debts', feature, branchId, keyword.trim(), overdueOnly],
+    queryKey: ['manager-tenant-debts', feature, branchId, keyword.trim()],
     queryFn: () =>
       branchTenantsService.debts(
         {
           branchId: branchId || undefined,
           keyword: keyword.trim() || undefined,
-          overdueOnly: overdueOnly || undefined,
           size: 100,
         },
         feature,
@@ -185,7 +180,6 @@ export function ManagerDebts() {
     const totalUtilityUnpaid = items.reduce((sum, item) => sum + (item.unpaidUtilityAmount ?? 0), 0)
     const totalRemaining = items.reduce((sum, item) => sum + (item.remainingAmount ?? 0), 0)
     return {
-      totalTenants: items.length,
       overdueTenants,
       totalRoomRent,
       totalUtilityUnpaid,
@@ -199,16 +193,10 @@ export function ManagerDebts() {
       description="Theo dõi công nợ thu gọn theo từng phòng & người thuê. Bấm Chi tiết để xem đầy đủ chi phí phòng, dịch vụ, điện nước cùng hồ sơ người thuê và hợp đồng."
     >
       {/* Compact Summary Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-surface p-4">
           <p className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Người thuê đang ở
-          </p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{summary.totalTenants}</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-surface p-4">
-          <p className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Đang trễ hạn trả
+            Người thuê đang trễ hạn
           </p>
           <p className="mt-1 text-2xl font-bold text-danger">{summary.overdueTenants}</p>
         </div>
@@ -249,29 +237,8 @@ export function ManagerDebts() {
                 : 'Bảng tóm tắt công nợ trong cơ sở. Bấm vào nút Chi tiết để xem bảng bóc tách phí và thông tin hợp đồng / người thuê.'}
             </p>
           </div>
-          <div className="inline-flex shrink-0 rounded-xl border border-border bg-background p-1">
-            <button
-              type="button"
-              onClick={() => setOverdueOnly(false)}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors ${
-                !overdueOnly
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Tất cả người thuê ({summary.totalTenants})
-            </button>
-            <button
-              type="button"
-              onClick={() => setOverdueOnly(true)}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors ${
-                overdueOnly
-                  ? 'bg-danger text-white shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Đang trễ hạn ({summary.overdueTenants})
-            </button>
+          <div className="inline-flex shrink-0 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-xs font-bold text-danger">
+            Đang trễ hạn ({summary.overdueTenants})
           </div>
         </div>
 
@@ -297,9 +264,7 @@ export function ManagerDebts() {
           </div>
         ) : items.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            {overdueOnly
-              ? 'Hiện không có người thuê nào đang trễ hạn trả.'
-              : 'Chưa có công nợ người thuê nào trong cơ sở này.'}
+            Hiện không có người thuê nào đang trễ hạn trả.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -341,26 +306,15 @@ export function ManagerDebts() {
 
                     {/* Trạng thái thời gian trễ */}
                     <td className="whitespace-nowrap py-3.5 pr-4">
-                      {item.overdue && item.overdueDays > 0 ? (
-                        <div className="inline-flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 text-xs font-bold text-danger">
-                            <AlertTriangle className="size-3.5" />
-                            Trễ {item.overdueDays} ngày
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            (từ {dateOnly(item.dueDate)})
-                          </span>
-                        </div>
-                      ) : item.remainingAmount === 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success">
-                          <CheckCircle2 className="size-3.5" />
-                          Đã trả đủ
+                      <div className="inline-flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2.5 py-0.5 text-xs font-bold text-danger">
+                          <AlertTriangle className="size-3.5" />
+                          Trễ {item.overdueDays} ngày
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success">
-                          Đúng hạn · {dateOnly(item.dueDate)}
+                        <span className="text-xs text-muted-foreground">
+                          (từ {dateOnly(item.dueDate)})
                         </span>
-                      )}
+                      </div>
                     </td>
 
                     {/* Số tiền */}
@@ -419,23 +373,18 @@ export function ManagerDebts() {
             {/* Thanh trạng thái thu gọn */}
             <div
               className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                selectedItem.remainingAmount > 0
-                  ? 'border-danger/40 bg-danger/10'
-                  : 'border-success/30 bg-success/10'
+                selectedItem.remainingAmount === 0
+                  ? 'border-success/30 bg-success/10'
+                  : selectedItem.overdue
+                    ? 'border-danger/40 bg-danger/10'
+                    : 'border-warning/40 bg-warning/10'
               }`}
             >
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                {selectedItem.remainingAmount > 0 ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 font-bold text-white">
-                    <AlertTriangle className="size-3.5" />
-                    Trễ hạn {selectedItem.overdueDays} ngày
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-0.5 font-bold text-white">
-                    <CheckCircle2 className="size-3.5" />
-                    Đã trả đủ
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 font-bold text-white">
+                  <AlertTriangle className="size-3.5" />
+                  Trễ hạn {selectedItem.overdueDays} ngày
+                </span>
                 <span className="text-muted-foreground">
                   <CalendarClock className="mr-1 inline size-3.5" />
                   Hạn trả: <strong className="text-foreground">{dateOnly(selectedItem.dueDate)}</strong>

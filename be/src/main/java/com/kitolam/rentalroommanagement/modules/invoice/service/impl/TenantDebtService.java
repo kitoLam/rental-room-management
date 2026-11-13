@@ -112,21 +112,20 @@ public class TenantDebtService {
             Tenant tenant = scope.tenantByContract().get(contractId);
 
             List<Invoice> contractInvoices = invoiceByContract.getOrDefault(contractId, List.of());
+            // Khoản công nợ là kỳ còn tiền chưa thu sớm nhất; kỳ đã tất toán không che mất kỳ còn nợ cũ hơn.
             Invoice invoice = contractInvoices.stream()
-                    .max(Comparator.comparing(Invoice::getPeriod, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .filter(i -> i.getStatus() != InvoiceStatus.PAID && nz(i.getRemainingAmount()).signum() > 0)
+                    .min(Comparator.comparing(Invoice::getPeriod, Comparator.nullsLast(Comparator.naturalOrder())))
                     .orElse(null);
-            // Công nợ = hoá đơn còn tiền chưa thu; hoá đơn đã thu đủ không hiện thành dòng công nợ.
-            boolean outstanding = invoice != null
-                    && invoice.getStatus() != InvoiceStatus.PAID
-                    && nz(invoice.getRemainingAmount()).signum() > 0;
-            if (!outstanding) continue;
+            if (invoice == null) continue;
 
             TenantDebtResponse item = toDebtItem(contract, invoice, tenant, room,
                     scope.branchById().get(room.getBranchId()), today,
                     scope.tenancyIdByContract().get(contractId),
                     lateByContract.getOrDefault(contractId, List.of()),
                     contractInvoices);
-            if (overdueOnly && !item.overdue()) continue;
+            // Chỉ kỳ đã quá hạn trả mới là công nợ; hoá đơn còn trong hạn không hiện thành dòng công nợ.
+            if (!item.overdue()) continue;
             if (!needle.isEmpty() && !matches(item, needle)) continue;
             items.add(item);
         }
@@ -142,21 +141,34 @@ public class TenantDebtService {
         return PagedResponse.of(new ArrayList<>(items.subList(from, to)), safePage, safeSize, items.size());
     }
 
+    private static final Set<InvoiceItemType> SERVICE_TYPES = Set.of(InvoiceItemType.ROOM_SERVICE,
+            InvoiceItemType.PERSONAL_SERVICE, InvoiceItemType.SLOT_SERVICE);
+
     private TenantDebtResponse toDebtItem(Contract contract, Invoice invoice, Tenant tenant, Room room,
                                           BranchResponse branch, LocalDate today, String contractTenantId,
                                           List<LatePaymentRecord> records, List<Invoice> contractInvoices) {
         List<InvoiceItem> items = invoice.getItems() == null ? List.of() : invoice.getItems();
 
         BigDecimal roomRent = sumOf(items, InvoiceItemType.ROOM_RENT);
-        BigDecimal registeredServicesAmount = sumOf(items, InvoiceItemType.ROOM_SERVICE)
-                .add(sumOf(items, InvoiceItemType.PERSONAL_SERVICE))
-                .add(sumOf(items, InvoiceItemType.SLOT_SERVICE));
+        // Hoá đơn không có kiểu riêng cho nước: đó là một dòng dịch vụ có mô tả "nước". Tách ra khỏi
+        // danh sách dịch vụ để không cộng hai lần.
+        List<InvoiceItem> waterItems = items.stream()
+                .filter(i -> i.getType() != null && SERVICE_TYPES.contains(i.getType()))
+                .filter(TenantDebtService::isWater)
+                .toList();
+        List<InvoiceItem> serviceItems = items.stream()
+                .filter(i -> i.getType() != null && SERVICE_TYPES.contains(i.getType()))
+                .filter(i -> !isWater(i))
+                .toList();
+        BigDecimal registeredServicesAmount = serviceItems.stream()
+                .map(i -> nz(i.getAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal electricity = sumOf(items, InvoiceItemType.ELECTRICITY);
-        BigDecimal water = waterOf(items);
+        BigDecimal water = waterItems.stream()
+                .map(i -> nz(i.getAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<TenantDebtServiceItemResponse> services = items.stream()
-                .filter(i -> i.getType() != null && Set.of(InvoiceItemType.ROOM_SERVICE,
-                        InvoiceItemType.PERSONAL_SERVICE, InvoiceItemType.SLOT_SERVICE).contains(i.getType()))
+        List<TenantDebtServiceItemResponse> services = serviceItems.stream()
                 .map(i -> new TenantDebtServiceItemResponse(null, i.getDescription(),
                         i.getType() == InvoiceItemType.PERSONAL_SERVICE ? "người/tháng" : "tháng",
                         nz(i.getUnitPrice()), i.getQuantity() == null ? 1 : i.getQuantity().intValue(),
@@ -164,9 +176,12 @@ public class TenantDebtService {
                 .toList();
 
         LocalDate dueDate = invoice.getDueDate();
-        long overdueDays = dueDate != null && dueDate.isBefore(today)
+        // Hoá đơn đã thu đủ thì không còn trễ, bất kể đã quá hạn trả bao lâu.
+        boolean settled = invoice.getStatus() == InvoiceStatus.PAID
+                || nz(invoice.getRemainingAmount()).signum() <= 0;
+        long overdueDays = !settled && dueDate != null && dueDate.isBefore(today)
                 ? ChronoUnit.DAYS.between(dueDate, today) : 0;
-        boolean overdue = overdueDays > 0 && nz(invoice.getRemainingAmount()).signum() > 0;
+        boolean overdue = overdueDays > 0;
 
         LatePaymentRecord record = records.stream()
                 .filter(r -> Objects.equals(r.getPeriod(), invoice.getPeriod()))
@@ -227,6 +242,21 @@ public class TenantDebtService {
         );
     }
 
+    /**
+     * Số ngày trễ của một kỳ, tính đến lúc tất toán (hoặc hôm nay nếu còn nợ). Kỳ đã trả đủ vẫn giữ lại
+     * số ngày nó từng trễ; kỳ trả trước hạn trả về 0.
+     */
+    private static long lateDaysOf(Invoice inv, LocalDate today) {
+        LocalDate due = inv.getDueDate();
+        if (due == null) return 0;
+        LocalDate settledOn = inv.getStatus() == InvoiceStatus.PAID
+                || nz(inv.getRemainingAmount()).signum() <= 0
+                ? (inv.getUpdatedAt() == null ? today : LocalDate.ofInstant(inv.getUpdatedAt(), ZONE))
+                : null;
+        LocalDate until = settledOn != null && settledOn.isBefore(today) ? settledOn : today;
+        return until.isAfter(due) ? ChronoUnit.DAYS.between(due, until) : 0;
+    }
+
     /** Các kỳ hoá đơn có công nợ của hợp đồng, mới nhất trước; ghép thêm dữ liệu trễ hạn nếu có. */
     private List<DebtPeriodHistoryResponse> periodHistory(List<Invoice> contractInvoices,
                                                           List<LatePaymentRecord> records, LocalDate today) {
@@ -239,14 +269,11 @@ public class TenantDebtService {
                         Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .map(inv -> {
                     LatePaymentRecord r = recordByPeriod.get(inv.getPeriod());
-                    long days = inv.getDueDate() != null && inv.getDueDate().isBefore(today)
-                            && nz(inv.getRemainingAmount()).signum() > 0
-                            ? ChronoUnit.DAYS.between(inv.getDueDate(), today) : 0;
                     return new DebtPeriodHistoryResponse(inv.getId(), inv.getInvoiceNumber(), inv.getPeriod(),
                             inv.getDueDate(), inv.getIssueDate(), nz(inv.getTotalAmount()), nz(inv.getPaidAmount()),
                             nz(inv.getRemainingAmount()),
                             inv.getStatus() == null ? null : inv.getStatus().name(),
-                            days,
+                            lateDaysOf(inv, today),
                             r == null ? 0 : r.getLateDays(),
                             r == null ? 0 : r.getReminderCount(),
                             r == null ? null : r.getStatus() == null ? null : r.getStatus().name());
@@ -484,13 +511,10 @@ public class TenantDebtService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /** Hoá đơn tháng chỉ có một dòng tiền nước; nhận diện theo mô tả vì không có kiểu riêng. */
-    private static BigDecimal waterOf(List<InvoiceItem> items) {
-        return items.stream()
-                .filter(i -> i.getAmount() != null && i.getDescription() != null)
-                .filter(i -> i.getDescription().toLowerCase(Locale.ROOT).contains("nước"))
-                .map(InvoiceItem::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    /** Hoá đơn tháng ghi tiền nước thành một dòng dịch vụ; nhận diện theo mô tả vì không có kiểu riêng. */
+    private static boolean isWater(InvoiceItem item) {
+        String description = item.getDescription();
+        return description != null && description.toLowerCase(Locale.ROOT).contains("nước");
     }
 
     private static BigDecimal nz(BigDecimal value) {

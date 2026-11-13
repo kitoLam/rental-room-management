@@ -143,7 +143,7 @@ export default function TenantDebtsPage() {
   }, [debtsQuery.data, activeTenancy, tenancies])
 
   const periodRows = currentDebt?.periodHistory ?? []
-  const totalLateDays = periodRows.reduce((sum, r) => sum + r.lateDays, 0)
+  const totalLateDays = periodRows.reduce((sum, r) => sum + r.overdueDays, 0)
   const totalReminders = periodRows.reduce((sum, r) => sum + r.reminderCount, 0)
 
   const roomLabel = currentDebt?.roomNumber || activeTenancy?.roomName || 'đang thuê'
@@ -181,27 +181,14 @@ export default function TenantDebtsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Thanh trạng thái kỳ hiện tại & Nút trả ngay */}
-          <div
-            className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 ${
-              currentDebt.remainingAmount > 0
-                ? 'border-danger/40 bg-danger/10'
-                : 'border-success/30 bg-success/10'
-            }`}
-          >
+          {/* Thanh trạng thái kỳ hiện tại */}
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-danger/40 bg-danger/10 p-4">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                {currentDebt.remainingAmount > 0 ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 font-bold text-white">
-                    <AlertTriangle className="size-3.5" />
-                    Trễ hạn {currentDebt.overdueDays} ngày
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-0.5 font-bold text-white">
-                    <CheckCircle2 className="size-3.5" />
-                    Đã trả đủ
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger px-2.5 py-0.5 font-bold text-white">
+                  <AlertTriangle className="size-3.5" />
+                  Trễ hạn {currentDebt.overdueDays} ngày
+                </span>
                 <span className="text-muted-foreground">
                   <CalendarClock className="mr-1 inline size-3.5" />
                   Hạn trả: <strong className="text-foreground">{dateOnly(currentDebt.dueDate)}</strong>
@@ -292,6 +279,13 @@ export default function TenantDebtsPage() {
                       <span className="font-bold">{formatVnd(currentDebt.waterAmount)}</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="pt-2.5 flex items-center justify-between">
+                  <span className="font-bold text-foreground">Tổng hoá đơn kỳ này</span>
+                  <span className="font-bold text-foreground">
+                    {formatVnd(currentDebt.totalAmount)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -398,7 +392,6 @@ export default function TenantDebtsPage() {
                     {periodRows.map((row) => {
                       const isCurrent = row.period === currentDebt.period && row.invoiceId === currentDebt.id
                       const paid = row.status === 'PAID' || row.remainingAmount === 0
-                      const days = Math.max(row.lateDays, row.overdueDays)
                       return (
                         <tr key={row.invoiceId || row.period} className={isCurrent ? 'bg-primary-soft/25' : ''}>
                           <td className="whitespace-nowrap py-3 pr-4 font-bold">
@@ -422,8 +415,8 @@ export default function TenantDebtsPage() {
                             {formatVnd(row.remainingAmount)}
                           </td>
                           <td className="whitespace-nowrap py-3 pr-4">
-                            {days > 0 ? (
-                              <span className="font-bold text-danger">{days} ngày</span>
+                            {row.overdueDays > 0 ? (
+                              <span className="font-bold text-danger">{row.overdueDays} ngày</span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -434,7 +427,7 @@ export default function TenantDebtsPage() {
                               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
                                 paid
                                   ? 'bg-success/15 text-success'
-                                  : days > 0
+                                  : row.overdueDays > 0
                                     ? 'bg-danger/15 text-danger'
                                     : 'bg-warning/15 text-warning'
                               }`}
@@ -444,7 +437,7 @@ export default function TenantDebtsPage() {
                                   <CheckCircle2 className="size-3.5" />
                                   Đã trả đủ
                                 </>
-                              ) : days > 0 ? (
+                              ) : row.overdueDays > 0 ? (
                                 <>
                                   <AlertTriangle className="size-3.5" />
                                   Trễ hạn
