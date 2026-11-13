@@ -37,7 +37,7 @@ export function ManagerSlotServiceRequests() {
   return (
     <ManagerPage
       title="Yêu cầu dịch vụ tự chọn"
-      description="Người thuê xin đăng ký thêm hoặc huỷ dịch vụ tự chọn. Duyệt xong, dịch vụ được thêm vào / kết thúc trên hợp đồng từ ngày hiệu lực."
+      description="Người thuê xin đăng ký thêm hoặc huỷ dịch vụ tự chọn. Duyệt xong, dịch vụ được thêm vào / kết thúc trên hợp đồng ngay."
     >
       <div className="flex flex-wrap gap-2">
         {filters.map((f) => (
@@ -83,7 +83,6 @@ export function ManagerSlotServiceRequests() {
                     </td>
                     <td className="px-3 py-4">
                       <StatusBadge tone={requestStatusTone[r.status]}>{requestStatusLabel[r.status]}</StatusBadge>
-                      {r.effectiveDate && <p className="mt-1 text-xs text-muted-foreground">Hiệu lực {r.effectiveDate}</p>}
                     </td>
                     <td className="px-5 py-4 text-right whitespace-nowrap">
                       {r.status === 'PENDING' && (
@@ -144,9 +143,9 @@ function DecisionModal({
   onClose: () => void
   onDone: () => void
 }) {
-  const [value, setValue] = useState(approve ? new Date().toISOString().slice(0, 10) : '')
+  const [value, setValue] = useState('')
   const decide = useMutation({
-    mutationFn: () => (approve ? serviceCatalogApi.approve(request.id, value) : serviceCatalogApi.reject(request.id, value)),
+    mutationFn: () => (approve ? serviceCatalogApi.approve(request.id) : serviceCatalogApi.reject(request.id, value)),
     onSuccess: onDone,
   })
   return (
@@ -157,14 +156,18 @@ function DecisionModal({
       onOpenChange={(o) => !o && onClose()}
     >
       <div className="grid gap-4">
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium">{approve ? 'Ngày hiệu lực' : 'Lý do từ chối'}</span>
-          {approve ? (
-            <input type="date" value={value} onChange={(e) => setValue(e.target.value)} className="input" />
-          ) : (
+        {approve ? (
+          <p className="text-sm text-muted-foreground">
+            {request.action === 'ADD'
+              ? 'Dịch vụ sẽ được thêm vào hợp đồng và bắt đầu tính phí từ hôm nay.'
+              : 'Dịch vụ sẽ kết thúc trên hợp đồng từ hôm nay.'}
+          </p>
+        ) : (
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Lý do từ chối</span>
             <textarea value={value} onChange={(e) => setValue(e.target.value)} rows={3} maxLength={500} className="input min-h-20" />
-          )}
-        </label>
+          </label>
+        )}
         <InlineError error={decide.error} />
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={onClose} disabled={decide.isPending}>
