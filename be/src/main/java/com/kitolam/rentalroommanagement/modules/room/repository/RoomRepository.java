@@ -14,4 +14,5 @@ public interface RoomRepository extends BaseRepository<Room> {
     List<com.kitolam.rentalroommanagement.modules.room.service.RoomService.StatusTotal> readStatusTotalsForAdmin();
     List<Room> findByBranchIdInAndIsDeletedFalse(Collection<String> branchIds);
     List<Room> findByBranchIdAndIsDeletedFalse(String branchId);
+    List<Room> findByBranchIdIn(Collection<String> branchIds);
 }
