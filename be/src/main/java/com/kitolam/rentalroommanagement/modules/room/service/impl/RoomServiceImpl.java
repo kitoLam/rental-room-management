@@ -21,9 +21,19 @@ import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.Utility
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
-import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomSlotOccupancy;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
+import com.kitolam.rentalroommanagement.modules.booking.document.Booking;
+import com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus;
+import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import org.bson.types.ObjectId;
+import org.springframework.data.mongodb.core.query.Query;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -43,6 +53,9 @@ import java.util.stream.Collectors;
 public class RoomServiceImpl implements RoomService {
 
     private static final List<OccupancyStatus> HOLDING = List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE);
+    /** Booking requests still being processed (CONVERTED ones are covered by their contract). */
+    private static final List<BookingStatus> LIVE_BOOKINGS = List.of(BookingStatus.REQUESTED, BookingStatus.PENDING,
+            BookingStatus.AWAITING_PAYMENT, BookingStatus.APPROVED, BookingStatus.CONFIRMED);
 
     private final RoomRepository roomRepository;
     private final RoomMapper mapper;
@@ -143,7 +156,21 @@ public class RoomServiceImpl implements RoomService {
         if (request.images() != null) room.setImages(new ArrayList<>(request.images()));
         if (request.rules() != null) room.setRules(request.rules());
         if (request.roomServiceIds() != null) room.setRoomServiceIds(validRoomServices(room.getBranchId(), request.roomServiceIds()));
-        if (request.status() != null) room.setStatus(request.status());
+        if (request.status() != null && request.status() != room.getStatus()) {
+            boolean closing = request.status() == RoomStatus.MAINTENANCE || request.status() == RoomStatus.INACTIVE;
+            if (closing) {
+                // A room can only leave "active" once nobody lives in / holds any of its slots.
+                List<RoomSlot> slots = roomSlotRepository.findByRoomIdAndIsDeletedFalse(room.getId());
+                Map<String, String> busy = busySlots(slots);
+                if (!busy.isEmpty()) {
+                    throw new BadRequestException("Không thể chuyển phòng " + room.getRoomNumber() + " sang "
+                            + (request.status() == RoomStatus.MAINTENANCE ? "bảo trì" : "ngừng hoạt động")
+                            + " vì còn " + busy.size() + " chỗ đang có người ở hoặc được giữ: " + describe(slots, busy)
+                            + ". Phòng chỉ đổi trạng thái được khi không còn ai ở.");
+                }
+            }
+            room.setStatus(request.status());
+        }
         ensureUniqueNumber(room);
         syncSlots(room);
         return mapper.toResponse(roomRepository.save(room));
@@ -155,8 +182,11 @@ public class RoomServiceImpl implements RoomService {
         Room room = find(id);
         requireAccess(room.getBranchId(), principal);
         List<RoomSlot> slots = roomSlotRepository.findByRoomIdAndIsDeletedFalse(room.getId());
-        if (!heldSlotIds(slots).isEmpty()) {
-            throw new ConflictException("Phòng đang có người giữ chỗ hoặc đang ở, không thể xoá");
+        Map<String, String> busy = busySlots(slots);
+        if (!busy.isEmpty()) {
+            throw new ConflictException("Không thể xoá phòng " + room.getRoomNumber() + " vì còn " + busy.size()
+                    + " chỗ đang được giữ hoặc có người ở: " + describe(slots, busy)
+                    + ". Hãy xử lý các yêu cầu giữ chỗ / hợp đồng này trước.");
         }
         slots.forEach(slot -> {
             slot.markDeleted();
@@ -175,13 +205,19 @@ public class RoomServiceImpl implements RoomService {
         List<RoomSlot> slots = new ArrayList<>(roomSlotRepository.findByRoomIdAndIsDeletedFalse(room.getId()));
         slots.sort(Comparator.comparing(s -> s.getSlotNumber() == null ? 0 : s.getSlotNumber()));
         if (slots.size() > target) {
-            List<RoomSlot> extra = slots.subList(target, slots.size());
-            Set<String> held = heldSlotIds(extra);
-            if (!held.isEmpty()) {
-                throw new BadRequestException("Không thể giảm sức chứa xuống " + target
-                        + " vì còn " + held.size() + " chỗ đang có người giữ hoặc đang ở");
+            int toRemove = slots.size() - target;
+            Map<String, String> busy = busySlots(slots);
+            // Any free slot can go (highest numbers first); busy ones always stay.
+            List<RoomSlot> free = slots.stream().filter(slot -> !busy.containsKey(slot.getId()))
+                    .sorted(Comparator.comparing((RoomSlot slot) -> slot.getSlotNumber() == null ? 0 : slot.getSlotNumber()).reversed())
+                    .toList();
+            if (free.size() < toRemove) {
+                throw new BadRequestException("Không thể giảm sức chứa từ " + slots.size() + " xuống " + target
+                        + " người: cần " + toRemove + " chỗ trống để bỏ đi nhưng phòng chỉ còn " + free.size()
+                        + " chỗ trống. Các chỗ đang bận: " + describe(slots, busy)
+                        + ". Sức chứa thấp nhất có thể đặt lúc này là " + busy.size() + ".");
             }
-            extra.forEach(slot -> {
+            free.subList(0, toRemove).forEach(slot -> {
                 slot.markDeleted();
                 roomSlotRepository.save(slot);
             });
@@ -215,12 +251,53 @@ public class RoomServiceImpl implements RoomService {
         return new ArrayList<>(distinct);
     }
 
-    private Set<String> heldSlotIds(List<RoomSlot> slots) {
-        if (slots.isEmpty()) return Set.of();
-        return occupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(
-                        slots.stream().map(RoomSlot::getId).toList(), HOLDING).stream()
-                .map(RoomSlotOccupancy::getRoomSlotId)
-                .collect(Collectors.toSet());
+    /**
+     * Slots that cannot be removed, with the reason: someone holds / lives in it (occupancy), a booking
+     * request on it is still being processed, or a draft / running contract uses it.
+     */
+    private Map<String, String> busySlots(List<RoomSlot> slots) {
+        Map<String, String> busy = new LinkedHashMap<>();
+        if (slots.isEmpty()) return busy;
+        List<String> ids = slots.stream().map(RoomSlot::getId).toList();
+        List<ObjectId> objectIds = ids.stream().map(MongoQueryHelper::toObjectId).toList();
+        Set<String> slotIds = Set.copyOf(ids);
+
+        occupancyRepository.findByRoomSlotIdInAndStatusInAndIsDeletedFalse(ids, HOLDING)
+                .forEach(o -> busy.putIfAbsent(o.getRoomSlotId(),
+                        o.getStatus() == OccupancyStatus.ACTIVE ? "đang có người ở" : "đang được giữ chỗ"));
+
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")));
+        for (Contract c : mongo.find(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                new Criteria().orOperator(Criteria.where("roomSlotId").in(objectIds), Criteria.where("roomSlotIds").in(objectIds)),
+                Criteria.where("status").in(ContractStatus.DRAFT.name(), ContractStatus.ACTIVE.name()))), Contract.class)) {
+            if (c.getStatus() == ContractStatus.ACTIVE && c.getEndDate() != null && !c.getEndDate().isAfter(today)) continue;
+            String reason = c.getStatus() == ContractStatus.DRAFT ? "có hợp đồng đang chờ ký / duyệt" : "đang có người ở theo hợp đồng";
+            slotIdsOf(c.getRoomSlotId(), c.getRoomSlotIds()).stream().filter(slotIds::contains)
+                    .forEach(id -> busy.putIfAbsent(id, reason));
+        }
+
+        for (Booking b : mongo.find(new Query(new Criteria().andOperator(MongoQueryHelper.notDeleted(),
+                new Criteria().orOperator(Criteria.where("roomSlotId").in(objectIds), Criteria.where("roomSlotIds").in(objectIds)),
+                Criteria.where("status").in(LIVE_BOOKINGS.stream().map(Enum::name).toList()))), Booking.class)) {
+            slotIdsOf(b.getRoomSlotId(), b.getRoomSlotIds()).stream().filter(slotIds::contains)
+                    .forEach(id -> busy.putIfAbsent(id, "có yêu cầu giữ chỗ đang xử lý"));
+        }
+        return busy;
+    }
+
+    private static List<String> slotIdsOf(String single, List<String> many) {
+        List<String> all = new ArrayList<>();
+        if (single != null) all.add(single);
+        if (many != null) all.addAll(many);
+        return all;
+    }
+
+    /** "S1 (đang có người ở), S3 (có yêu cầu giữ chỗ đang xử lý)" */
+    private static String describe(List<RoomSlot> slots, Map<String, String> busy) {
+        return slots.stream().filter(slot -> busy.containsKey(slot.getId()))
+                .sorted(Comparator.comparing(slot -> slot.getSlotNumber() == null ? 0 : slot.getSlotNumber()))
+                .map(slot -> slot.getSlotCode() + " (" + busy.get(slot.getId()) + ")")
+                .collect(Collectors.joining(", "));
     }
 
     private void ensureUniqueNumber(Room room) {

@@ -5,5 +5,5 @@ export const routes = {
   roomDetail: (id: string) => `/rooms/${id}`,
   login: '/login',
   register: '/register',
-  myRoom: '/tenant/my-room',
+  myRoom: '/tenant/dashboard',
 } as const
