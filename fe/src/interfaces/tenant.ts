@@ -51,6 +51,7 @@ export const tenantContractSchema = z.object({
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
   contractUrl: z.string().nullable().optional(),
+  generatedPdf: z.boolean().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
 })
 export type TenantContract = z.infer<typeof tenantContractSchema>

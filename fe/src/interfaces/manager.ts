@@ -154,6 +154,7 @@ export const contractSchema = contractInputSchema.extend({
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
   contractUrl: z.string().nullable().optional(),
+  generatedPdf: z.boolean().optional(),
   signedFileUrl: z.string().nullable().optional(),
   expiringSoon: z.boolean().optional(),
   renewedFromContractId: z.string().nullable().optional(),

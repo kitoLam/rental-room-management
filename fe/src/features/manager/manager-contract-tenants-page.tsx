@@ -12,7 +12,7 @@ import { branchTenantsService } from '@/services/branch-tenants'
 import { bookingService } from '@/services/guest-user'
 import { provider } from '@/services/config'
 import { useQueries } from '@tanstack/react-query'
-import { formatVnd } from '@/lib/format'
+import { formatProfileDate, formatVnd } from '@/lib/format'
 import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useParams } from 'react-router'
@@ -43,7 +43,7 @@ function ContractMember({ member, onEdit }: { member: ManagerContractTenant; onE
       <Facts items={[
         ['Email', person?.email || member.tenantEmail || '—'],
         ['Điện thoại', person?.phone || '—'],
-        ['Ngày sinh', person?.dateOfBirth ? dateOnly(person.dateOfBirth) : '—'],
+        ['Ngày sinh', formatProfileDate(person?.dateOfBirth) || '—'],
         ['Giới tính', person?.gender === 'MALE' ? 'Nam' : person?.gender === 'FEMALE' ? 'Nữ' : person?.gender === 'OTHER' ? 'Khác' : '—'],
         ['Phần tiền thuê', member.rentAmount == null ? '—' : `${formatVnd(member.rentAmount)}/tháng`],
         ['Ngày bắt đầu cư trú', dateOnly(member.joinedAt)],

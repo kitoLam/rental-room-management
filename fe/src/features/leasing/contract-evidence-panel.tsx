@@ -7,6 +7,8 @@ import { contractService } from '@/services/guest-user'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { contractStage } from './contract-stage'
+import { ContractPdfDownload } from './contract-pdf-download'
+import { ContractEvidenceFile, submitContractEvidence } from './contract-evidence-file'
 
 /**
  * One slot contract: tenant downloads the template, submits the signed copy;
@@ -27,7 +29,7 @@ export function ContractEvidencePanel({
   moveInDate?: string | null
   /** Booking rental start, for the "expected term" preview while choosing the term. */
 }) {
-  const [evidenceUrl, setEvidenceUrl] = useState('')
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
   const [termMonths, setTermMonths] = useState('3')
   const [managerNote, setManagerNote] = useState('')
   const contractQuery = useQuery({
@@ -39,9 +41,10 @@ export function ContractEvidencePanel({
     await onChanged?.()
   }
   const submitEvidence = useMutation({
-    mutationFn: () => contractService.submitEvidence(contractId, { evidenceUrl: evidenceUrl.trim(), termMonths: Number(termMonths) }),
+    mutationFn: (file: File) => submitContractEvidence(contractId, file,
+      data?.generatedPdf ? data.termMonths! : Number(termMonths)),
     onSuccess: async () => {
-      setEvidenceUrl('')
+      setEvidenceFile(null)
       await refresh()
     },
   })
@@ -65,8 +68,9 @@ export function ContractEvidencePanel({
   // Expected contract term: from the rental start date for the chosen number of months.
   const rentalStartDate = data?.startDate || moveInDate
   const termPreview = rentalStartDate
-    ? `${dateOnly(rentalStartDate)} → ${dateOnly(addMonths(rentalStartDate, Number(termMonths)))}`
+    ? `${dateOnly(rentalStartDate)} → ${dateOnly(addMonths(rentalStartDate, data?.generatedPdf ? data.termMonths ?? Number(termMonths) : Number(termMonths)))}`
     : null
+  const pendingEvidence = !canManage && data?.status === 'DRAFT' && !data.evidenceSubmittedAt
 
   return (
     <Panel className="mt-5">
@@ -80,7 +84,18 @@ export function ContractEvidencePanel({
         {data && (
           <div className="mt-4 grid gap-5">
             {data.roomAddress && <p className="text-sm text-muted-foreground">{data.roomAddress}</p>}
-            {data.contractUrl && (
+            {data.generatedPdf ? (
+              <ContractPdfDownload
+                key={contractId}
+                id={contractId}
+                rentalStartDate={rentalStartDate}
+                ready={Boolean(data.contractUrl)}
+                canChooseTerm={Boolean(pendingEvidence && data.evidenceDeadline && !data.termMonths)}
+                waitingForTerm={!data.termMonths}
+                canManage={canManage}
+                onChanged={refresh}
+              />
+            ) : data.contractUrl && (
               <a className="text-sm text-primary underline" href={data.contractUrl} target="_blank" rel="noreferrer">
                 Tải mẫu hợp đồng
               </a>
@@ -90,19 +105,15 @@ export function ContractEvidencePanel({
             {data.evidenceSubmittedAt && data.status === 'DRAFT' && (
               <Notice>Đã gửi bản ký lúc {dateTime(data.evidenceSubmittedAt)}; đang chờ quản lý duyệt.</Notice>
             )}
-            {!canManage && data.status === 'DRAFT' && !data.evidenceSubmittedAt && (
+            {pendingEvidence && (!data.generatedPdf || (data.termMonths && data.contractUrl)) && (
               <form
                 className="grid gap-4"
                 onSubmit={(event) => {
                   event.preventDefault()
-                  submitEvidence.mutate()
+                  if (evidenceFile && !submitEvidence.isPending) submitEvidence.mutate(evidenceFile)
                 }}
               >
-                <label className="grid gap-1 text-sm">
-                  Link ảnh/PDF hợp đồng đã ký
-                  <input className="input" type="url" required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} />
-                </label>
-                <label className="grid gap-1 text-sm">
+                {!data.generatedPdf && <label className="grid gap-1 text-sm">
                   Thời hạn hợp đồng
                   <select className="input" value={termMonths} onChange={(event) => setTermMonths(event.target.value)}>
                     {[3, 6, 8, 12].map((months) => (
@@ -111,12 +122,12 @@ export function ContractEvidencePanel({
                       </option>
                     ))}
                   </select>
-                </label>
+                </label>}
                 {termPreview && (
                   <p className="text-xs text-muted-foreground">Hiệu lực dự kiến: {termPreview} (bắt đầu từ ngày bắt đầu thuê)</p>
                 )}
-                <InlineError error={submitEvidence.error} />
-                <Button loading={submitEvidence.isPending}>Gửi bản ký hợp đồng</Button>
+                <ContractEvidenceFile file={evidenceFile} pending={submitEvidence.isPending} error={submitEvidence.error}
+                  onSelect={(file) => { setEvidenceFile(file); submitEvidence.reset() }} />
               </form>
             )}
             {canManage && data.status === 'DRAFT' && data.evidenceSubmittedAt && (
