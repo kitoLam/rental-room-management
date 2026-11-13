@@ -124,6 +124,8 @@ public class ContractServiceImpl implements ContractService {
     public ContractResponse completeCheckIn(String id, ContractCheckInRequest request, AuthPrincipal principal) {
         Contract contract = find(id);
         Booking booking = booking(contract.getBookingId());
+        if (booking.getSlotMoveInDates() != null)
+            throw new ConflictException("Đơn đặt chỗ này cần nộp và duyệt bằng chứng hợp đồng.");
         RoomSlot slot = slot(contract.getRoomSlotId());
         Room room = room(slot.getRoomId());
         requireManager(room, principal);
@@ -188,7 +190,7 @@ public class ContractServiceImpl implements ContractService {
         contract.setSignedEvidenceUrl(request.evidenceUrl().trim());
         contract.setTermMonths(request.termMonths());
         contract.setSignedDate(null);
-        contract.setStartDate(null);
+        if (booking(contract.getBookingId()).getSlotMoveInDates() == null) contract.setStartDate(null);
         contract.setEndDate(null);
         contract.setEvidenceSubmittedAt(now);
         contract.setEvidenceDeadline(null);
@@ -219,7 +221,7 @@ public class ContractServiceImpl implements ContractService {
             contract.setEvidenceSubmittedAt(null);
             contract.setTermMonths(null);
             contract.setSignedDate(null);
-            contract.setStartDate(null);
+            if (booking.getSlotMoveInDates() == null) contract.setStartDate(null);
             contract.setEndDate(null);
             contract.setEvidenceDeadline(clock.instant().plusSeconds(24 * 60 * 60));
             contract.setEvidenceNote(note);
@@ -227,12 +229,15 @@ public class ContractServiceImpl implements ContractService {
         }
 
         // Ngày bắt đầu hợp đồng theo ngày bắt đầu thuê đã chốt lúc đặt cọc; booking cũ chưa có thì giữ quy tắc cũ.
-        LocalDate effectiveDate = booking.getExpectedMoveInDate() != null
+        LocalDate effectiveDate = booking.getSlotMoveInDates() == null
                 ? booking.getExpectedMoveInDate()
-                : LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
-        LocalDate firstBillingStartDate = request.firstBillingStartDate();
-        if (firstBillingStartDate == null || firstBillingStartDate.isBefore(effectiveDate) || firstBillingStartDate.getDayOfMonth() != 1)
-            throw new BadRequestException("Ngày bắt đầu tính tiền kỳ đầu phải là mùng 1 của tháng, không trước ngày hiệu lực hợp đồng");
+                : booking.getSlotMoveInDates().get(contract.getRoomSlotId());
+        if (effectiveDate == null)
+            effectiveDate = LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
+        LocalDate firstBillingStartDate = effectiveDate.withDayOfMonth(1).plusMonths(1);
+        if (!firstBillingStartDate.equals(request.firstBillingStartDate()))
+            throw new BadRequestException("Ngày tính tiền kỳ đầu phải là mùng 1 tháng sau ngày bắt đầu thuê.");
+        LocalDate contractStart = effectiveDate;
         contract.setSignedDate(null);
         contract.setStartDate(effectiveDate);
         contract.setEndDate(effectiveDate.plusMonths(contract.getTermMonths()));
@@ -249,7 +254,7 @@ public class ContractServiceImpl implements ContractService {
                     created.setBookingId(booking.getId());
                     created.setIsRepresentative(true);
                     created.setRentAmount(contract.getRentPrice());
-                    created.setJoinedAt(effectiveDate);
+                    created.setJoinedAt(contractStart);
                     created.setRoomSlotIds(contract.getRoomSlotIds());
                     created.setServices(contract.getServices());
                     created.setStatus(ContractTenantStatus.ACTIVE);
@@ -264,7 +269,7 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Không tìm thấy đủ slot đang được giữ bởi booking");
         reservations.forEach(item -> {
             item.setContractTenantId(contractTenant.getId());
-            item.setStartDate(effectiveDate);
+            item.setStartDate(contractStart);
             item.setEndDate(contract.getEndDate());
             item.setStatus(OccupancyStatus.ACTIVE);
             occupancyRepository.save(item);
@@ -295,12 +300,17 @@ public class ContractServiceImpl implements ContractService {
             throw new ConflictException("Hợp đồng đã hết hạn");
         if (contract.getRenewedToContractId() != null)
             throw new ConflictException("Hợp đồng này đã được gia hạn");
-        // Slot đã có người đặt cho giai đoạn sau khi hợp đồng này kết thúc?
-        if (hasLaterClaimOnSlot(contract))
-            throw new ConflictException("Chỗ ở đã có người đặt sau hợp đồng này, không thể gia hạn");
-
+        // Booking and renewal both write the slot version before checking occupancy.
+        try {
+            roomSlotRepository.save(slot(contract.getRoomSlotId()));
+        } catch (OptimisticLockingFailureException exception) {
+            throw new ConflictException("Slot vừa được cập nhật bởi yêu cầu khác; vui lòng tải lại");
+        }
         LocalDate newStart = contract.getEndDate().plusDays(1);
         LocalDate newEnd = newStart.plusMonths(termMonths);
+        if (hasLaterClaimOnSlot(contract, newStart, newEnd))
+            throw new ConflictException("Chỗ ở đã có người đặt sau hợp đồng này, không thể gia hạn");
+
         Contract renewal = copyForRenewal(contract, newStart, newEnd);
         renewal.setTermMonths(termMonths);
         String renewalId = renewal.getId();
@@ -312,7 +322,7 @@ public class ContractServiceImpl implements ContractService {
                 FindAndModifyOptions.options().returnNew(true), Contract.class);
         if (claimed == null) throw new ConflictException("Hợp đồng này đã được gia hạn");
         // Re-check sau khi claim để chặn race với đặt cọc đồng thời.
-        if (hasLaterClaimOnSlot(contract)) {
+        if (hasLaterClaimOnSlot(contract, newStart, newEnd)) {
             mongoTemplate.updateFirst(Query.query(Criteria.where("_id").is(new ObjectId(id))),
                     new Update().set("renewedToContractId", null), Contract.class);
             throw new ConflictException("Chỗ ở đã có người đặt sau hợp đồng này, không thể gia hạn");
@@ -334,18 +344,20 @@ public class ContractServiceImpl implements ContractService {
         return response(renewal);
     }
 
-    /** Có claim nào khác (booking giữ/đã cọc, hoặc contract DRAFT/ACTIVE khác) trên slot bắt đầu sau endDate của hợp đồng này? */
-    private boolean hasLaterClaimOnSlot(Contract contract) {
+    private boolean hasLaterClaimOnSlot(Contract contract, LocalDate newStart, LocalDate newEnd) {
         String slotId = contract.getRoomSlotId();
-        LocalDate cutoff = contract.getEndDate();
         for (RoomSlotOccupancy occupancy : occupancyRepository.findByRoomSlotIdAndStatusInAndIsDeletedFalse(
                 slotId, List.of(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE))) {
-            if (occupancy.getStartDate() != null && occupancy.getStartDate().isAfter(cutoff)) return true;
-        }
-        for (Contract other : contractRepository.findByRoomSlotIdAndIsDeletedFalse(slotId)) {
-            if (other.getId().equals(contract.getId())) continue;
-            if (other.getStatus() != ContractStatus.DRAFT && other.getStatus() != ContractStatus.ACTIVE) continue;
-            if (other.getStartDate() != null && other.getStartDate().isAfter(cutoff)) return true;
+            if (occupancy.getStatus() == OccupancyStatus.RESERVED && occupancy.getBookingId() != null) {
+                Booking holder = bookingRepository.findByIdAndIsDeletedFalse(occupancy.getBookingId()).orElse(null);
+                if (holder != null && holder.getStatus() == BookingStatus.AWAITING_PAYMENT
+                        && ((holder.getHoldExpiresAt() != null && !holder.getHoldExpiresAt().isAfter(clock.instant()))
+                        || (holder.getPaymentDeadline() != null && !holder.getPaymentDeadline().isAfter(clock.instant()))))
+                    continue;
+            }
+            if ((occupancy.getEndDate() == null || !occupancy.getEndDate().isBefore(newStart))
+                    && (occupancy.getStartDate() == null || !occupancy.getStartDate().isAfter(newEnd)))
+                return true;
         }
         return false;
     }
