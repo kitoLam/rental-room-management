@@ -17,9 +17,11 @@ export function AdminUsers() {
       title="Người dùng"
       description="Quản lý danh tính và trạng thái tài khoản."
       actions={
-        <Button asChild>
-          <Link to="/admin/users/new">Mời người dùng</Link>
-        </Button>
+        real ? undefined : (
+          <Button asChild>
+            <Link to="/admin/users/new">Mời người dùng</Link>
+          </Button>
+        )
       }
     >
       <AdminFilters

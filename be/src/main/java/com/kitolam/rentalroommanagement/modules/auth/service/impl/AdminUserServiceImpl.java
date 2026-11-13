@@ -14,6 +14,7 @@ import com.kitolam.rentalroommanagement.modules.auth.dto.response.AdminRoleRespo
 import com.kitolam.rentalroommanagement.modules.auth.dto.response.AdminUserResponse;
 import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import com.kitolam.rentalroommanagement.modules.auth.service.AdminUserService;
+import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.manager.service.ManagerService;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +31,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final MongoTemplate mongo;
     private final UserRepository users;
     private final ManagerService managers;
+    private final BranchService branches;
 
     @Override
     public PagedResponse<AdminUserResponse> search(AdminUserFilterRequest filter, Pageable pageable, AuthPrincipal principal) {
@@ -52,8 +54,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         } else if (current == Role.MANAGER && target == Role.TENANT) {
             user.setRole(Role.TENANT);
             managers.deactivateByEmail(user.getEmail());
+        } else if (current == Role.OWNER && target == Role.TENANT) {
+            if (!branches.ownedBranchIds(user.getId()).isEmpty())
+                throw new BadRequestException("Chủ trọ còn cơ sở đang sở hữu, hãy chuyển quyền sở hữu hoặc xóa cơ sở trước khi hạ vai trò");
+            user.setRole(Role.TENANT);
         } else {
-            throw new BadRequestException("Chỉ được đổi vai trò Người thuê → Chủ trọ hoặc Quản lý → Người thuê");
+            throw new BadRequestException("Chỉ được nâng Người thuê → Chủ trọ hoặc hạ Quản lý / Chủ trọ → Người thuê");
         }
         return toResponse(users.save(user));
     }
@@ -69,7 +75,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 role(Role.MANAGER, "Quản lý", "Vận hành cơ sở được phân công: giữ phòng, hợp đồng, hóa đơn, công nợ.",
                         "Các cơ sở được Chủ trọ phân công.", "Có thể được hạ xuống Người thuê bởi Quản trị viên.", counts),
                 role(Role.OWNER, "Chủ trọ", "Sở hữu cơ sở, phân công quản lý và theo dõi doanh thu.",
-                        "Các cơ sở thuộc quyền sở hữu.", "Nâng từ Người thuê bởi Quản trị viên.", counts),
+                        "Các cơ sở thuộc quyền sở hữu.", "Nâng từ Người thuê, có thể hạ xuống Người thuê khi không còn cơ sở sở hữu.", counts),
                 role(Role.ADMIN, "Quản trị viên", "Quản trị người dùng và nền tảng.",
                         "Toàn hệ thống.", "Tài khoản hệ thống, không đổi vai trò từ giao diện.", counts));
     }
