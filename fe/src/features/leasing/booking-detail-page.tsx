@@ -8,11 +8,14 @@ import { provider } from '@/services/config'
 import { useSession } from '@/features/auth/session-store'
 import { invalidateActivity } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router'
+import { useEffect, useRef } from 'react'
+import { Link, useLocation, useParams } from 'react-router'
 import { Timeline } from './activity-shared'
 
 export function BookingDetailPage() {
   const { bookingId = '' } = useParams()
+  const { hash } = useLocation()
+  const contractsSection = useRef<HTMLElement>(null)
   const user = useSession((state) => state.user)
   const canManage = user?.roles.some((role) => ['ADMIN', 'OWNER', 'MANAGER'].includes(role)) || false
   const recordQuery = useQuery({
@@ -24,6 +27,10 @@ export function BookingDetailPage() {
   const record = recordQuery.data
   // One contract per booked slot; older bookings only have contractId.
   const contractIds = record?.contractIds?.length ? record.contractIds : record?.contractId ? [record.contractId] : []
+  const showContracts = provider('leasing') === 'real' && contractIds.length > 0
+  useEffect(() => {
+    if (hash === '#contracts' && showContracts) contractsSection.current?.focus()
+  }, [hash, showContracts, bookingId])
   const refresh = async () => {
     await invalidateActivity()
     await recordQuery.refetch()
@@ -72,11 +79,15 @@ export function BookingDetailPage() {
         </Panel>}
       </QueryState>
 
-      {provider('leasing') === 'real' && contractIds.map((contractId, index) => (
-        <ContractEvidencePanel key={contractId} contractId={contractId} index={contractIds.length > 1 ? index : undefined}
-          canManage={canManage} onChanged={refresh}
-          moveInDate={bookingMoveInDate(record)} />
-      ))}
+      {showContracts && (
+        <section id="contracts" ref={contractsSection} tabIndex={-1} aria-label="Hợp đồng giữ chỗ">
+          {contractIds.map((contractId, index) => (
+            <ContractEvidencePanel key={contractId} contractId={contractId} index={contractIds.length > 1 ? index : undefined}
+              canManage={canManage} onChanged={refresh}
+              moveInDate={bookingMoveInDate(record)} />
+          ))}
+        </section>
+      )}
     </Page>
   )
 }

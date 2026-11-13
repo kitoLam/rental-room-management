@@ -28,6 +28,7 @@ export const myContractSchema = z.object({
   status: z.string(),
   startDate: z.string().nullish(),
   endDate: z.string().nullish(),
+  generatedPdf: z.boolean().optional(),
   evidenceSubmittedAt: z.string().nullish(),
   evidenceDeadline: z.string().nullish(),
   evidenceNote: z.string().nullish(),

@@ -10,6 +10,7 @@ import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractChe
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractRenewRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractTermRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.response.ContractResponse;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
@@ -22,6 +23,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -41,6 +44,21 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 public class ContractController {
 
     private final ContractService contractService;
+
+    @PatchMapping("/{id}/term")
+    @PreAuthorize("hasRole('TENANT')")
+    public StandardResponse<ContractResponse> chooseTerm(@PathVariable String id,
+            @Valid @RequestBody ContractTermRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(contractService.chooseTerm(id, request.termMonths(), principal));
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAnyRole('TENANT', 'OWNER', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<StandardResponse<String>> downloadPdf(@PathVariable String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(StandardResponse.success(contractService.downloadPdf(id, principal)));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

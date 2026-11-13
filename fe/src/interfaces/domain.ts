@@ -180,7 +180,7 @@ export const bookingSchema = z.object({
   requesterEmail: z.string().optional(),
   requesterPhone: z.string().nullable().optional(),
   roomTitle: z.string(),
-  branchId: databaseIdSchema,
+  branchId: databaseIdSchema.nullable(),
   branchName: z.string(),
   roomSlotId: databaseIdSchema.nullable(),
   roomSlotIds: z.array(databaseIdSchema).default([]),

@@ -15,6 +15,7 @@ public interface RoomSlotRepository extends BaseRepository<RoomSlot> {
     List<RoomSlot> findByRoomIdAndIsDeletedFalse(String roomId);
 
     List<RoomSlot> findByRoomIdInAndIsDeletedFalse(Collection<String> roomIds);
+    List<RoomSlot> findByRoomIdIn(Collection<String> roomIds);
 
     List<RoomSlot> findByIdInAndIsDeletedFalse(Collection<String> ids);
 }

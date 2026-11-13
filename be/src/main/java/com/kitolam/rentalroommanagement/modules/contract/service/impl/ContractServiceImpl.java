@@ -31,6 +31,7 @@ import com.kitolam.rentalroommanagement.modules.contract.dto.response.ContractRe
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
+import com.kitolam.rentalroommanagement.modules.contract.service.ContractTemplateService;
 import com.kitolam.rentalroommanagement.modules.contracttenant.document.ContractTenant;
 import com.kitolam.rentalroommanagement.modules.contracttenant.enums.ContractTenantStatus;
 import com.kitolam.rentalroommanagement.modules.contracttenant.repository.ContractTenantRepository;
@@ -44,6 +45,7 @@ import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.Occupanc
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
+import com.kitolam.rentalroommanagement.modules.upload.service.CloudinaryService;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -91,6 +93,8 @@ public class ContractServiceImpl implements ContractService {
     private final MongoTemplate mongoTemplate;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final ContractTemplateService contractTemplates;
+    private final CloudinaryService cloudinary;
 
     @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
     @Transactional
@@ -116,7 +120,52 @@ public class ContractServiceImpl implements ContractService {
         }
         services.forEach(service -> service.setSelected(service.isMandatory() || selectedIds.contains(service.getServiceId())));
         contract.setServices(services);
+        if (contract.getPdfRevision() != null) {
+            if (contract.getEvidenceSubmittedAt() != null)
+                throw new ConflictException("Hợp đồng đã nộp bằng chứng.");
+            contractTemplates.queuePdf(contract);
+        }
         return response(contractRepository.save(contract));
+    }
+
+    @Override
+    @Transactional
+    public ContractResponse chooseTerm(String id, int termMonths, AuthPrincipal principal) {
+        Contract contract = find(id);
+        requireTenant(contract, principal);
+        validateTerm(termMonths);
+        if (contract.getPdfRevision() == null || contract.getStatus() != ContractStatus.DRAFT
+                || contract.getEvidenceSubmittedAt() != null || contract.getEvidenceDeadline() == null
+                || !contract.getEvidenceDeadline().isAfter(clock.instant())) {
+            throw new ConflictException("Hợp đồng hiện không thể chọn kỳ hạn.");
+        }
+        if (Integer.valueOf(termMonths).equals(contract.getTermMonths())) return response(contract);
+        if (contract.getTermMonths() != null) throw new ConflictException("Kỳ hạn đã được chốt.");
+        if (contract.getStartDate() == null) throw new ConflictException("Hợp đồng chưa có ngày bắt đầu thuê.");
+        contract.setTermMonths(termMonths);
+        contract.setEndDate(contract.getStartDate().plusMonths(termMonths));
+        contractTemplates.queuePdf(contract);
+        return response(contractRepository.save(contract));
+    }
+
+    @Override
+    public String downloadPdf(String id, AuthPrincipal principal) {
+        Contract contract = find(id);
+        if (principal != null && "TENANT".equals(principal.role())) {
+            requireTenant(contract, principal);
+            if (contract.getTermMonths() == null)
+                throw new ConflictException("Hãy chọn kỳ hạn trước khi tải hợp đồng.");
+        } else {
+            requireManager(room(contract.getRoomId()), principal);
+        }
+        if (contract.getPdfPublicId() == null || contract.getContractUrl() == null)
+            throw new ConflictException("PDF hợp đồng chưa sẵn sàng.");
+        return cloudinary.contractDownloadUrl(contract.getPdfPublicId(), clock.instant().plusSeconds(120).getEpochSecond());
+    }
+
+    private void validateTerm(int termMonths) {
+        if (!List.of(3, 6, 8, 12).contains(termMonths))
+            throw new BadRequestException("Kỳ hạn hợp đồng chỉ gồm 3, 6, 8 hoặc 12 tháng");
     }
 
     @Override
@@ -185,13 +234,17 @@ public class ContractServiceImpl implements ContractService {
         Instant now = clock.instant();
         if (contract.getEvidenceDeadline() == null || !contract.getEvidenceDeadline().isAfter(now))
             throw new ConflictException("Hạn nộp bằng chứng hợp đồng đã hết");
-        if (!List.of(3, 6, 8, 12).contains(request.termMonths()))
-            throw new BadRequestException("Kỳ hạn hợp đồng chỉ gồm 3, 6, 8 hoặc 12 tháng");
+        validateTerm(request.termMonths());
+        if (contract.getPdfRevision() != null && (contract.getContractUrl() == null || contract.getPdfPublicId() == null
+                || !request.termMonths().equals(contract.getTermMonths())))
+            throw new ConflictException("Hãy chốt kỳ hạn và tải bản PDF tương ứng trước khi gửi bằng chứng.");
         contract.setSignedEvidenceUrl(request.evidenceUrl().trim());
         contract.setTermMonths(request.termMonths());
         contract.setSignedDate(null);
-        if (booking(contract.getBookingId()).getSlotMoveInDates() == null) contract.setStartDate(null);
-        contract.setEndDate(null);
+        if (contract.getPdfRevision() == null) {
+            if (booking(contract.getBookingId()).getSlotMoveInDates() == null) contract.setStartDate(null);
+            contract.setEndDate(null);
+        }
         contract.setEvidenceSubmittedAt(now);
         contract.setEvidenceDeadline(null);
         contract.setEvidenceNote(null);
@@ -223,15 +276,22 @@ public class ContractServiceImpl implements ContractService {
             contract.setSignedDate(null);
             if (booking.getSlotMoveInDates() == null) contract.setStartDate(null);
             contract.setEndDate(null);
+            if (contract.getPdfRevision() != null) {
+                if (contract.getStartDate() == null) contract.setStartDate(booking.getExpectedMoveInDate());
+                contractTemplates.queuePdf(contract);
+            }
             contract.setEvidenceDeadline(clock.instant().plusSeconds(24 * 60 * 60));
             contract.setEvidenceNote(note);
             return response(contractRepository.save(contract));
         }
 
         // Ngày bắt đầu hợp đồng theo ngày bắt đầu thuê đã chốt lúc đặt cọc; booking cũ chưa có thì giữ quy tắc cũ.
-        LocalDate effectiveDate = booking.getSlotMoveInDates() == null
-                ? booking.getExpectedMoveInDate()
-                : booking.getSlotMoveInDates().get(contract.getRoomSlotId());
+        LocalDate effectiveDate = contract.getStartDate();
+        if (contract.getPdfRevision() == null) {
+            effectiveDate = booking.getSlotMoveInDates() == null
+                    ? booking.getExpectedMoveInDate()
+                    : booking.getSlotMoveInDates().get(contract.getRoomSlotId());
+        }
         if (effectiveDate == null)
             effectiveDate = LocalDate.ofInstant(contract.getEvidenceSubmittedAt(), VIETNAM_ZONE).plusDays(1);
         LocalDate firstBillingStartDate = effectiveDate.withDayOfMonth(1).plusMonths(1);
@@ -389,7 +449,7 @@ public class ContractServiceImpl implements ContractService {
         c.setTerms(old.getTerms());
         c.setServices(old.getServices() == null ? new ArrayList<>() : new ArrayList<>(old.getServices()));
         c.setActiveSlotServices(new ArrayList<>());
-        c.setContractUrl(old.getContractUrl());
+        if (old.getPdfRevision() == null) c.setContractUrl(old.getContractUrl());
         c.setFirstBillingStartDate(null);
         c.setStatus(ContractStatus.ACTIVE);
         c.setRenewedFromContractId(old.getId());
@@ -482,6 +542,7 @@ public class ContractServiceImpl implements ContractService {
         if (principal == null || !List.of("TENANT", "OWNER", "MANAGER", "ADMIN").contains(principal.role()))
             throw new ForbiddenException("Không có quyền tìm kiếm hợp đồng");
         List<Criteria> criteria = MongoQueryHelper.baseCriteria();
+        criteria.add(Criteria.where("status").ne(ContractStatus.TEMPLATE));
         MongoQueryHelper.addObjectIdEquals(criteria, "roomId", filter.roomId());
         MongoQueryHelper.addObjectIdEquals(criteria, "managerId", filter.managerId());
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
@@ -523,6 +584,10 @@ public class ContractServiceImpl implements ContractService {
         if (request.signedFileUrl() != null) throw new ConflictException("Tải hợp đồng đã ký qua bước bàn giao");
         if (request.status() != null && request.status() != ContractStatus.DRAFT)
             throw new ConflictException("Chỉ luồng bàn giao được đổi trạng thái hợp đồng");
+        boolean changesPdf = request.startDate() != null || request.endDate() != null
+                || request.rentPrice() != null || request.contractDepositAmount() != null;
+        if (changesPdf && contract.getPdfRevision() != null && contract.getTermMonths() != null)
+            throw new ConflictException("Hợp đồng đã chốt kỳ hạn và đang chờ ký hoặc duyệt.");
         if (request.startDate() != null) contract.setStartDate(request.startDate());
         if (request.endDate() != null) contract.setEndDate(request.endDate());
         if (request.rentPrice() != null) contract.setRentPrice(request.rentPrice());
@@ -531,6 +596,9 @@ public class ContractServiceImpl implements ContractService {
         if (request.terms() != null) contract.setTerms(request.terms());
         if (request.terminatedAt() != null) contract.setTerminatedAt(request.terminatedAt());
         if (request.terminationReason() != null) contract.setTerminationReason(request.terminationReason());
+        if (changesPdf && contract.getPdfRevision() != null && contract.getEvidenceSubmittedAt() == null) {
+            contractTemplates.queuePdf(contract);
+        }
         return response(contractRepository.save(contract));
     }
 
@@ -639,6 +707,7 @@ public class ContractServiceImpl implements ContractService {
                 c.getServices() == null ? List.of() : List.copyOf(c.getServices()), c.getPaymentDueDay(), c.getTerms(), c.getSignedFileUrl(),
                 c.getSignedEvidenceUrl(), c.getTermMonths(), c.getSignedDate(), c.getFirstBillingStartDate(), c.getEvidenceSubmittedAt(),
                 c.getEvidenceDeadline(), c.getEvidenceResubmissionCount(), c.getEvidenceNote(), evidenceHistory, c.getContractUrl(),
+                c.getPdfRevision() != null,
                 c.getTerminatedAt(), c.getTerminationReason(), c.getStatus(),
                 c.getActiveSlotServices() == null ? List.of() : List.copyOf(c.getActiveSlotServices()),
                 com.kitolam.rentalroommanagement.modules.contract.service.support.ContractExpirySupport
@@ -650,6 +719,7 @@ public class ContractServiceImpl implements ContractService {
     public List<ReportContract> readForReports(List<String> roomIds) {
         if (roomIds.isEmpty()) return List.of();
         var query = MongoQueryHelper.byReferenceIds("roomId", roomIds);
+        query.addCriteria(Criteria.where("status").ne(ContractStatus.TEMPLATE));
         query.fields().include("roomId", "roomSlotId", "roomSlotIds", "status", "startDate", "endDate", "terminatedAt");
         return mongoTemplate.find(query, Contract.class).stream()
                 .map(item -> new ReportContract(item.getId(), item.getRoomId(), item.getStatus(), item.getStartDate(),
@@ -668,6 +738,7 @@ public class ContractServiceImpl implements ContractService {
     public List<OverviewContract> readForOverview(List<String> ids) {
         if (ids.isEmpty()) return List.of();
         var query = MongoQueryHelper.byReferenceIds("roomId", ids);
+        query.addCriteria(Criteria.where("status").ne(ContractStatus.TEMPLATE));
         query.fields().include("roomId", "roomSlotId", "roomSlotIds", "tenantId", "bookingId", "contractNumber", "status", "startDate", "endDate", "evidenceSubmittedAt");
         return mongoTemplate.find(query, Contract.class).stream()
                 .map(item -> new OverviewContract(item.getId(), item.getRoomId(), item.getTenantId(), item.getBookingId(), item.getContractNumber(), item.getStatus(), item.getStartDate(), item.getEndDate(), item.getEvidenceSubmittedAt(),
