@@ -38,7 +38,7 @@ const roomDto = z.object({
 })
 const backendContractDto = z.object({
   id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), roomSlotIds: z.array(z.string()).optional(), bookingId: z.string().nullable().optional(),
-  tenantId: z.string().nullable().optional(), managerId: z.string().nullish(), contractNumber: z.string(), startDate: z.string().nullable(),
+  tenantId: z.string().nullable().optional(), managerId: z.string().nullish(), contractNumber: z.string().nullable(), startDate: z.string().nullable(),
   endDate: z.string().nullable(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),

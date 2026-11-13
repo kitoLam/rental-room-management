@@ -1,3 +1,4 @@
+import { ContractEvidenceLink } from '@/features/leasing/contract-evidence-link'
 import { Modal, Pagination, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,11 +59,11 @@ function ContractMember({ member, onEdit }: { member: ManagerContractTenant; onE
 const SIGNED_CONTRACTS_PER_PAGE = 3
 
 function SignedContract({ contract, slotNames }: { contract: ManagerContract; slotNames: Map<string, string> }) {
-  const file = contract.signedFileUrl || contract.signedEvidenceUrl
+  const file = contract.signedEvidenceUrl || contract.signedFileUrl
   return (
     <article className="grid min-w-0 gap-3 rounded-xl border border-border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0 break-words">
-        <ManagerLink to={`/manager/contracts/${contract.id}`}>{contract.code}</ManagerLink>
+        <ManagerLink to={`/manager/contracts/${contract.id}`}>{contract.code ?? 'Chưa có mã hợp đồng'}</ManagerLink>
         <p className="text-sm text-muted-foreground">
           {contract.roomSlotIds?.map((id) => slotNames.get(id) || id).join(', ') || 'Chưa có thông tin chỗ thuê'}
         </p>
@@ -73,7 +74,8 @@ function SignedContract({ contract, slotNames }: { contract: ManagerContract; sl
       <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
         <ManagerStatus value={contract.status} />
         {file && /^https?:\/\//i.test(file) && (
-          <Button variant="outline" asChild><a href={file} target="_blank" rel="noreferrer">Mở bản ký</a></Button>
+          <ContractEvidenceLink key={file} contractId={contract.id}
+            evidenceUrl={contract.signedEvidenceUrl} legacyUrl={contract.signedFileUrl} label="Mở bản ký" />
         )}
       </div>
     </article>
@@ -151,7 +153,7 @@ function ContractTenantsContent({ contractId }: { contractId: string }) {
   return (
     <ManagerPage
       title="Người ký và chỗ thuê"
-      description={contract.data?.code}
+      description={contract.data?.code ?? undefined}
       actions={<ManagerLink to={`/manager/contracts/${contractId}`}>Chi tiết hợp đồng</ManagerLink>}
     >
       <QueryState pending={contract.isPending} error={contract.error} retry={() => void contract.refetch()}>

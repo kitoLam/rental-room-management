@@ -60,6 +60,14 @@ public class ContractController {
                 .body(StandardResponse.success(contractService.downloadPdf(id, principal)));
     }
 
+    @GetMapping("/{id}/evidence/download")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
+    public ResponseEntity<StandardResponse<String>> downloadSignedEvidence(@PathVariable String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(StandardResponse.success(contractService.downloadSignedEvidence(id, principal)));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Tạo hợp đồng")
