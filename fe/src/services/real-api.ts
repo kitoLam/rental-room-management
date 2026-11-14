@@ -125,6 +125,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}/(services|term)`) && verb === 'PATCH') ||
       (matches(`/api/v1/contracts/${id}/pdf`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/pdf/retry`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence`) && verb === 'POST'))
   )
     return null
@@ -145,6 +146,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches('/api/v1/contracts') && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}/pdf`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/pdf/retry`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence/review`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence/download`) && verb === 'GET') ||

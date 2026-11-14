@@ -622,6 +622,8 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/term`, backendContractSchema, write('PATCH', { termMonths })),
   downloadPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
     request(feature, `/api/v1/contracts/${id}/pdf`, z.url()),
+  retryPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
+    request(feature, `/api/v1/contracts/${id}/pdf/retry`, z.enum(['READY', 'QUEUED', 'PROCESSING']), write('POST')),
   selectServices: (id: string, selectedServiceIds: string[]) =>
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>

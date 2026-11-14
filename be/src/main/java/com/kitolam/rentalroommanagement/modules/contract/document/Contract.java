@@ -139,6 +139,7 @@ public class Contract extends BaseDocument {
     private String pdfRevision;
     private String pdfPublicId;
     private Instant pdfNextAttemptAt;
+    private boolean pdfProcessing;
 
     /** Hợp đồng gốc đã được gia hạn để tạo ra hợp đồng này (null nếu không phải hợp đồng nối tiếp). */
     @Indexed

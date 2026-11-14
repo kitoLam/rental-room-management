@@ -25,6 +25,10 @@ export function ContractPdfDownload({
     mutationFn: () => contractService.downloadPdf(id, canManage ? 'manager' : 'leasing'),
     onSuccess: (url) => { window.location.assign(url) },
   })
+  const retry = useMutation({
+    mutationFn: () => contractService.retryPdf(id, canManage ? 'manager' : 'leasing'),
+    onSuccess: async () => { await onChanged() },
+  })
   useEffect(() => {
     if (canChooseTerm || waitingForTerm || ready) return
     const timer = window.setInterval(() => { void onChanged() }, 5_000)
@@ -52,11 +56,14 @@ export function ContractPdfDownload({
         <p role="status" className="text-sm text-muted-foreground">
           {waitingForTerm
             ? canChooseTerm ? 'Chốt kỳ hạn để tạo PDF có thời hạn thuê.' : 'Hợp đồng chưa có kỳ hạn.'
-            : 'PDF đang được chuẩn bị.'}
+            : retry.data === 'QUEUED' ? 'Đã gửi yêu cầu tạo lại PDF.'
+              : retry.data === 'PROCESSING' ? 'Yêu cầu tạo PDF đang được xử lý.'
+                : 'PDF đang được chuẩn bị.'}
         </p>
       )}
-      {!waitingForTerm && !ready && <Button type="button" variant="outline" onClick={() => { void onChanged() }}>Kiểm tra lại</Button>}
-      <InlineError error={chooseTerm.error || download.error} />
+      {!waitingForTerm && !ready && <Button type="button" variant="outline" loading={retry.isPending}
+        onClick={() => retry.mutate()}>Thử tạo lại PDF</Button>}
+      <InlineError error={chooseTerm.error || download.error || retry.error} />
     </div>
   )
 }

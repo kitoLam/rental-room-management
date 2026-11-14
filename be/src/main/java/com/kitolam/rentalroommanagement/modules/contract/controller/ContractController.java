@@ -68,6 +68,12 @@ public class ContractController {
                 .body(StandardResponse.success(contractService.downloadSignedEvidence(id, principal)));
     }
 
+    @PostMapping("/{id}/pdf/retry")
+    @PreAuthorize("hasAnyRole('TENANT', 'OWNER', 'MANAGER', 'ADMIN')")
+    public StandardResponse<String> retryPdf(@PathVariable String id, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(contractService.retryPdf(id, principal));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Tạo hợp đồng")

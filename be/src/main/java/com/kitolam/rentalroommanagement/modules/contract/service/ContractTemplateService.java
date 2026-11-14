@@ -93,6 +93,7 @@ public class ContractTemplateService {
     public void queuePdf(Contract contract) {
         contract.setPdfRevision(UUID.randomUUID().toString());
         contract.setPdfNextAttemptAt(clock.instant());
+        contract.setPdfProcessing(false);
         contract.setContractUrl(null);
     }
 

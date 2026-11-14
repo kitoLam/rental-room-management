@@ -32,6 +32,7 @@ import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractTemplateService;
+import com.kitolam.rentalroommanagement.modules.contract.service.ContractPdfJob;
 import com.kitolam.rentalroommanagement.modules.contracttenant.document.ContractTenant;
 import com.kitolam.rentalroommanagement.modules.contracttenant.enums.ContractTenantStatus;
 import com.kitolam.rentalroommanagement.modules.contracttenant.repository.ContractTenantRepository;
@@ -94,6 +95,7 @@ public class ContractServiceImpl implements ContractService {
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
     private final ContractTemplateService contractTemplates;
+    private final ContractPdfJob contractPdfJob;
     private final CloudinaryService cloudinary;
 
     @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
@@ -151,6 +153,24 @@ public class ContractServiceImpl implements ContractService {
     @Override
     public String downloadPdf(String id, AuthPrincipal principal) {
         Contract contract = find(id);
+        requirePdfAccess(contract, principal);
+        if (contract.getPdfPublicId() == null || contract.getContractUrl() == null)
+            throw new ConflictException("PDF hợp đồng chưa sẵn sàng.");
+        return cloudinary.contractDownloadUrl(contract.getPdfPublicId(), clock.instant().plusSeconds(120).getEpochSecond());
+    }
+
+    @Override
+    public String retryPdf(String id, AuthPrincipal principal) {
+        Contract contract = find(id);
+        requirePdfAccess(contract, principal);
+        if (contract.getPdfPublicId() != null && contract.getContractUrl() != null) return "READY";
+        if (contract.getPdfRevision() == null || contract.getStatus() != ContractStatus.DRAFT
+                || contract.getEvidenceDeadline() == null || !contract.getEvidenceDeadline().isAfter(clock.instant()))
+            throw new ConflictException("Hợp đồng hiện không thể tạo lại PDF.");
+        return contractPdfJob.requestRetry(contract);
+    }
+
+    private void requirePdfAccess(Contract contract, AuthPrincipal principal) {
         if (principal != null && "TENANT".equals(principal.role())) {
             requireTenant(contract, principal);
             if (contract.getTermMonths() == null)
@@ -158,9 +178,6 @@ public class ContractServiceImpl implements ContractService {
         } else {
             requireManager(room(contract.getRoomId()), principal);
         }
-        if (contract.getPdfPublicId() == null || contract.getContractUrl() == null)
-            throw new ConflictException("PDF hợp đồng chưa sẵn sàng.");
-        return cloudinary.contractDownloadUrl(contract.getPdfPublicId(), clock.instant().plusSeconds(120).getEpochSecond());
     }
 
     @Override
