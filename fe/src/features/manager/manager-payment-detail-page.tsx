@@ -17,8 +17,8 @@ export function ManagerPaymentDetail() {
       [paymentId],
       true,
     ),
-    [decision, setDecision] = useState(''),
-    mutation = useManagerAction(() => setDecision(''))
+    [verifyOpen, setVerifyOpen] = useState(false),
+    mutation = useManagerAction(() => setVerifyOpen(false))
   return (
     <ManagerPage
       title="Chi tiết đối soát"
@@ -52,28 +52,15 @@ export function ManagerPaymentDetail() {
               />
               <p className="mt-5 text-sm leading-6">{query.data.note}</p>
               <div className="mt-5 flex flex-wrap gap-3">
-                {query.data.invoiceId && (
-                  <ManagerLink to={`/manager/invoices/${query.data.invoiceId}`}>
-                    Hóa đơn được phân bổ
-                  </ManagerLink>
-                )}
                 {query.data.bookingId && (
                   <ManagerLink to={`/manager/bookings/${query.data.bookingId}`}>
                     Giữ phòng
                   </ManagerLink>
                 )}
-                {['PENDING', 'REVIEW'].includes(query.data.status) && (
-                  <>
-                    {query.data.status === 'PENDING' && (
-                      <Button variant="outline" onClick={() => setDecision('review')}>
-                        Đưa vào đối soát
-                      </Button>
-                    )}
-                    {query.data.method === 'TRANSFER' && query.data.environment !== 'SANDBOX' && (
-                      <Button onClick={() => setDecision('verify')}>Đối chiếu & xác minh</Button>
-                    )}
-                  </>
-                )}
+                {['PENDING', 'REVIEW'].includes(query.data.status) &&
+                  query.data.method === 'TRANSFER' && query.data.environment !== 'SANDBOX' && (
+                    <Button onClick={() => setVerifyOpen(true)}>Đối chiếu & xác minh</Button>
+                  )}
               </div>
             </Panel>
 
@@ -96,31 +83,21 @@ export function ManagerPaymentDetail() {
         )}
       </QueryState>
       <ActionDialog
-        title={
-          decision === 'verify'
-            ? 'Xác minh biên nhận và phân bổ tiền?'
-            : 'Chuyển giao dịch vào đối soát?'
-        }
-        open={!!decision}
-        onOpenChange={(v) => {
-          if (!v) setDecision('')
-        }}
-        fields={
-          decision === 'verify'
-            ? [
-                { name: 'reference', label: 'Tham chiếu trên biên nhận' },
-                { name: 'amount', label: 'Số tiền trên biên nhận (VND)', kind: 'number' },
-                { name: 'providerTransactionId', label: 'Mã giao dịch nhà cung cấp' },
-              ]
-            : []
-        }
+        title="Xác minh biên nhận và phân bổ tiền?"
+        open={verifyOpen}
+        onOpenChange={setVerifyOpen}
+        fields={[
+          { name: 'reference', label: 'Tham chiếu trên biên nhận' },
+          { name: 'amount', label: 'Số tiền trên biên nhận (VND)', kind: 'number' },
+          { name: 'providerTransactionId', label: 'Mã giao dịch nhà cung cấp' },
+        ]}
         pending={mutation.isPending}
         error={mutation.error}
         onConfirm={(value) =>
           mutation.mutate({
             resource: 'payments',
             id: paymentId,
-            value: { ...value, note: value.reason, decision },
+            value: { ...value, note: value.reason, decision: 'verify' },
           })
         }
       />
