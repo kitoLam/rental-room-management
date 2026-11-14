@@ -92,7 +92,8 @@ public class ContractTemplateService {
 
     public void queuePdf(Contract contract) {
         contract.setPdfRevision(UUID.randomUUID().toString());
-        contract.setPdfNextAttemptAt(clock.instant());
+        contract.setPdfNextAttemptAt(contract.getStatus() == ContractStatus.TEMPLATE || contract.getTermMonths() != null
+                ? clock.instant() : null);
         contract.setPdfProcessing(false);
         contract.setContractUrl(null);
     }

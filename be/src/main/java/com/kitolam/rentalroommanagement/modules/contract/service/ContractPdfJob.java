@@ -39,20 +39,26 @@ public class ContractPdfJob {
 
     @Scheduled(fixedDelayString = "${contract.pdf.poll-delay-ms:5000}", scheduler = "contractPdfScheduler")
     public void publishPending() {
-        Instant now = clock.instant();
-        Query ready = Query.query(Criteria.where("isDeleted").is(false)
-                        .and("status").in(ContractStatus.TEMPLATE, ContractStatus.DRAFT)
-                        .and("pdfRevision").ne(null)
-                        .and("pdfNextAttemptAt").lte(now))
-                .with(Sort.by("pdfNextAttemptAt", "_id"));
         for (int i = 0; i < 5; i++) {
-            Contract contract = mongo.findAndModify(ready, new Update().set("pdfNextAttemptAt", clock.instant().plusSeconds(300))
-                            .set("pdfProcessing", true),
-                    FindAndModifyOptions.options().returnNew(true), Contract.class);
+            Instant now = clock.instant();
+            Contract contract = claim(ContractStatus.DRAFT, now);
+            if (contract == null) contract = claim(ContractStatus.TEMPLATE, now);
             if (contract == null) return;
-            log.info("Contract PDF generation started for id={}", contract.getId());
+            log.info("Contract PDF generation started for id={} status={} number={}",
+                    contract.getId(), contract.getStatus(), contract.getContractNumber());
             publish(contract);
         }
+    }
+
+    private Contract claim(ContractStatus status, Instant now) {
+        Criteria ready = Criteria.where("isDeleted").is(false)
+                .and("status").is(status)
+                .and("pdfRevision").ne(null)
+                .and("pdfNextAttemptAt").lte(now);
+        if (status == ContractStatus.DRAFT) ready.and("termMonths").ne(null);
+        return mongo.findAndModify(Query.query(ready).with(Sort.by("pdfNextAttemptAt", "_id")),
+                new Update().set("pdfNextAttemptAt", now.plusSeconds(300)).set("pdfProcessing", true),
+                FindAndModifyOptions.options().returnNew(true), Contract.class);
     }
 
     public String requestRetry(Contract contract) {
@@ -91,7 +97,8 @@ public class ContractPdfJob {
             stage = "save";
             var result = mongo.updateFirst(sameRevision, new Update().set("contractUrl", asset.url())
                     .set("pdfPublicId", asset.publicId()).unset("pdfNextAttemptAt").unset("pdfProcessing"), Contract.class);
-            if (result.getMatchedCount() > 0) log.info("Contract PDF generation completed for id={}", contract.getId());
+            if (result.getMatchedCount() > 0) log.info("Contract PDF generation completed for id={} status={} number={}",
+                    contract.getId(), contract.getStatus(), contract.getContractNumber());
             if (result.getMatchedCount() > 0 && !Objects.equals(contract.getPdfPublicId(), asset.publicId())) {
                 deletePrevious(contract.getId(), contract.getPdfPublicId());
             } else if (result.getMatchedCount() == 0) {
