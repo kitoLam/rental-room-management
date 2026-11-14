@@ -4,6 +4,7 @@ import com.kitolam.rentalroommanagement.common.config.VnPayProperties;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.ConflictException;
 import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundException;
+import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.util.VnPayUtil;
 import com.kitolam.rentalroommanagement.modules.booking.service.BookingService;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceStatus;
@@ -23,6 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -66,9 +68,15 @@ public class VnPayServiceImpl implements VnPayService {
         String clientIp = VnPayUtil.getIpAddress(httpRequest);
 
         if (request.getInvoiceId() != null && !request.getInvoiceId().isBlank()) requirePayableInvoice(request);
+        Payment payment = paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef).orElse(null);
+        String bookingId = payment == null ? request.getBookingId() : payment.getBookingId();
+        if (bookingId != null && !bookingId.isBlank()) {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            var principal = authentication != null && authentication.getPrincipal() instanceof AuthPrincipal account ? account : null;
+            bookingService.validateBookingDeposit(bookingId, principal);
+        }
 
         // Lưu bản ghi Payment trạng thái PENDING
-        Payment payment = paymentRepository.findByTransactionCodeAndIsDeletedFalse(txnRef).orElse(null);
         if (payment == null) {
             payment = new Payment();
             payment.setTransactionCode(txnRef);

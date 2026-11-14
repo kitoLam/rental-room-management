@@ -1,6 +1,7 @@
 import { InlineError, Modal, Notice, Panel, QueryState } from '@/components/common/page'
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
+import { vnDateKey } from '@/lib/activity'
 import { cn } from '@/lib/utils'
 import { managerApi } from '@/services/manager'
 import { roomSlotsApi, type RoomSlotUsage } from '@/services/room-slots'
@@ -18,7 +19,7 @@ const statusLabel: Record<RoomSlotUsage['status'], string> = {
   INACTIVE: 'Ngừng',
 }
 
-const today = () => new Date().toLocaleDateString('en-CA')
+const tomorrow = () => vnDateKey(new Date(Date.now() + 86_400_000).toISOString())
 const dayLabel = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
 
 /** Slots of a room: who holds what, and the manually editable "rentable from" date of free slots. */
@@ -28,9 +29,12 @@ export function ManagerSlots() {
   const room = useManagerQuery('room', (b) => managerApi.get(b, 'rooms', roomId), [roomId])
   const slots = useQuery({ queryKey: ['room-slots', roomId], queryFn: () => roomSlotsApi.list(roomId) })
   const [editing, setEditing] = useState<RoomSlotUsage | null>(null)
+  const [action, setAction] = useState<'date' | 'pause' | 'reopen'>('date')
   const [date, setDate] = useState('')
   const save = useMutation({
-    mutationFn: () => roomSlotsApi.setAvailableFrom(roomId, editing!.id, date),
+    mutationFn: () => action === 'date'
+      ? roomSlotsApi.setAvailableFrom(roomId, editing!.id, date)
+      : roomSlotsApi.setDepositPaused(roomId, editing!.id, action === 'pause', action === 'reopen' ? date : undefined),
     onSuccess: () => {
       setEditing(null)
       void queryClient.invalidateQueries({ queryKey: ['room-slots', roomId] })
@@ -42,6 +46,12 @@ export function ManagerSlots() {
     save.reset()
   }
   const free = slots.data?.filter((s) => !s.busy).length ?? 0
+  const openEditor = (slot: RoomSlotUsage, nextAction: typeof action) => {
+    save.reset()
+    setAction(nextAction)
+    setDate(nextAction === 'reopen' ? '' : slot.availableFrom && slot.availableFrom >= tomorrow() ? slot.availableFrom : tomorrow())
+    setEditing(slot)
+  }
 
   return (
     <ManagerPage
@@ -65,8 +75,8 @@ export function ManagerSlots() {
                 <Panel key={slot.id} className={cn('flex flex-col gap-3 p-5 sm:p-5', slot.busy && 'bg-muted/30')}>
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-lg font-bold">Chỗ {slot.slotCode}</h2>
-                    <StatusBadge tone={slot.busy ? 'warning' : slot.status === 'AVAILABLE' ? 'success' : 'neutral'}>
-                      {slot.busy ? 'Đang bận' : statusLabel[slot.status]}
+                    <StatusBadge tone={slot.busy || slot.depositPaused ? 'warning' : slot.status === 'AVAILABLE' ? 'success' : 'neutral'}>
+                      {slot.busy ? 'Đang bận' : slot.depositPaused ? 'Tạm ngưng đặt cọc' : statusLabel[slot.status]}
                     </StatusBadge>
                   </div>
                   <div className="text-sm">
@@ -79,17 +89,14 @@ export function ManagerSlots() {
                       Chỗ này {slot.busyReason}, không chỉnh được ngày.
                     </p>
                   ) : (
-                    <Button
-                      variant="outline"
-                      className="mt-auto"
-                      onClick={() => {
-                        setDate(slot.availableFrom && slot.availableFrom >= today() ? slot.availableFrom : today())
-                        setEditing(slot)
-                      }}
-                    >
-                      <CalendarClock size={16} />
-                      Chỉnh ngày cho thuê
-                    </Button>
+                    <div className="mt-auto flex flex-wrap gap-2">
+                      {!slot.depositPaused && <Button variant="outline" onClick={() => openEditor(slot, 'date')}>
+                        <CalendarClock size={16} /> Chỉnh ngày cho thuê
+                      </Button>}
+                      {slot.status === 'AVAILABLE' && <Button variant="outline" onClick={() => openEditor(slot, slot.depositPaused ? 'reopen' : 'pause')}>
+                        {slot.depositPaused ? 'Mở lại đặt cọc' : 'Tạm ngưng đặt cọc'}
+                      </Button>}
+                    </div>
                   )}
                 </Panel>
               ))}
@@ -100,21 +107,21 @@ export function ManagerSlots() {
       <Modal
         open={!!editing}
         onOpenChange={(open) => !open && close()}
-        title={editing ? `Ngày cho thuê chỗ ${editing.slotCode}` : 'Ngày cho thuê'}
-        description="Khách chỉ đặt được chỗ này từ ngày bạn chọn."
+        title={action === 'pause' ? 'Tạm ngưng đặt cọc' : action === 'reopen' ? 'Mở lại đặt cọc' : 'Ngày cho thuê'}
+        description={action === 'pause' ? `Khách sẽ không thể đặt cọc chỗ ${editing?.slotCode} cho đến khi bạn mở lại.` : 'Chọn ngày bắt đầu cho thuê sau hôm nay.'}
       >
         <div className="grid gap-4">
-          <label className="grid gap-1 text-sm">
+          {action !== 'pause' && <label className="grid gap-1 text-sm">
             <span className="font-medium">Cho thuê từ ngày</span>
-            <input type="date" className="input" min={today()} value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
+            <input type="date" className="input" min={tomorrow()} value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>}
           <InlineError error={save.error} />
           <div className="flex justify-end gap-3">
             <Button variant="outline" disabled={save.isPending} onClick={close}>
               Huỷ
             </Button>
-            <Button loading={save.isPending} disabled={!date || date < today()} onClick={() => save.mutate()}>
-              Lưu
+            <Button loading={save.isPending} disabled={action !== 'pause' && (!date || date < tomorrow())} onClick={() => save.mutate()}>
+              {action === 'pause' ? 'Tạm ngưng' : action === 'reopen' ? 'Mở lại' : 'Lưu'}
             </Button>
           </div>
         </div>
