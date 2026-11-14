@@ -1,11 +1,6 @@
 import { ContractEvidenceLink } from '@/features/leasing/contract-evidence-link'
-import { Modal, Pagination, Panel, QueryState } from '@/components/common/page'
-import { Button } from '@/components/ui/button'
-import {
-  contractTenantUpdateSchema,
-  type ManagerContract,
-  type ManagerContractTenant,
-} from '@/interfaces/manager'
+import { Pagination, Panel, QueryState } from '@/components/common/page'
+import type { ManagerContract, ManagerContractTenant } from '@/interfaces/manager'
 import { useSession } from '@/features/auth/session-store'
 import { Facts } from '@/features/tenant/components'
 import { dateOnly } from '@/lib/activity'
@@ -17,16 +12,10 @@ import { formatProfileDate, formatVnd } from '@/lib/format'
 import { managerApi } from '@/services/manager'
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import {
-  ManagerForm,
-  ManagerLink,
-  ManagerPage,
-  ManagerStatus,
-  type FieldSpec,
-} from './components'
-import { useManager, useManagerAction, useManagerList, useManagerQuery } from './context'
+import { ManagerLink, ManagerPage, ManagerStatus } from './components'
+import { useManager, useManagerList, useManagerQuery } from './context'
 
-function ContractMember({ member, onEdit }: { member: ManagerContractTenant; onEdit: () => void }) {
+function ContractMember({ member }: { member: ManagerContractTenant }) {
   const profile = useManagerQuery('contract-member', (branchId) =>
     branchTenantsService.get(branchId, member.tenantId), [member.tenantId])
   const person = profile.data
@@ -48,10 +37,8 @@ function ContractMember({ member, onEdit }: { member: ManagerContractTenant; onE
         ['Giới tính', person?.gender === 'MALE' ? 'Nam' : person?.gender === 'FEMALE' ? 'Nữ' : person?.gender === 'OTHER' ? 'Khác' : '—'],
         ['Phần tiền thuê', member.rentAmount == null ? '—' : `${formatVnd(member.rentAmount)}/tháng`],
         ['Ngày bắt đầu cư trú', dateOnly(member.joinedAt)],
-        ['Ngày rời đi', member.leftAt ? dateOnly(member.leftAt) : '—'],
       ]} />
       {profile.isError && <p className="mt-3 text-sm text-muted-foreground">Không tải được hồ sơ liên hệ bổ sung.</p>}
-      <Button className="mt-4" variant="outline" onClick={onEdit}>Sửa nghĩa vụ</Button>
     </Panel>
   )
 }
@@ -96,9 +83,7 @@ function ContractTenantsContent({ contractId }: { contractId: string }) {
       true,
     ),
     query = useManagerList('contract-tenants', { contractId, size: '100' }, true),
-    { branch } = useManager(),
-    [editing, setEditing] = useState<ManagerContractTenant | undefined>(undefined),
-    mutation = useManagerAction(() => setEditing(undefined))
+    { branch } = useManager()
   const roomId = contract.data?.roomId
   const slots = useManagerList('slots', { roomId: roomId || '' }, false, Boolean(roomId))
   const bookingId = contract.data?.sourceBookingId
@@ -134,22 +119,6 @@ function ContractTenantsContent({ contractId }: { contractId: string }) {
   const firstSignedIndex = (currentSignedPage - 1) * SIGNED_CONTRACTS_PER_PAGE
   const visibleSignedContracts = signedContracts.slice(firstSignedIndex, firstSignedIndex + SIGNED_CONTRACTS_PER_PAGE)
 
-  const fields: FieldSpec[] = [
-    { name: 'rentAmount', label: 'Phần tiền thuê hàng tháng (VND)', kind: 'number', min: 0 },
-    { name: 'joinedAt', label: 'Ngày bắt đầu cư trú', kind: 'date' },
-    { name: 'leftAt', label: 'Ngày rời đi', kind: 'date', nullable: true },
-    { name: 'isRepresentative', label: 'Đại diện hợp đồng', kind: 'check' },
-    {
-      name: 'status',
-      label: 'Trạng thái thành viên',
-      kind: 'select' as const,
-      options: [
-        { value: 'ACTIVE', label: 'Đang ở' },
-        { value: 'LEFT', label: 'Đã rời đi' },
-      ],
-    },
-  ]
-
   return (
     <ManagerPage
       title="Người ký và chỗ thuê"
@@ -163,7 +132,7 @@ function ContractTenantsContent({ contractId }: { contractId: string }) {
               <h2 className="text-lg font-bold">Người ký và thành viên</h2>
               <QueryState pending={query.isPending} error={query.error} retry={() => void query.refetch()}>
                 {query.data?.content.map((member) => (
-                  <ContractMember key={member.id} member={member} onEdit={() => setEditing(member)} />
+                  <ContractMember key={member.id} member={member} />
                 ))}
                 {query.data?.content.length === 0 && <Panel>Chưa có thành viên trong hợp đồng.</Panel>}
               </QueryState>
@@ -203,38 +172,6 @@ function ContractTenantsContent({ contractId }: { contractId: string }) {
           </div>
         )}
       </QueryState>
-      <Modal
-        title="Sửa nghĩa vụ thành viên"
-        open={editing !== undefined}
-        onOpenChange={(open) => {
-          if (!open && !mutation.isPending) setEditing(undefined)
-        }}
-      >
-        {editing !== undefined && (
-          <ManagerForm
-            schema={contractTenantUpdateSchema}
-            defaults={{
-              isRepresentative: Boolean(editing.isRepresentative),
-              rentAmount: editing.rentAmount || 0,
-              joinedAt: editing.joinedAt,
-              leftAt: editing.leftAt,
-              status: editing.status,
-            }}
-            fields={fields}
-            pending={mutation.isPending}
-            error={mutation.error}
-            submitLabel="Lưu nghĩa vụ"
-            onSubmit={(value) =>
-              mutation.mutate({
-                resource: 'contract-tenants',
-                id: editing.id,
-                value,
-                method: 'PATCH',
-              })
-            }
-          />
-        )}
-      </Modal>
     </ManagerPage>
   )
 }
