@@ -1,5 +1,6 @@
 package com.kitolam.rentalroommanagement.modules.roomslot.service.support;
 
+import com.kitolam.rentalroommanagement.common.exception.exceptions.BadRequestException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -24,6 +25,12 @@ public final class RoomSlotAvailabilityRoller {
         return LocalDate.ofInstant(clock.instant(), VIETNAM_ZONE);
     }
 
+    public static LocalDate requireFuture(LocalDate date, LocalDate today) {
+        if (date == null || !date.isAfter(today))
+            throw new BadRequestException("Ngày bắt đầu cho thuê phải sau ngày hôm nay.");
+        return date;
+    }
+
     /**
      * Ngày sớm nhất một slot đang có lượt ở (RESERVED/ACTIVE) được coi là trống để khách mới đặt cọc:
      * {@code endDate - 14 ngày}. Lượt ở không có endDate thì coi như không giới hạn (trả null = slot kín).
@@ -39,7 +46,7 @@ public final class RoomSlotAvailabilityRoller {
     }
 
     /**
-     * Dời ngày bắt đầu +7 ngày cho tới khi không còn trước hôm nay. Null giữ nguyên null.
+     * Move a past date forward in seven-day steps until it reaches today or later.
      * Ví dụ: 01/12/2026 với hôm nay 02/12/2026 → 08/12/2026.
      */
     public static LocalDate rollForward(LocalDate availableFrom, LocalDate todayVietnam) {
@@ -49,5 +56,10 @@ public final class RoomSlotAvailabilityRoller {
             result = result.plusDays(ROLL_DAYS);
         }
         return result;
+    }
+
+    public static LocalDate rollOverdueIntoFuture(LocalDate availableFrom, LocalDate today) {
+        if (availableFrom == null || !availableFrom.isBefore(today)) return availableFrom;
+        return rollForward(availableFrom, today.plusDays(1));
     }
 }

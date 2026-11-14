@@ -5,6 +5,7 @@ import com.kitolam.rentalroommanagement.modules.manager.document.Manager;
 import com.kitolam.rentalroommanagement.modules.manager.enums.ManagerStatus;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
 import com.kitolam.rentalroommanagement.modules.tenant.dto.response.TenantResponse;
+import com.kitolam.rentalroommanagement.modules.tenant.enums.Gender;
 import com.kitolam.rentalroommanagement.modules.tenant.enums.TenantStatus;
 import org.mapstruct.Mapper;
 
@@ -44,6 +45,13 @@ public interface TenantMapper {
         String role = (effectiveRole != null && !effectiveRole.isBlank())
                 ? effectiveRole
                 : (user != null && user.getRole() != null ? user.getRole().name() : "TENANT");
+        String profileGender = user == null || user.getGender() == null ? "" : user.getGender();
+        Gender gender = switch (profileGender) {
+            case "MALE" -> Gender.MALE;
+            case "FEMALE" -> Gender.FEMALE;
+            case "OTHER" -> Gender.OTHER;
+            default -> tenant.getGender();
+        };
 
         return new TenantResponse(
                 tenant.getId(),
@@ -53,7 +61,7 @@ public interface TenantMapper {
                 tenant.getPhone(),
                 role,
                 tenant.getDateOfBirth(),
-                tenant.getGender(),
+                gender,
                 tenant.getAvatarUrl(),
                 branchStatus,
                 accountStatus,

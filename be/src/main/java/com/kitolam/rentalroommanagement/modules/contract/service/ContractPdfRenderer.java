@@ -53,14 +53,25 @@ class ContractPdfRenderer {
             try (OutputStream output = Files.newOutputStream(docx)) {
                 writeDocx(contract, output);
             }
-            Process process = new ProcessBuilder(officeCommand,
+            ProcessBuilder converter = new ProcessBuilder(resolveOfficeCommand(),
                     "-env:UserInstallation=" + directory.resolve("profile").toUri().toASCIIString(),
                     "--headless", "--nolockcheck", "--convert-to", "pdf:writer_pdf_Export",
                     "--outdir", outputDirectory.toString(), docx.toString())
-                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+                    .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            Process process;
             try {
-                if (!process.waitFor(60, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                    throw new IOException("LibreOffice could not convert the contract");
+                process = converter.start();
+            } catch (IOException cause) {
+                throw new ConversionException(
+                        "Could not start LibreOffice Writer. Install it and set CONTRACT_PDF_LIBREOFFICE_COMMAND "
+                                + "to the executable, or make soffice available on PATH.", cause);
+            }
+            try {
+                if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                    throw new ConversionException("LibreOffice Writer did not finish conversion within 60 seconds.");
+                }
+                if (process.exitValue() != 0) {
+                    throw new ConversionException("LibreOffice Writer exited with code " + process.exitValue() + ".");
                 }
             } finally {
                 if (process.isAlive()) {
@@ -68,9 +79,36 @@ class ContractPdfRenderer {
                     process.destroyForcibly();
                 }
             }
-            return Files.readAllBytes(outputDirectory.resolve("contract.pdf"));
+            Path pdf = outputDirectory.resolve("contract.pdf");
+            if (!Files.isRegularFile(pdf) || Files.size(pdf) == 0) {
+                throw new ConversionException("LibreOffice Writer finished without producing a PDF.");
+            }
+            return Files.readAllBytes(pdf);
         } finally {
             cleanTemporaryFiles(directory);
+        }
+    }
+
+    private String resolveOfficeCommand() {
+        if (!"soffice".equals(officeCommand) || !System.getProperty("os.name").startsWith("Windows")) {
+            return officeCommand;
+        }
+        for (String variable : List.of("ProgramFiles", "ProgramFiles(x86)")) {
+            String programFiles = System.getenv(variable);
+            if (programFiles == null) continue;
+            Path executable = Path.of(programFiles, "LibreOffice", "program", "soffice.com");
+            if (Files.isRegularFile(executable)) return executable.toString();
+        }
+        return officeCommand;
+    }
+
+    static final class ConversionException extends IOException {
+        private ConversionException(String message) {
+            super(message);
+        }
+
+        private ConversionException(String message, IOException cause) {
+            super(message, cause);
         }
     }
 

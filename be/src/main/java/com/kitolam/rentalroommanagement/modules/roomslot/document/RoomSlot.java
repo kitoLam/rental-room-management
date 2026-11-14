@@ -34,6 +34,8 @@ public class RoomSlot extends BaseDocument {
     /** Ngày bắt đầu cho thuê; chỉ áp dụng cho slot AVAILABLE và tự dời +7 ngày khi đã qua. */
     private LocalDate availableFrom;
 
+    private boolean depositPaused;
+
     @Version
     private Long version;
 }

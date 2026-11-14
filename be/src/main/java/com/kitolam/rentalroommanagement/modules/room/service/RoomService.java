@@ -35,4 +35,7 @@ public interface RoomService {
     /** Manually set when a free slot can be rented from; refused while the slot is busy. */
     com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse updateSlotAvailableFrom(
             String roomId, String slotId, java.time.LocalDate availableFrom, AuthPrincipal principal);
+
+    com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse setSlotDepositPaused(
+            String roomId, String slotId, boolean paused, java.time.LocalDate availableFrom, AuthPrincipal principal);
 }

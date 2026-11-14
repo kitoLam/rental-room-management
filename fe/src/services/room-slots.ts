@@ -10,12 +10,20 @@ export const roomSlotUsageSchema = z.object({
   availableFrom: z.string().nullish(),
   busy: z.boolean(),
   busyReason: z.string().nullish(),
+  depositPaused: z.boolean().default(false),
 })
 export type RoomSlotUsage = z.infer<typeof roomSlotUsageSchema>
 
 export const roomSlotsApi = {
   list: (roomId: string) =>
     request('manager', `/api/v1/rooms/${encodeURIComponent(roomId)}/slots`, z.array(roomSlotUsageSchema)),
+  setDepositPaused: (roomId: string, slotId: string, paused: boolean, availableFrom?: string) =>
+    request(
+      'manager',
+      `/api/v1/rooms/${encodeURIComponent(roomId)}/slots/${encodeURIComponent(slotId)}/deposit-availability`,
+      roomSlotUsageSchema,
+      write('PATCH', { paused, availableFrom }),
+    ),
   /** Refused by the backend while the slot is busy or for a past date. */
   setAvailableFrom: (roomId: string, slotId: string, availableFrom: string) =>
     request(

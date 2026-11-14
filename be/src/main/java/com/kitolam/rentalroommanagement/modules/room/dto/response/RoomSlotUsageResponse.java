@@ -15,6 +15,7 @@ public record RoomSlotUsageResponse(
         RoomSlotStatus status,
         LocalDate availableFrom,
         boolean busy,
-        String busyReason
+        String busyReason,
+        boolean depositPaused
 ) {
 }

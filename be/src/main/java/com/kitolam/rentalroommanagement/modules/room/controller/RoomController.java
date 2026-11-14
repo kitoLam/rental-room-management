@@ -17,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import com.kitolam.rentalroommanagement.modules.room.dto.request.SlotAvailableFromRequest;
+import com.kitolam.rentalroommanagement.modules.room.dto.request.SlotDepositAvailabilityRequest;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -96,6 +97,15 @@ public class RoomController {
             @Valid @RequestBody SlotAvailableFromRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success("Đã cập nhật ngày bắt đầu cho thuê",
                 roomService.updateSlotAvailableFrom(id, slotId, request.availableFrom(), principal));
+    }
+
+    @PatchMapping("/{id}/slots/{slotId}/deposit-availability")
+    @PreAuthorize("hasAnyRole('OWNER','MANAGER')")
+    public StandardResponse<RoomSlotUsageResponse> setSlotDepositPaused(
+            @PathVariable @ValidObjectId String id, @PathVariable @ValidObjectId String slotId,
+            @Valid @RequestBody SlotDepositAvailabilityRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(roomService.setSlotDepositPaused(
+                id, slotId, request.paused(), request.availableFrom(), principal));
     }
 
     @DeleteMapping("/{id}")

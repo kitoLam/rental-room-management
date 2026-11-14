@@ -1,5 +1,8 @@
 package com.kitolam.rentalroommanagement.modules.roomslot.service.impl;
 
+import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
+import com.kitolam.rentalroommanagement.modules.room.document.Room;
+import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.service.support.RoomSlotAvailabilityRoller;
@@ -42,28 +45,35 @@ public class RoomSlotAvailabilityRollJob {
             log.warn("Room slot availability roll could not finish", unavailable);
             return;
         }
-        if (rolled > 0) log.info("Rolled availableFrom +7 days for {} room slots", rolled);
+        log.info("Rolled availableFrom for {} room slots", rolled);
     }
 
     /** Trả về số slot đã dời; public để chạy tay/kiểm thử. */
     public int rollBatch(LocalDate today) {
         List<RoomSlot> due = mongoTemplate.find(Query.query(Criteria.where("status").is(RoomSlotStatus.AVAILABLE)
                 .and("isDeleted").is(false)
+                .and("depositPaused").ne(true)
                 .and("availableFrom").lt(today)), RoomSlot.class);
         if (due.isEmpty()) return 0;
+        Query openRooms = MongoQueryHelper.byReferenceIds("_id", due.stream().map(RoomSlot::getRoomId).distinct().toList());
+        openRooms.addCriteria(Criteria.where("status").in(RoomStatus.AVAILABLE, RoomStatus.RESERVED, RoomStatus.OCCUPIED));
+        Set<String> openRoomIds = mongoTemplate.find(openRooms, Room.class).stream().map(Room::getId).collect(Collectors.toSet());
         Set<String> blocked = occupiedSlotIds(due.stream().map(RoomSlot::getId).toList());
         int rolled = 0;
         for (RoomSlot slot : due) {
-            if (blocked.contains(slot.getId())) continue;
-            LocalDate next = RoomSlotAvailabilityRoller.rollForward(slot.getAvailableFrom(), today);
+            if (blocked.contains(slot.getId()) || !openRoomIds.contains(slot.getRoomId())) continue;
+            LocalDate next = RoomSlotAvailabilityRoller.requireFuture(
+                    RoomSlotAvailabilityRoller.rollOverdueIntoFuture(slot.getAvailableFrom(), today), today);
             // CAS theo version: nếu booking vừa claim slot này (bump @Version) thì bỏ qua, chu kỳ sau xử lý.
             Criteria criteria = Criteria.where("_id").is(new ObjectId(slot.getId()))
                     .and("isDeleted").is(false)
-                    .and("availableFrom").lt(today);
-            if (slot.getVersion() != null) criteria.and("version").is(slot.getVersion());
+                    .and("status").is(RoomSlotStatus.AVAILABLE)
+                    .and("depositPaused").ne(true)
+                    .and("availableFrom").is(slot.getAvailableFrom())
+                    .and("version").is(slot.getVersion());
             Update update = new Update().set("availableFrom", next)
                     .set("updatedAt", clock.instant())
-                    .inc("version", 1);
+                    .set("version", slot.getVersion() == null ? 0L : slot.getVersion() + 1);
             long matched = mongoTemplate.updateFirst(Query.query(criteria), update, RoomSlot.class).getMatchedCount();
             if (matched > 0) rolled++;
         }
@@ -71,10 +81,9 @@ public class RoomSlotAvailabilityRollJob {
     }
 
     private Set<String> occupiedSlotIds(List<String> slotIds) {
-        List<ObjectId> ids = slotIds.stream().filter(ObjectId::isValid).map(ObjectId::new).toList();
-        return mongoTemplate.find(Query.query(Criteria.where("isDeleted").is(false)
-                        .and("status").in(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE)
-                        .and("roomSlotId").in(ids)), RoomSlotOccupancy.class)
+        Query query = MongoQueryHelper.byReferenceIds("roomSlotId", slotIds)
+                .addCriteria(Criteria.where("status").in(OccupancyStatus.RESERVED, OccupancyStatus.ACTIVE));
+        return mongoTemplate.find(query, RoomSlotOccupancy.class)
                 .stream().map(RoomSlotOccupancy::getRoomSlotId).collect(Collectors.toSet());
     }
 }

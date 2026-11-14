@@ -59,6 +59,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     RESUBMISSION_REQUESTED: { actor: 'Quản lý', note: 'Yêu cầu nộp lại bản ký.' },
     EXPIRED: { actor: 'Hệ thống', note: 'Đã quá hạn nộp bản ký.' },
     CONTRACT_EXPIRED: { actor: 'Hệ thống', note: 'Hợp đồng đã hết hạn.' },
+    CONTRACT_TERMINATED: { actor: 'Quản lý', note: 'Hợp đồng đã hủy trước hạn.' },
   }
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomName ?? undefined,

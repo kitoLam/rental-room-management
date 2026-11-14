@@ -41,6 +41,8 @@ public interface BookingService {
 
     BookingPaymentResponse createVnPayPayment(String id, AuthPrincipal principal);
 
+    void validateBookingDeposit(String id, AuthPrincipal principal);
+
     List<BookingPaymentResponse> payments(String id, AuthPrincipal principal);
 
     BookingResponse reconcilePayment(String id, String paymentId, PaymentReconciliationRequest request, AuthPrincipal principal);

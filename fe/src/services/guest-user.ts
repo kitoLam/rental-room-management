@@ -622,6 +622,8 @@ export const contractService = {
     request('leasing', `/api/v1/contracts/${id}/term`, backendContractSchema, write('PATCH', { termMonths })),
   downloadPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
     request(feature, `/api/v1/contracts/${id}/pdf`, z.url()),
+  retryPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
+    request(feature, `/api/v1/contracts/${id}/pdf/retry`, z.enum(['READY', 'QUEUED', 'PROCESSING']), write('POST')),
   selectServices: (id: string, selectedServiceIds: string[]) =>
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>
@@ -634,6 +636,36 @@ export const contractService = {
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
     request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
+  terminationDetails: (id: string) =>
+    request('manager', `/api/v1/contracts/${id}/termination`, z.object({
+      availableFrom: z.iso.date(),
+      settlement: z.object({
+        reason: z.string(),
+        lastRentalDate: z.iso.date(),
+        agreedDepositAmount: z.coerce.number().nullish(),
+        electricity: z.object({
+          startReading: z.coerce.number(),
+          endReading: z.coerce.number(),
+          amount: z.coerce.number(),
+        }),
+        invoices: z.array(z.object({
+          invoiceId: z.string(),
+          period: z.string(),
+          total: z.coerce.number(),
+          paid: z.coerce.number(),
+          outstanding: z.coerce.number(),
+          overpaid: z.coerce.number(),
+        })),
+      }).nullish(),
+    })),
+  terminate: (id: string, value: {
+    confirmation: string
+    reason: string
+    availableFrom: string
+    electricityStartReading?: string
+    electricityEndReading: string
+  }) =>
+    request('manager', `/api/v1/contracts/${id}/termination`, z.object({ availableFrom: z.iso.date() }), write('POST', value)),
 }
 export const profileService = {
   get: (): Promise<User> =>

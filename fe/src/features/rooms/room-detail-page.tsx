@@ -24,8 +24,8 @@ import { formatVnd } from '@/lib/format'
 import { getPriceUnit, getRoomBadge } from './lib/room-display'
 import { heroMedia } from '@/features/home/data/hero-media'
 import { RoomCostEstimator } from './components/room-cost-estimator'
-import { RoomServicePicker } from './components/room-service-picker'
-import { selectedServiceCosts, type ServiceSelection } from './lib/cost-estimate'
+import { RoomServiceList } from './components/room-service-picker'
+import { selectedServiceCosts, shownOnRoomPage } from './lib/cost-estimate'
 import { useSession } from '@/features/auth/session-store'
 import { managerApi } from '@/services/manager'
 
@@ -58,9 +58,6 @@ export default function RoomDetailPage() {
     queryFn: () => catalogService.room(roomId),
     enabled: validRoomId,
   })
-  const [serviceSelection, setServiceSelection] = useState<ServiceSelection>(() =>
-    readJson(params.get('services'), {}),
-  )
   const roomServices = useQuery({
     queryKey: ['room-services', roomId],
     queryFn: () => catalogService.services(room.data!),
@@ -93,6 +90,7 @@ export default function RoomDetailPage() {
     )
   const r = room.data
   const badge = r ? getRoomBadge(r) : null
+  const includedServices = roomServices.data?.filter((service) => service.mandatory && shownOnRoomPage(service)) ?? []
   const selectedSlots = requestedSlots.filter(
     (id) =>
       available.data?.slots.some((slot) => slot.id === id) &&
@@ -108,7 +106,7 @@ export default function RoomDetailPage() {
   const blockedBookingSlots = (available.data?.slots ?? []).filter(
     (slot) => selectedSlots.includes(slot.id) && !slot.available,
   )
-  const bookingUrl = `/tenant/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
+  const bookingUrl = `/tenant/rooms/${roomId}/bookings/new?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
   const viewingUrl = `/rooms/${roomId}/viewing?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
   const canView =
     !!viewing.data?.canReceiveRequest &&
@@ -241,25 +239,13 @@ export default function RoomDetailPage() {
                   )}
                 </section>
                 <section className="rounded-2xl border border-border/70 bg-surface p-6 sm:p-8">
-                  <h2 className="mb-4 text-xl font-bold">Dịch vụ</h2>
+                  <h2 className="mb-4 text-xl font-bold">Dịch vụ đi kèm phòng</h2>
                   {roomServices.isPending ? (
                     <p className="text-sm text-muted-foreground">Đang tải danh sách dịch vụ…</p>
                   ) : roomServices.error ? (
                     <InlineError error={roomServices.error} />
-                  ) : roomServices.data?.length ? (
-                    <>
-                      <p className="mb-2 text-sm text-muted-foreground">
-                        Dịch vụ đi kèm phòng luôn được áp dụng. Dịch vụ tự chọn (gửi xe, giặt
-                        sấy...) bạn có thể tích để dự tính chi phí, và đăng ký sau khi hợp đồng có
-                        hiệu lực.
-                      </p>
-                      <RoomServicePicker
-                        services={roomServices.data}
-                        selection={serviceSelection}
-                        slotCount={selectedSlots.length}
-                        onChange={setServiceSelection}
-                      />
-                    </>
+                  ) : includedServices.length ? (
+                    <RoomServiceList services={includedServices} slotCount={selectedSlots.length} />
                   ) : (
                     <p className="text-sm text-muted-foreground">
                       Liên hệ chi nhánh để được cung cấp giá dịch vụ.
@@ -271,8 +257,8 @@ export default function RoomDetailPage() {
                   room={r}
                   slotCount={selectedSlots.length}
                   extras={selectedServiceCosts(
-                    roomServices.data ?? [],
-                    serviceSelection,
+                    includedServices,
+                    {},
                     selectedSlots.length,
                   )}
                 />

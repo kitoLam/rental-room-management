@@ -219,10 +219,13 @@ public class BookingServiceImpl implements BookingService {
 
     private RoomAvailabilityResponse slotAvailability(RoomSlot slot, LocalDate start, LocalDate end, LocalDate today,
                                                        List<RoomSlotOccupancy> occupancies) {
+        if (slot.isDepositPaused())
+            return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
+                    "Chỗ này đang tạm ngưng đặt cọc.", null);
         if (slot.getStatus() == RoomSlotStatus.MAINTENANCE || slot.getStatus() == RoomSlotStatus.INACTIVE)
             return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
                     "Chỗ hiện không nhận đặt.", null);
-        LocalDate availableFrom = RoomSlotAvailabilityRoller.rollForward(slot.getAvailableFrom(), today);
+        LocalDate availableFrom = RoomSlotAvailabilityRoller.rollOverdueIntoFuture(slot.getAvailableFrom(), today);
         String reason = null;
         for (RoomSlotOccupancy occupancy : occupancies) {
             LocalDate occupiedUntil = occupancy.getEndDate();
@@ -489,6 +492,14 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    public void validateBookingDeposit(String id, AuthPrincipal principal) {
+        requireRole(principal, "TENANT");
+        Booking booking = find(id);
+        ensureTenantOwns(booking, principal);
+        validatePaymentAllowed(booking);
+    }
+
+    @Override
     @Transactional
     public List<BookingPaymentResponse> payments(String id, AuthPrincipal principal) {
         expireOverdueBookings();
@@ -536,7 +547,7 @@ public class BookingServiceImpl implements BookingService {
             }
             return response(bookingRepository.save(booking));
         }
-        claimBookingSlots(booking);
+        List<RoomSlot> claimedSlots = bookingSlotIds(booking).stream().map(this::claimSlot).toList();
         if (!holdValid) {
             booking.setStatus(BookingStatus.EXPIRED);
             booking.setDepositStatus(DepositStatus.PAID);
@@ -545,7 +556,8 @@ public class BookingServiceImpl implements BookingService {
             return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT,
                     "Thanh toán đến sau hạn; booking đã hết hiệu lực và cọc chờ hoàn."));
         }
-        if (hasReservation(booking.getId())) {
+        boolean depositPaused = claimedSlots.stream().anyMatch(RoomSlot::isDepositPaused);
+        if (!depositPaused && hasReservation(booking.getId())) {
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setDepositStatus(DepositStatus.PAID);
             createSlotContracts(booking);
@@ -557,6 +569,7 @@ public class BookingServiceImpl implements BookingService {
         }
         return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT,
                 booking.getStatus() == BookingStatus.CONFIRMED ? "Đã xác minh cọc; booking được xác nhận."
+                        : depositPaused ? "Chỗ đang tạm ngưng đặt cọc; khoản tiền đã nhận chờ hoàn."
                         : "Slot đã được giữ; chờ Owner duyệt hoàn cọc."));
     }
 
@@ -654,6 +667,9 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.AWAITING_PAYMENT)
             throw new ConflictException("Booking không còn chờ thanh toán");
         ensureTermsCurrent(booking);
+        for (String slotId : bookingSlotIds(booking)) {
+            if (roomSlot(slotId).isDepositPaused()) throw new ConflictException("Chỗ này đang tạm ngưng đặt cọc.");
+        }
         requireReservation(booking.getId());
     }
 
