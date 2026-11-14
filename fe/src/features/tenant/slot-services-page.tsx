@@ -13,14 +13,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { TenantPage } from './components'
+import { useTenant } from './context'
 
 /** Optional (slot) services of the tenant's active contracts: what is in use, request add / cancel. */
 export function SlotServicesPage() {
   const queryClient = useQueryClient()
   const contracts = useQuery({ queryKey: ['tenant', 'contracts-real'], queryFn: serviceCatalogApi.myContracts })
   const active = (contracts.data || []).filter((c) => c.status === 'ACTIVE')
-  const [picked, setPicked] = useState('')
-  const contract = active.find((c) => c.id === picked) || active[0]
+  // Always the contract of the tenancy selected in the sidebar ("Không gian thuê").
+  const { tenancy } = useTenant()
+  const contract = active.find((c) => c.id === tenancy.contractId)
   const room = useQuery({
     queryKey: ['tenant', 'room-of', contract?.roomId],
     queryFn: () => serviceCatalogApi.roomOf(contract!.roomId!),
@@ -59,24 +61,13 @@ export function SlotServicesPage() {
     <TenantPage
       title="Dịch vụ tự chọn"
       description="Đăng ký thêm hoặc huỷ dịch vụ như gửi xe, giặt sấy. Quản lý duyệt xong thì dịch vụ mới bắt đầu / kết thúc."
-      actions={
-        active.length > 1 && (
-          <select value={contract?.id} onChange={(e) => setPicked(e.target.value)} className="input w-auto" aria-label="Hợp đồng">
-            {active.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.contractNumber}
-              </option>
-            ))}
-          </select>
-        )
-      }
     >
       <QueryState
         pending={contracts.isPending}
         error={contracts.error}
         retry={contracts.refetch}
-        empty={active.length === 0}
-        emptyMessage="Bạn chưa có hợp đồng đang hiệu lực. Dịch vụ tự chọn dùng được sau khi hợp đồng được duyệt."
+        empty={!contract}
+        emptyMessage="Chỗ ở đang chọn chưa có hợp đồng đang hiệu lực. Dịch vụ tự chọn dùng được khi hợp đồng của chỗ này có hiệu lực."
       >
         <InlineError error={withdraw.error} />
         <Panel>
