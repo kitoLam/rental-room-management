@@ -28,9 +28,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import com.kitolam.rentalroommanagement.modules.invoice.dto.response.InvoiceResponse;
+import com.kitolam.rentalroommanagement.modules.invoice.dto.response.LatePaymentHistoryResponse;
+import com.kitolam.rentalroommanagement.modules.invoice.dto.response.TenantDebtResponse;
 import com.kitolam.rentalroommanagement.modules.invoice.repository.InvoiceRepository;
 import com.kitolam.rentalroommanagement.modules.invoice.service.InvoiceService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -43,6 +46,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final ContractTenantRepository contractTenantRepository;
     private final TenantRepository tenantRepository;
     private final StaffAccess staffAccess;
+    private final TenantDebtService tenantDebtService;
 
     @Override
     public InvoiceResponse getById(String id, AuthPrincipal principal) {
@@ -132,6 +136,27 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .map(item -> new DebtInvoice(item.getId(), item.getContractId(), item.getInvoiceNumber(),
                         item.getPeriod(), item.getDueDate(), item.getTotalAmount(), item.getRemainingAmount()))
                 .toList();
+    }
+
+    @Override
+    public PagedResponse<TenantDebtResponse> listDebts(String branchId, String keyword, boolean overdueOnly,
+                                                       String period, Pageable pageable, AuthPrincipal principal) {
+        return tenantDebtService.listDebts(branchId, keyword, overdueOnly, period, pageable, principal);
+    }
+
+    @Override
+    public TenantDebtResponse payDebt(String debtId, AuthPrincipal principal) {
+        return tenantDebtService.payDebt(debtId, principal);
+    }
+
+    @Override
+    public TenantDebtResponse unpayDebt(String debtId, AuthPrincipal principal) {
+        return tenantDebtService.unpayDebt(debtId, principal);
+    }
+
+    @Override
+    public List<LatePaymentHistoryResponse> latePaymentHistory(String contractId, AuthPrincipal principal) {
+        return tenantDebtService.latePaymentHistory(contractId, principal);
     }
 
     @Override

@@ -10,6 +10,8 @@ import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractFil
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractUpdateRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractServiceSelectionRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractRenewRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractTerminationRequest;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractTerminationSettlement;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
@@ -22,6 +24,14 @@ public interface ContractService {
     ContractResponse create(ContractCreateRequest request);
 
     ContractResponse getById(String id, AuthPrincipal principal);
+
+    ContractResponse chooseTerm(String id, int termMonths, AuthPrincipal principal);
+
+    String downloadPdf(String id, AuthPrincipal principal);
+
+    String retryPdf(String id, AuthPrincipal principal);
+
+    String downloadSignedEvidence(String id, AuthPrincipal principal);
 
     PagedResponse<ContractResponse> search(ContractFilterRequest filter, Pageable pageable, AuthPrincipal principal);
 
@@ -40,6 +50,12 @@ public interface ContractService {
     ContractResponse reviewEvidence(String id, ContractEvidenceReviewRequest request, AuthPrincipal principal);
 
     ContractResponse renew(String id, ContractRenewRequest request, AuthPrincipal principal);
+
+    TerminationDetails terminationDetails(String id, AuthPrincipal principal);
+
+    ContractTerminationSettlement terminate(String id, ContractTerminationRequest request, AuthPrincipal principal);
+
+    record TerminationDetails(java.time.LocalDate availableFrom, ContractTerminationSettlement settlement) { }
 
     /** Internal read-only projection. Callers must supply an already-authorized scope. */
     List<OverviewContract> readForOverview(List<String> ids);

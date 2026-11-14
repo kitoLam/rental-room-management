@@ -185,8 +185,8 @@ export function OwnerLayout() {
                   </Button>
                 )}
                 <div className="mt-5 flex flex-wrap gap-4 text-xs font-bold text-primary">
-                  <Link to="/profile">Hồ sơ</Link>
-                  <Link to="/profile">Tài khoản</Link>
+                  <Link to="/owner/profile">Hồ sơ</Link>
+                  <Link to="/owner/profile">Tài khoản</Link>
                   <Link to="/owner/verification">Xác minh</Link>
                 </div>
               </aside>

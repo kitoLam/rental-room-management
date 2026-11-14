@@ -130,7 +130,7 @@ public class InvoiceGenerationService {
         return new Result(created, skipped);
     }
 
-    private Invoice toInvoice(SlotBill bill, String period, ContractTenant representative, LocalDate today) {
+    public Invoice toInvoice(SlotBill bill, String period, ContractTenant representative, LocalDate today) {
         Contract contract = bill.contract();
         Invoice invoice = new Invoice();
         invoice.setContractId(contract.getId());

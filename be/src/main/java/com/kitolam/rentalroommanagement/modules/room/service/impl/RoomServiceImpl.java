@@ -21,12 +21,14 @@ import com.kitolam.rentalroommanagement.modules.roomservice.dto.response.Utility
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
 import com.kitolam.rentalroommanagement.modules.roomslot.enums.RoomSlotStatus;
 import com.kitolam.rentalroommanagement.modules.roomslot.repository.RoomSlotRepository;
+import com.kitolam.rentalroommanagement.modules.roomslot.service.support.RoomSlotAvailabilityRoller;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import com.kitolam.rentalroommanagement.modules.booking.document.Booking;
 import com.kitolam.rentalroommanagement.modules.booking.enums.BookingStatus;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
+import com.kitolam.rentalroommanagement.modules.contract.service.ContractTemplateService;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.query.Query;
 import java.time.LocalDate;
@@ -37,6 +39,7 @@ import com.kitolam.rentalroommanagement.modules.room.enums.RoomStatus;
 import com.kitolam.rentalroommanagement.modules.room.dto.response.RoomSlotUsageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
@@ -65,6 +68,8 @@ public class RoomServiceImpl implements RoomService {
     private final Clock clock;
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository occupancyRepository;
+    @Autowired
+    private ContractTemplateService contractTemplates;
 
     @Override
     public List<StatusTotal> readStatusTotalsForAdmin() {
@@ -192,6 +197,7 @@ public class RoomServiceImpl implements RoomService {
         slots.forEach(slot -> {
             slot.markDeleted();
             roomSlotRepository.save(slot);
+            contractTemplates.removeForSlot(slot.getId());
         });
         room.markDeleted();
         roomRepository.save(room);
@@ -219,11 +225,28 @@ public class RoomServiceImpl implements RoomService {
             throw new BadRequestException("Không thể đổi ngày bắt đầu cho thuê của chỗ " + slot.getSlotCode()
                     + " vì chỗ này " + reason + ". Chỉ chỉnh được khi chỗ chưa có ai ở hay giữ.");
         }
-        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")));
-        if (availableFrom.isBefore(today)) {
-            throw new BadRequestException("Ngày bắt đầu cho thuê không được ở quá khứ");
+        slot.setAvailableFrom(RoomSlotAvailabilityRoller.requireFuture(availableFrom, RoomSlotAvailabilityRoller.todayVietnam(clock)));
+        return usage(roomSlotRepository.save(slot), Map.of());
+    }
+
+    @Override
+    @Transactional
+    public RoomSlotUsageResponse setSlotDepositPaused(String roomId, String slotId, boolean paused,
+                                                     LocalDate availableFrom, AuthPrincipal principal) {
+        Room room = find(roomId);
+        requireAccess(room.getBranchId(), principal);
+        RoomSlot slot = roomSlotRepository.findByIdAndIsDeletedFalse(slotId)
+                .filter(item -> room.getId().equals(item.getRoomId()))
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chỗ ở trong phòng."));
+        if (slot.getStatus() != RoomSlotStatus.AVAILABLE
+                || (!paused && (room.getStatus() == RoomStatus.MAINTENANCE || room.getStatus() == RoomStatus.INACTIVE)))
+            throw new ConflictException("Chỉ có thể đổi trạng thái đặt cọc của chỗ đang sẵn sàng.");
+        String reason = busySlots(List.of(slot)).get(slotId);
+        if (reason != null) throw new ConflictException("Không thể đổi trạng thái đặt cọc vì chỗ này " + reason + ".");
+        if (!paused) {
+            slot.setAvailableFrom(RoomSlotAvailabilityRoller.requireFuture(availableFrom, RoomSlotAvailabilityRoller.todayVietnam(clock)));
         }
-        slot.setAvailableFrom(availableFrom);
+        slot.setDepositPaused(paused);
         return usage(roomSlotRepository.save(slot), Map.of());
     }
 
@@ -236,7 +259,7 @@ public class RoomServiceImpl implements RoomService {
     private static RoomSlotUsageResponse usage(RoomSlot slot, Map<String, String> busy) {
         String reason = busy.get(slot.getId());
         return new RoomSlotUsageResponse(slot.getId(), slot.getSlotCode(), slot.getSlotNumber(), slot.getStatus(),
-                slot.getAvailableFrom(), reason != null, reason);
+                slot.getAvailableFrom(), reason != null, reason, slot.isDepositPaused());
     }
 
     /**
@@ -263,6 +286,7 @@ public class RoomServiceImpl implements RoomService {
             free.subList(0, toRemove).forEach(slot -> {
                 slot.markDeleted();
                 roomSlotRepository.save(slot);
+                contractTemplates.removeForSlot(slot.getId());
             });
             return;
         }
@@ -275,9 +299,9 @@ public class RoomServiceImpl implements RoomService {
             slot.setSlotNumber(next);
             slot.setSlotCode("S" + next);
             slot.setStatus(RoomSlotStatus.AVAILABLE);
-            // New slots are bookable right away (RoomSlot.availableFrom, Vietnam date).
-            slot.setAvailableFrom(java.time.LocalDate.now(clock.withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))));
-            roomSlotRepository.save(slot);
+            LocalDate today = RoomSlotAvailabilityRoller.todayVietnam(clock);
+            slot.setAvailableFrom(RoomSlotAvailabilityRoller.requireFuture(today.plusDays(1), today));
+            contractTemplates.createForSlot(room, roomSlotRepository.save(slot));
         }
     }
 

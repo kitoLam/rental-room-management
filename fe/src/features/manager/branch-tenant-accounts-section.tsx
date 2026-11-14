@@ -2,6 +2,7 @@ import { Field, InlineError, Modal, Notice, Panel, Pagination, QueryState } from
 import { StatusBadge } from '@/components/common/status-badge'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
+import { formatProfileDate } from '@/lib/format'
 import {
   branchTenantsService,
   createTenantAccountSchema,
@@ -427,7 +428,7 @@ export function BranchTenantAccountsSection({
                                 : currentRole === 'MANAGER'
                                   ? 'Quản lý vận hành cơ sở'
                                   : 'Đang thuê tại cơ sở'}
-                          {item.dateOfBirth ? ` · NS: ${item.dateOfBirth}` : ''}
+                          {item.dateOfBirth ? ` · NS: ${formatProfileDate(item.dateOfBirth)}` : ''}
                         </p>
                       </td>
                       <td className="py-3.5 pr-3 whitespace-nowrap">

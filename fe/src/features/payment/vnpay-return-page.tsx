@@ -44,6 +44,15 @@ export function VnPayReturnPage() {
 
   const isSuccess = data?.status === 'SUCCESS'
   const isInvalidSignature = data?.status === 'INVALID_SIGNATURE'
+  const bookingId = isSuccess && data?.validSignature
+    ? /^Coc giu cho booking ([\da-f]{24}|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i.exec(data.orderInfo?.trim() ?? '')?.[1]
+    : undefined
+  const isInvoice = data?.orderInfo?.startsWith('Thanh toan hoa don')
+  const nextAction = bookingId
+    ? { to: `/tenant/bookings/${bookingId}#contracts`, label: 'Xem hợp đồng' }
+    : isInvoice
+      ? { to: '/tenant/invoices', label: 'Về hoá đơn của tôi' }
+      : { to: '/rooms', label: 'Xem phòng' }
 
   return (
     <Container className="py-12 sm:py-16">
@@ -153,21 +162,12 @@ export function VnPayReturnPage() {
                   Về trang chủ
                 </Button>
               </Link>
-              {data.orderInfo?.startsWith('Thanh toan hoa don') ? (
-                <Link to="/tenant/invoices" className="flex-1">
-                  <Button className="w-full">
-                    Về hoá đơn của tôi
-                    <ArrowRight size={18} />
-                  </Button>
+              <Button asChild className="flex-1">
+                <Link to={nextAction.to}>
+                  {nextAction.label}
+                  <ArrowRight size={18} />
                 </Link>
-              ) : (
-                <Link to="/rooms" className="flex-1">
-                  <Button className="w-full">
-                    Xem phòng
-                    <ArrowRight size={18} />
-                  </Button>
-                </Link>
-              )}
+              </Button>
             </div>
           </div>
         )}

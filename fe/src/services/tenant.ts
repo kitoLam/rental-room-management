@@ -108,6 +108,7 @@ export const tenantApi = {
     return items.map((t): Tenancy => ({
       id: t.id, userId: user.id, contractId: t.contractId, branchId: t.branchId, roomId: t.roomId,
       roomSlotId: t.roomSlotIds[0] || null, branchName: t.branchName, roomName: t.roomNumber,
+      roomSlotIds: t.roomSlotIds, slotNames: t.slotCodes.map((code) => code.startsWith(t.roomNumber + '-') ? code.slice(t.roomNumber.length + 1) : code),
       slotName: t.slotCodes.map((code) => code.startsWith(t.roomNumber + '-') ? code.slice(t.roomNumber.length + 1) : code).join(', ') || null,
       rentalMode: t.roomSlotIds.length ? 'SLOT' : 'ROOM',
       status: t.status, contractStatus: t.contractStatus === 'EXPIRED' ? 'ENDED' : t.contractStatus === 'TERMINATED' ? 'CANCELLED' : t.contractStatus,

@@ -1,5 +1,8 @@
 import { RouteGuard } from '@/features/auth/route-guard'
-import { LegacyTenantRedirect } from '@/features/tenant/legacy-tenant-redirect'
+import {
+  LegacyAccountRedirect,
+  LegacyManagementSettingsRedirect,
+} from '@/features/auth/legacy-account-redirect'
 import { HomePage } from '@/features/home/home-page'
 import { AdminLayout } from '@/layouts/admin-layout'
 import { AuthLayout } from '@/layouts/auth-layout'
@@ -11,8 +14,70 @@ import { UserLayout } from '@/layouts/user-layout'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { RouteErrorPage } from '@/pages/route-error-page'
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router'
+const accountRoutes: RouteObject[] = [
+  {
+    path: 'profile',
+    lazy: async () => ({ Component: (await import('@/features/user/profile-page')).default }),
+  },
+  {
+    path: 'manager-invitations',
+    lazy: async () => ({
+      Component: (await import('@/features/owner/manager-invitations-page')).ManagerInvitationsPage,
+    }),
+  },
+  {
+    path: 'owner-onboarding',
+    lazy: async () => ({
+      Component: (await import('@/features/owner/owner-onboarding-page')).OwnerOnboarding,
+    }),
+  },
+  {
+    path: 'owner-verification',
+    lazy: async () => ({
+      Component: (await import('@/features/owner/owner-verification-page')).OwnerVerificationPage,
+    }),
+  },
+]
+
 const managementRoutes: RouteObject[] = [
   { index: true, element: <Navigate to="dashboard" replace /> },
+  {
+    path: 'rooms/:roomId/viewing-settings',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/viewing-shift-settings-page'))
+        .ViewingShiftSettingsPage,
+    }),
+  },
+  {
+    path: 'branches/:branchId/viewing-settings',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/branch-viewing-settings-page'))
+        .BranchViewingSettingsPage,
+    }),
+  },
+  {
+    path: 'rooms/:roomId/utility-rates',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/utility-rates-page')).default,
+    }),
+  },
+  {
+    path: 'notifications',
+    lazy: async () => ({ Component: (await import('@/features/user/notifications-page')).default }),
+  },
+  {
+    path: 'appointments',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/manager-appointments-page')).ManagerAppointments,
+    }),
+  },
+  {
+    path: 'appointments/:appointmentId',
+    lazy: async () => ({
+      Component: (await import('@/features/manager/manager-appointment-detail-page'))
+        .ManagerAppointmentDetail,
+    }),
+  },
   {
     path: 'dashboard',
     lazy: async () => ({
@@ -71,19 +136,22 @@ const managementRoutes: RouteObject[] = [
   {
     path: 'meter-readings',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-meter-readings-page')).ManagerMeterReadings,
+      Component: (await import('@/features/manager/manager-meter-readings-page'))
+        .ManagerMeterReadings,
     }),
   },
   {
     path: 'room-services',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-service-catalog-page')).ManagerRoomServiceCatalog,
+      Component: (await import('@/features/manager/manager-service-catalog-page'))
+        .ManagerRoomServiceCatalog,
     }),
   },
   {
     path: 'slot-services',
     lazy: async () => ({
-      Component: (await import('@/features/manager/manager-service-catalog-page')).ManagerSlotServiceCatalog,
+      Component: (await import('@/features/manager/manager-service-catalog-page'))
+        .ManagerSlotServiceCatalog,
     }),
   },
   {
@@ -255,10 +323,6 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       {
-        path: 'notifications/viewing',
-        element: <Navigate to="/notifications" replace />,
-      },
-      {
         path: 'preview',
         lazy: async () => ({ Component: (await import('@/pages/preview-page')).default }),
       },
@@ -293,79 +357,14 @@ export const router = createBrowserRouter([
             .ViewingAvailabilityPage,
         }),
       },
-      {
-        path: 'rooms/:roomId/viewing-settings',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/viewing-shift-settings-page'))
-            .ViewingShiftSettingsPage,
-        }),
-      },
-      {
-        path: 'rooms/:roomId/utility-rates',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/utility-rates-page')).default,
-        }),
-      },
-      { path: 'user/appointments/*', element: <LegacyTenantRedirect /> },
-      {
-        element: <UserLayout />,
-        children: [
-          {
-            path: 'tenant/appointments',
-            lazy: async () => ({
-              Component: (await import('@/features/leasing/appointments-page')).AppointmentsPage,
-            }),
-          },
-          {
-            path: 'tenant/appointments/:appointmentId',
-            lazy: async () => ({
-              Component: (await import('@/features/leasing/appointment-detail-page'))
-                .AppointmentDetailPage,
-            }),
-          },
-        ],
-      },
-      {
-        path: 'manager/appointments',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/manager-appointments-page'))
-            .ManagerAppointments,
-        }),
-      },
-      {
-        path: 'manager/appointments/:appointmentId',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/manager-appointment-detail-page'))
-            .ManagerAppointmentDetail,
-        }),
-      },
-      {
-        path: 'owner/appointments',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/manager-appointments-page'))
-            .ManagerAppointments,
-        }),
-      },
-      {
-        path: 'owner/appointments/:appointmentId',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/manager-appointment-detail-page'))
-            .ManagerAppointmentDetail,
-        }),
-      },
+
       {
         path: 'branches/:branchId',
         lazy: async () => ({
           Component: (await import('@/features/rooms/branch-detail-page')).default,
         }),
       },
-      {
-        path: 'branches/:branchId/viewing-settings',
-        lazy: async () => ({
-          Component: (await import('@/features/manager/branch-viewing-settings-page'))
-            .BranchViewingSettingsPage,
-        }),
-      },
+
       {
         path: 'owner-onboarding',
         lazy: async () => ({ Component: (await import('@/pages/owner-onboarding-page')).default }),
@@ -373,11 +372,24 @@ export const router = createBrowserRouter([
       {
         element: <RouteGuard />,
         children: [
+          { path: 'rooms/:roomId/viewing-settings', element: <LegacyManagementSettingsRedirect /> },
+          { path: 'rooms/:roomId/utility-rates', element: <LegacyManagementSettingsRedirect /> },
+          {
+            path: 'branches/:branchId/viewing-settings',
+            element: <LegacyManagementSettingsRedirect />,
+          },
           {
             path: 'admin',
             element: <AdminLayout />,
             children: [
               { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+              ...accountRoutes.filter((route) => route.path !== 'profile'),
+              {
+                path: 'notifications',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/notifications-page')).default,
+                }),
+              },
               {
                 path: 'profile',
                 lazy: async () => ({
@@ -558,13 +570,7 @@ export const router = createBrowserRouter([
               },
             ],
           },
-          {
-            path: 'manager-invitations',
-            lazy: async () => ({
-              Component: (await import('@/features/owner/manager-invitations-page'))
-                .ManagerInvitationsPage,
-            }),
-          },
+          { path: 'manager-invitations', element: <LegacyAccountRedirect /> },
           {
             path: 'manager',
             element: <ManagerLayout />,
@@ -575,6 +581,12 @@ export const router = createBrowserRouter([
             element: <TenantLayout />,
             children: [
               { index: true, element: <Navigate to="/tenant/dashboard" replace /> },
+              {
+                path: 'notifications',
+                lazy: async () => ({
+                  Component: (await import('@/features/user/notifications-page')).default,
+                }),
+              },
               {
                 path: 'dashboard',
                 lazy: async () => ({
@@ -598,6 +610,12 @@ export const router = createBrowserRouter([
                 path: 'contracts',
                 lazy: async () => ({
                   Component: (await import('@/features/tenant/contracts-page')).ContractsPage,
+                }),
+              },
+              {
+                path: 'payments',
+                lazy: async () => ({
+                  Component: (await import('@/features/tenant/payments-page')).PaymentsPage,
                 }),
               },
               {
@@ -627,15 +645,16 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'payments',
+                path: 'debts',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/payments-page')).PaymentsPage,
+                  Component: (await import('@/features/tenant/tenant-debts-gate')).default,
                 }),
               },
               {
                 path: 'services',
                 lazy: async () => ({
-                  Component: (await import('@/features/tenant/slot-services-page')).SlotServicesPage,
+                  Component: (await import('@/features/tenant/slot-services-page'))
+                    .SlotServicesPage,
                 }),
               },
               {
@@ -680,20 +699,36 @@ export const router = createBrowserRouter([
             }),
           },
           {
-            path: 'rooms/:roomId/bookings/new',
+            path: 'tenant/rooms/:roomId/bookings/new',
             lazy: async () => ({
               Component: (await import('@/features/leasing/create-booking-page')).CreateBookingPage,
             }),
           },
-          { path: 'user/bookings/*', element: <LegacyTenantRedirect /> },
+          { path: 'rooms/:roomId/bookings/new', element: <LegacyAccountRedirect /> },
+          { path: 'user/*', element: <LegacyAccountRedirect /> },
+          { path: 'profile', element: <LegacyAccountRedirect /> },
+          { path: 'notifications/*', element: <LegacyAccountRedirect /> },
+          ...['manager', 'owner'].map((role): RouteObject => ({
+            path: role,
+            element: <UserLayout />,
+            children: accountRoutes,
+          })),
           {
             element: <UserLayout />,
             children: [
-              { path: 'user', element: <Navigate to="/user/dashboard" replace /> },
+              ...accountRoutes.map((route) => ({ ...route, path: `tenant/${route.path}` })),
               {
-                path: 'user/dashboard',
+                path: 'tenant/appointments',
                 lazy: async () => ({
-                  Component: (await import('@/features/user/dashboard-page')).default,
+                  Component: (await import('@/features/leasing/appointments-page'))
+                    .AppointmentsPage,
+                }),
+              },
+              {
+                path: 'tenant/appointments/:appointmentId',
+                lazy: async () => ({
+                  Component: (await import('@/features/leasing/appointment-detail-page'))
+                    .AppointmentDetailPage,
                 }),
               },
               {
@@ -716,27 +751,15 @@ export const router = createBrowserRouter([
                 }),
               },
               {
-                path: 'profile',
-                lazy: async () => ({
-                  Component: (await import('@/features/user/profile-page')).default,
-                }),
-              },
-              {
-                path: 'user/payments',
-                lazy: async () => ({
-                  Component: (await import('@/features/user/my-payments-page')).default,
-                }),
-              },
-              {
-                path: 'user/contracts',
+                path: 'tenant/account/contracts',
                 lazy: async () => ({
                   Component: (await import('@/features/user/my-contracts-page')).default,
                 }),
               },
               {
-                path: 'notifications',
+                path: 'tenant/account/payments',
                 lazy: async () => ({
-                  Component: (await import('@/features/user/notifications-page')).default,
+                  Component: (await import('@/features/user/my-payments-page')).default,
                 }),
               },
             ],

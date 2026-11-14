@@ -8,7 +8,8 @@ import { Logo } from '@/components/common/logo'
 import { InlineError, Modal } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
-import { dashboardPath } from '@/features/auth/navigation'
+import { accountPath, dashboardPath } from '@/features/auth/navigation'
+import { useManagerSelection } from '@/features/manager/context'
 import { authService, notificationService } from '@/services/guest-user'
 import { inboxService } from '@/services/inbox'
 import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
@@ -16,17 +17,19 @@ import { tenantApi } from '@/services/tenant'
 import { managerApi } from '@/services/manager'
 import { queryClient } from '@/services/query-client'
 import { hasMocks, provider } from '@/services/config'
+import { TenantOverdueGate } from '@/features/tenant/tenant-debts-gate'
 import { dateTime } from '@/lib/activity'
 import { cn } from '@/lib/utils'
 import { useHeaderOverlay } from './use-header-overlay'
 
 export function SiteHeader() {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const isHome = pathname === '/'
   const overlay = useHeaderOverlay(isHome)
   const [menu, setMenu] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const user = useSession((s) => s.user)
+  const selectedBranch = useManagerSelection((s) => (user ? s.byUser[user.id] : undefined))
   const isStaffOnly = Boolean(
     user &&
     !user.roles.includes('TENANT') &&
@@ -36,7 +39,7 @@ export function SiteHeader() {
   const tenancies = useQuery({
     queryKey: ['tenant', user?.id, 'tenancies'],
     queryFn: tenantApi.tenancies,
-    enabled: !!user,
+    enabled: !!user?.roles.includes('TENANT'),
     retry: false,
   })
   const unread = useQuery({
@@ -67,6 +70,9 @@ export function SiteHeader() {
     retry: false,
     refetchInterval: 5000,
   })
+  const requestedBranch = new URLSearchParams(search).get('branchId') || selectedBranch
+  const branchId =
+    assignments.data?.find((b) => b.id === requestedBranch)?.id || assignments.data?.[0]?.id
   const logout = useMutation({
     mutationFn: authService.logout,
     onSettled: () => {
@@ -159,14 +165,20 @@ export function SiteHeader() {
                         aria-label="Thông báo gần đây"
                         className="z-40 flex max-h-[var(--radix-popover-content-available-height)] w-88 max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-border bg-surface text-foreground shadow-lg"
                       >
-                        <h2 className="shrink-0 border-b border-border px-4 py-3 font-bold">Thông báo</h2>
+                        <h2 className="shrink-0 border-b border-border px-4 py-3 font-bold">
+                          Thông báo
+                        </h2>
                         <div className="min-h-0 overflow-y-auto" aria-busy={preview.isPending}>
                           {preview.isPending ? (
                             <p className="p-4 text-sm text-muted-foreground">Đang tải thông báo…</p>
                           ) : preview.isError ? (
                             <div className="p-4">
                               <InlineError error={preview.error} />
-                              <Button variant="outline" className="mt-3" onClick={() => void preview.refetch()}>
+                              <Button
+                                variant="outline"
+                                className="mt-3"
+                                onClick={() => void preview.refetch()}
+                              >
                                 Thử lại
                               </Button>
                             </div>
@@ -175,15 +187,28 @@ export function SiteHeader() {
                           ) : (
                             <ul className="divide-y divide-border">
                               {preview.data.map((item) => (
-                                <li key={item.id} className={cn('px-4 py-3', !item.read && 'bg-primary-soft')}>
+                                <li
+                                  key={item.id}
+                                  className={cn('px-4 py-3', !item.read && 'bg-primary-soft')}
+                                >
                                   <div className="flex items-start justify-between gap-2">
-                                    <p className="line-clamp-1 text-sm font-semibold">{item.title}</p>
+                                    <p className="line-clamp-1 text-sm font-semibold">
+                                      {item.title}
+                                    </p>
                                     {!item.read && (
-                                      <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="Chưa đọc" role="img" />
+                                      <span
+                                        className="mt-1.5 size-2 shrink-0 rounded-full bg-primary"
+                                        aria-label="Chưa đọc"
+                                        role="img"
+                                      />
                                     )}
                                   </div>
-                                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.message}</p>
-                                  <p className="mt-1 text-xs text-muted-foreground">{dateTime(item.createdAt)}</p>
+                                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                    {item.message}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {dateTime(item.createdAt)}
+                                  </p>
                                 </li>
                               ))}
                             </ul>
@@ -191,7 +216,7 @@ export function SiteHeader() {
                         </div>
                         <Popover.Close asChild>
                           <Link
-                            to="/notifications"
+                            to={accountPath(user.roles, 'notifications')}
                             className="flex min-h-11 shrink-0 items-center justify-center gap-2 border-t border-border px-4 text-sm font-bold text-primary hover:bg-primary-soft"
                           >
                             Xem chi tiết thông báo
@@ -208,9 +233,7 @@ export function SiteHeader() {
                   className="hidden sm:inline-flex"
                 >
                   {/* Tenants / plain users land on their account page; staff keep their workspace. */}
-                  <Link to={isStaffOnly ? dashboardPath(user.roles) : '/profile'}>
-                    {user.fullName}
-                  </Link>
+                  <Link to={dashboardPath(user.roles)}>{user.fullName}</Link>
                 </Button>
               </>
             ) : (
@@ -234,6 +257,7 @@ export function SiteHeader() {
             </button>
           </nav>
         </Container>
+        <TenantOverdueGate />
       </header>
       <Modal
         open={menu}
@@ -261,13 +285,14 @@ export function SiteHeader() {
                   : []),
 
                 ['Tìm phòng', '/rooms'],
-                ...(!user.roles.includes('ADMIN') ? [[
-                  'Lịch xem phòng',
-                  viewingAppointmentsPath(user.roles, { branchId: assignments.data?.[0]?.id }),
-                ]] : []),
-                ...(!user.roles.includes('ADMIN') ? [['Yêu cầu giữ chỗ', '/tenant/bookings']] : []),
-                ...(!isStaffOnly ? [['Thông báo', '/notifications']] : []),
-                ['Hồ sơ', user.roles.includes('ADMIN') ? '/admin/profile' : '/profile'],
+                ...(!user.roles.includes('ADMIN')
+                  ? [['Lịch xem phòng', viewingAppointmentsPath(user.roles, { branchId })]]
+                  : []),
+                ...(!user.roles.includes('ADMIN')
+                  ? [['Yêu cầu giữ chỗ', accountPath(user.roles, 'bookings', branchId)]]
+                  : []),
+                ...(!isStaffOnly ? [['Thông báo', accountPath(user.roles, 'notifications')]] : []),
+                ['Hồ sơ', accountPath(user.roles, 'profile', branchId)],
               ]
             : [
                 ['Trang chủ', '/'],

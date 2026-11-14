@@ -1,3 +1,4 @@
+import { accountPath } from '@/features/auth/navigation'
 import { Field, InlineError, Notice, Page, Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/features/auth/session-store'
@@ -42,7 +43,7 @@ export function OwnerOnboarding() {
       description="Xác minh thông tin để bắt đầu quản lý chi nhánh."
       eyebrow="HỒ SƠ CHỦ TRỌ"
       narrow
-      back="/owner/verification"
+      back={accountPath(user.roles, 'owner-verification')}
     >
       <QueryState
         pending={verification.isPending}
@@ -52,14 +53,14 @@ export function OwnerOnboarding() {
         {mutation.isSuccess ? (
           <Notice tone="success">
             Đã gửi hồ sơ.{' '}
-            <Link to="/owner/verification" className="font-bold underline">
+            <Link to={accountPath(user.roles, 'owner-verification')} className="font-bold underline">
               Theo dõi xét duyệt
             </Link>
           </Notice>
         ) : verification.data && ['PENDING', 'APPROVED'].includes(verification.data.status) ? (
           <Notice>
             Hồ sơ {status[verification.data.status].toLowerCase()}.{' '}
-            <Link to="/owner/verification" className="underline">
+            <Link to={accountPath(user.roles, 'owner-verification')} className="underline">
               Xem trạng thái
             </Link>
           </Notice>

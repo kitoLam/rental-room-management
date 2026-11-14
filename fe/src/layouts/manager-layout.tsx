@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Outlet,
   NavLink,
@@ -129,6 +129,9 @@ export function ManagerLayout() {
       .reduce<string[]>((paths, g) => [...paths, ...g.items.map((item) => item[0])], [])
       .find((path) => location.pathname.startsWith(`${root}/${path}`)) || 'dashboard'
   const allowed = branch && !denied.includes(`${user.id}:${branch.id}`)
+  useEffect(() => {
+    if (allowed && selected !== branch.id) select(user.id, branch.id)
+  }, [allowed, branch?.id, selected, select, user.id])
   if (owner && /^\/manager(?:\/|$)/.test(location.pathname)) {
     const ownerParams = new URLSearchParams(params)
     ownerParams.delete('workspace')
@@ -155,7 +158,7 @@ export function ManagerLayout() {
         }
         emptyAction={
           <Button asChild>
-            <Link to="/profile">Xem hồ sơ</Link>
+            <Link to={`${root}/profile`}>Xem hồ sơ</Link>
           </Button>
         }
       >
@@ -259,7 +262,7 @@ export function ManagerLayout() {
               </nav>
               <div className="mt-4 flex flex-wrap gap-4 lg:grid lg:gap-1">
                 <Link
-                  to="/profile"
+                  to={managerLink(`${root}/profile`, branch.id)}
                   className="inline-flex min-h-11 items-center text-xs text-muted-foreground"
                 >
                   Hồ sơ

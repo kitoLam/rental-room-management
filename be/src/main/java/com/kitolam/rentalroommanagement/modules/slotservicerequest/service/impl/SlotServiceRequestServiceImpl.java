@@ -157,6 +157,8 @@ public class SlotServiceRequestServiceImpl implements SlotServiceRequestService 
 
         Contract contract = contractRepository.findByIdAndIsDeletedFalse(item.getContractId())
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy hợp đồng"));
+        if (contract.getStatus() != ContractStatus.ACTIVE)
+            throw new ConflictException("Hợp đồng không còn hiệu lực.");
         if (contract.getActiveSlotServices() == null) contract.setActiveSlotServices(new ArrayList<>());
         if (item.getAction() == SlotServiceRequestAction.ADD) {
             if (active(contract, item.getSlotServiceId()).isPresent()) throw new ConflictException("Hợp đồng đã có dịch vụ này");

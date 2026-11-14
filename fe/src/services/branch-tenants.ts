@@ -64,6 +64,98 @@ export const createTenantAccountSchema = z.object({
 
 export type CreateTenantAccountInput = z.infer<typeof createTenantAccountSchema>
 
+export const tenantDebtServiceItemSchema = z.object({
+  serviceId: z.string().nullable().optional(),
+  name: z.string(),
+  unit: z.string(),
+  unitPrice: z.coerce.number(),
+  quantity: z.number(),
+  amount: z.coerce.number(),
+  mandatory: z.boolean().optional().default(false),
+})
+
+export const latePaymentHistorySchema = z.object({
+  id: z.string(),
+  invoiceId: z.string().nullable().optional(),
+  period: z.string(),
+  dueDate: z.string().nullable().optional(),
+  firstOverdueDate: z.string().nullable().optional(),
+  lateDays: z.number(),
+  status: z.string(),
+  totalAmount: z.coerce.number().optional().default(0),
+  paidAmount: z.coerce.number().optional().default(0),
+  remainingAmount: z.coerce.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  lastReminderAt: z.string().nullable().optional(),
+  settledAt: z.string().nullable().optional(),
+})
+
+export type LatePaymentHistoryItem = z.infer<typeof latePaymentHistorySchema>
+
+export const debtPeriodHistorySchema = z.object({
+  invoiceId: z.string().nullable().optional(),
+  invoiceNumber: z.string().nullable().optional(),
+  period: z.string(),
+  dueDate: z.string().nullable().optional(),
+  issueDate: z.string().nullable().optional(),
+  totalAmount: z.coerce.number().optional().default(0),
+  paidAmount: z.coerce.number().optional().default(0),
+  remainingAmount: z.coerce.number().optional().default(0),
+  status: z.string().nullable().optional().default('UNPAID'),
+  overdueDays: z.number().optional().default(0),
+  lateDays: z.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  lateStatus: z.string().nullable().optional(),
+})
+
+export type DebtPeriodHistoryItem = z.infer<typeof debtPeriodHistorySchema>
+
+export const tenantDebtItemSchema = z.object({
+  id: z.string(),
+  contractId: z.string().nullable().optional(),
+  contractNumber: z.string().nullable().optional(),
+  contractStatus: z.string().nullable().optional(),
+  contractStartDate: z.string().nullable().optional(),
+  contractEndDate: z.string().nullable().optional(),
+  contractSignedDate: z.string().nullable().optional(),
+  contractDepositAmount: z.coerce.number().nullable().optional(),
+  paymentDueDay: z.number().nullable().optional(),
+  joinedAt: z.string().nullable().optional(),
+  contractTenantId: z.string().nullable().optional(),
+  tenantId: z.string().nullable().optional(),
+  tenantName: z.string(),
+  tenantEmail: z.string().nullable().optional(),
+  tenantPhone: z.string().nullable().optional(),
+  tenantIdNumber: z.string().nullable().optional(),
+  tenantGender: z.string().nullable().optional(),
+  tenantDateOfBirth: z.string().nullable().optional(),
+  tenantAddress: z.string().nullable().optional(),
+  branchId: z.string().nullable().optional(),
+  branchName: z.string().nullable().optional(),
+  roomId: z.string().nullable().optional(),
+  roomNumber: z.string().nullable().optional(),
+  period: z.string(),
+  dueDate: z.string(),
+  overdueDays: z.number(),
+  overdue: z.boolean(),
+  roomRentAmount: z.coerce.number(),
+  registeredServices: z.array(tenantDebtServiceItemSchema).optional().default([]),
+  registeredServicesAmount: z.coerce.number(),
+  electricityAmount: z.coerce.number().optional().default(0),
+  waterAmount: z.coerce.number().optional().default(0),
+  unpaidUtilityAmount: z.coerce.number(),
+  totalAmount: z.coerce.number(),
+  paidAmount: z.coerce.number().optional().default(0),
+  remainingAmount: z.coerce.number(),
+  status: z.string().optional().default('OVERDUE'),
+  recordedLateDays: z.number().optional().default(0),
+  reminderCount: z.number().optional().default(0),
+  latePaymentHistory: z.array(latePaymentHistorySchema).optional().default([]),
+  periodHistory: z.array(debtPeriodHistorySchema).optional().default([]),
+})
+
+export type TenantDebtItem = z.infer<typeof tenantDebtItemSchema>
+
 const managedBranchSchema = z.object({
   id: z.string(),
   ownerAccountId: z.string().nullable().optional(),
@@ -349,6 +441,237 @@ export const branchTenantsService = {
       `/api/v1/tenants/${encodeURIComponent(tenantId)}/resend-verification${query}`,
       z.object({ message: z.string().optional() }).passthrough().nullable(),
       write('POST', {}),
+    )
+  },
+
+  debts: async (
+    params: {
+      branchId?: string
+      keyword?: string
+      overdueOnly?: boolean
+      period?: string
+      page?: number
+      size?: number
+    },
+    feature: Feature = 'manager',
+  ): Promise<Page<TenantDebtItem>> => {
+    const pageIndex = params.page ?? 0
+    const size = params.size ?? 10
+    if (provider(feature) === 'mock') {
+      const mockDebts: TenantDebtItem[] = [
+        {
+          id: '00000000-0000-4000-8000-000000009001',
+          contractId: '00000000-0000-4000-8000-000000004000',
+          contractNumber: 'HD-2026-001',
+          contractTenantId: '00000000-0000-4000-8000-000000005000',
+          tenantId: '00000000-0000-4000-8000-000000005100',
+          tenantName: 'Phạm Minh Tuấn',
+          tenantEmail: 'tenant@tropro.demo',
+          tenantPhone: '0901234567',
+          branchId: params.branchId || '00000000-0000-4000-8000-000000001000',
+          branchName: 'TroPro Cầu Giấy',
+          roomId: '00000000-0000-4000-8000-000000003000',
+          roomNumber: 'P.101',
+          period: '2026-11',
+          dueDate: '2026-11-05',
+          overdueDays: 6,
+          overdue: true,
+          roomRentAmount: 3500000,
+          registeredServices: [
+            {
+              serviceId: 'srv-wifi',
+              name: 'Internet / Wifi',
+              unit: 'tháng',
+              unitPrice: 100000,
+              quantity: 1,
+              amount: 100000,
+              mandatory: true,
+            },
+            {
+              serviceId: 'srv-clean',
+              name: 'Vệ sinh chung',
+              unit: 'tháng',
+              unitPrice: 50000,
+              quantity: 1,
+              amount: 50000,
+              mandatory: true,
+            },
+          ],
+          registeredServicesAmount: 150000,
+          electricityAmount: 280000,
+          waterAmount: 90000,
+          unpaidUtilityAmount: 370000,
+          totalAmount: 4020000,
+          paidAmount: 0,
+          remainingAmount: 4020000,
+          status: 'OVERDUE',
+          recordedLateDays: 6,
+          reminderCount: 1,
+          latePaymentHistory: [],
+          periodHistory: [
+            {
+              invoiceId: '00000000-0000-4000-8000-000000009001',
+              invoiceNumber: 'INV-202611-001',
+              period: '2026-11',
+              dueDate: '2026-11-05',
+              issueDate: '2026-11-01',
+              totalAmount: 4020000,
+              paidAmount: 0,
+              remainingAmount: 4020000,
+              status: 'OVERDUE',
+              overdueDays: 6,
+              lateDays: 6,
+              reminderCount: 1,
+            },
+            {
+              invoiceId: '00000000-0000-4000-8000-000000009000',
+              invoiceNumber: 'INV-202610-001',
+              period: '2026-10',
+              dueDate: '2026-10-05',
+              issueDate: '2026-10-01',
+              totalAmount: 3980000,
+              paidAmount: 3980000,
+              remainingAmount: 0,
+              status: 'PAID',
+              overdueDays: 0,
+              lateDays: 0,
+              reminderCount: 0,
+            },
+          ],
+        },
+      ]
+      const filtered = mockDebts.filter((d) => {
+        if (params.overdueOnly && !d.overdue) return false
+        if (params.keyword) {
+          const q = params.keyword.toLowerCase()
+          return (
+            d.tenantName.toLowerCase().includes(q) ||
+            (d.roomNumber || '').toLowerCase().includes(q)
+          )
+        }
+        return true
+      })
+      return {
+        content: filtered,
+        number: pageIndex,
+        size,
+        totalElements: filtered.length,
+        totalPages: Math.max(1, Math.ceil(filtered.length / size)),
+      }
+    }
+    const query = new URLSearchParams({
+      page: String(pageIndex),
+      size: String(size),
+      overdueOnly: String(Boolean(params.overdueOnly)),
+    })
+    if (params.branchId) query.set('branchId', params.branchId)
+    if (params.keyword) query.set('keyword', params.keyword)
+    if (params.period) query.set('period', params.period)
+    const raw = await request(
+      feature,
+      `/api/v1/invoices/debts?${query}`,
+      pageSchema(tenantDebtItemSchema),
+    )
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const isEffectiveToday = (item: TenantDebtItem) =>
+      !(item.contractNumber || '').toUpperCase().startsWith('TMP-') &&
+      (!item.contractStartDate || item.contractStartDate <= today) &&
+      (!item.contractEndDate || item.contractEndDate >= today)
+
+    const compareActivePriority = (a: TenantDebtItem, b: TenantDebtItem) => {
+      const startCmp = (b.contractStartDate || '').localeCompare(a.contractStartDate || '')
+      if (startCmp !== 0) return startCmp
+      return (b.contractNumber || '').localeCompare(a.contractNumber || '')
+    }
+
+    const byTenantAndRoom = new Map<string, TenantDebtItem>()
+    for (const item of raw.content) {
+      if (!isEffectiveToday(item)) continue
+      const tenantKey = (item.tenantId || item.tenantEmail || item.tenantName).trim().toLowerCase()
+      const roomKey = (item.roomId || item.roomNumber || item.contractId || item.id)
+        .trim()
+        .toLowerCase()
+      const compositeKey = `${tenantKey}:${roomKey}`
+      const existing = byTenantAndRoom.get(compositeKey)
+      if (!existing || compareActivePriority(item, existing) < 0) {
+        byTenantAndRoom.set(compositeKey, item)
+      }
+    }
+    const dedupedContent = Array.from(byTenantAndRoom.values())
+    return {
+      ...raw,
+      content: dedupedContent,
+      totalElements: dedupedContent.length,
+      totalPages: Math.max(1, Math.ceil(dedupedContent.length / size)),
+      number: Math.max(0, raw.number - 1),
+    }
+  },
+  latePaymentHistory: async (
+    contractId: string,
+    feature: Feature = 'manager',
+  ): Promise<LatePaymentHistoryItem[]> => {
+    if (provider(feature) === 'mock') return []
+    return request(
+      feature,
+      `/api/v1/invoices/contracts/${encodeURIComponent(contractId)}/late-payments`,
+      z.array(latePaymentHistorySchema),
+    )
+  },
+  payDebt: async (
+    debtId: string,
+    feature: Feature = 'manager',
+  ): Promise<TenantDebtItem> => {
+    if (provider(feature) === 'mock') {
+      return {
+        id: debtId,
+        contractId: '00000000-0000-4000-8000-000000004000',
+        contractNumber: 'HD-2026-001',
+        contractTenantId: debtId,
+        tenantId: '00000000-0000-4000-8000-000000005100',
+        tenantName: 'Phạm Minh Tuấn',
+        tenantEmail: 'tenant@tropro.demo',
+        tenantPhone: '0901234567',
+        branchId: '00000000-0000-4000-8000-000000001000',
+        branchName: 'TroPro Cầu Giấy',
+        roomId: '00000000-0000-4000-8000-000000003000',
+        roomNumber: 'P.101',
+        period: '2026-11',
+        dueDate: '2026-11-05',
+        overdueDays: 0,
+        overdue: false,
+        roomRentAmount: 3500000,
+        registeredServices: [],
+        registeredServicesAmount: 150000,
+        electricityAmount: 280000,
+        waterAmount: 90000,
+        unpaidUtilityAmount: 0,
+        totalAmount: 4020000,
+        paidAmount: 4020000,
+        remainingAmount: 0,
+        status: 'PAID',
+        recordedLateDays: 0,
+        reminderCount: 0,
+        latePaymentHistory: [],
+        periodHistory: [],
+      }
+    }
+    return request(
+      feature,
+      `/api/v1/invoices/debts/${encodeURIComponent(debtId)}/pay`,
+      tenantDebtItemSchema,
+      { method: 'POST' },
+    )
+  },
+  unpayDebt: async (
+    debtId: string,
+    feature: Feature = 'manager',
+  ): Promise<TenantDebtItem> => {
+    return request(
+      feature,
+      `/api/v1/invoices/debts/${encodeURIComponent(debtId)}/unpay`,
+      tenantDebtItemSchema,
+      { method: 'POST' },
     )
   },
 }

@@ -77,6 +77,13 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
   )
     return null
   if (
+    (feature === 'manager' || feature === 'owner' || feature === 'tenant') &&
+    ((pathname === '/api/v1/invoices/debts' && verb === 'GET') ||
+      (matches('/api/v1/invoices/debts/[^/]+/(pay|unpay)') && verb === 'POST') ||
+      (matches('/api/v1/invoices/contracts/[^/]+/late-payments') && verb === 'GET'))
+  )
+    return null
+  if (
     (feature === 'manager' || feature === 'owner') &&
     ((pathname === '/api/v1/branches/managed' && verb === 'GET') ||
       (pathname === '/api/v1/tenants' && ['GET', 'POST'].includes(verb)) ||
@@ -116,7 +123,9 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     feature === 'leasing' &&
     ((matches('/api/v1/contracts') && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
-      (matches(`/api/v1/contracts/${id}/services`) && verb === 'PATCH') ||
+      (matches(`/api/v1/contracts/${id}/(services|term)`) && verb === 'PATCH') ||
+      (matches(`/api/v1/contracts/${id}/pdf`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/pdf/retry`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence`) && verb === 'POST'))
   )
     return null
@@ -127,7 +136,7 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (pathname === '/api/v1/rooms' && verb === 'POST') ||
       (matches(`/api/v1/rooms/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)) ||
       (matches(`/api/v1/rooms/${id}/slots`) && verb === 'GET') ||
-      (matches(`/api/v1/rooms/${id}/slots/${id}/available-from`) && verb === 'PATCH') ||
+      (matches(`/api/v1/rooms/${id}/slots/${id}/(available-from|deposit-availability)`) && verb === 'PATCH') ||
       (matches('/api/v1/bookings') && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}`) && verb === 'GET') ||
       (matches(`/api/v1/bookings/${id}/review`) && verb === 'POST') ||
@@ -136,9 +145,13 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST') ||
       (matches('/api/v1/contracts') && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/pdf`) && verb === 'GET') ||
+      (matches(`/api/v1/contracts/${id}/pdf/retry`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence/review`) && verb === 'POST') ||
+      (matches(`/api/v1/contracts/${id}/evidence/download`) && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}/renew`) && verb === 'POST') ||
+      (matches(`/api/v1/contracts/${id}/termination`) && (verb === 'GET' || verb === 'POST')) ||
       (matches('/api/v1/contract-tenants') && ['GET', 'POST'].includes(verb)) ||
       (matches('/api/v1/contract-tenants/eligible') && verb === 'GET') ||
       (matches(`/api/v1/contract-tenants/${id}`) && ['GET', 'PATCH', 'DELETE'].includes(verb)))

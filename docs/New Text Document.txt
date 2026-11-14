@@ -1,0 +1,7 @@
+
+/prompt-master tạo prompt yêu cầu claude code đọc codegraph sau đó chọn những skill phù hợp để thực hiện những thay đổi sau: 
+Loại bỏ nút Tạo hợp đồng từ booking cũng như chức năng , backend của nút này . Trong UI Hợp đồng của phía manager /owner và admin
+New feature CO:  Chức năng gia hạn hạn hợp đồng sắp hết hạn 
+CO1: trong trang hợp đồng của Manager/Owner và Admin ở phần hiện thị trạng thái sẽ có dưới thanh trạng thái đã có như đang hiệu lực , etc sẽ có 1 dòng hiện thị trạng thái mới là "Sắp hết hạn" (boolean Tên bạn tự đặt) sẽ chỉ nháy và xuất hiện với các hợp đồng còn 2 tháng (60) ngày nữa là hết hạn. Tạo thêm enum status tương ứng nếu cần (sử dụng mongodb Compass). 
+CO2: Song song với chức năng thông báo hợp đồng , thì sẽ có chức năng gia hạn hợp đồng đối với các hợp đồng 
+Thêm thông báo về những hợp đồng sắp hết hạn cho tenant , theo từng đợt , vd 1  tháng rưỡi(45 ngày) trước  ngày hết hạn , 1 tháng , 3 tuần , 2 tuần và 1 tuần 

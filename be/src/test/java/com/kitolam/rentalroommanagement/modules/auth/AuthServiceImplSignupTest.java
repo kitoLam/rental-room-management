@@ -12,6 +12,7 @@ import com.kitolam.rentalroommanagement.modules.auth.repository.UserRepository;
 import com.kitolam.rentalroommanagement.modules.auth.repository.VerificationTokenRepository;
 import com.kitolam.rentalroommanagement.modules.auth.service.impl.AuthServiceImpl;
 import com.kitolam.rentalroommanagement.modules.auth.util.OpaqueTokenProvider;
+import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,7 @@ import static org.mockito.Mockito.*;
 class AuthServiceImplSignupTest {
 
     @Mock private UserRepository users;
+    @Mock private TenantRepository tenants;
     @Mock private VerificationTokenRepository verifications;
     @Mock private RefreshTokenRepository refreshTokens;
     @Mock private AuthTokenStore tokenStore;
@@ -62,6 +64,7 @@ class AuthServiceImplSignupTest {
         Clock fixedClock = Clock.fixed(Instant.parse("2026-11-12T08:00:00Z"), ZoneOffset.UTC);
         authService = new AuthServiceImpl(
                 users,
+                tenants,
                 verifications,
                 refreshTokens,
                 tokenStore,
@@ -116,7 +119,7 @@ class AuthServiceImplSignupTest {
         UserProfileResponse profile = authService.getProfile("user-1");
         assertEquals("1999-05-20", profile.dateOfBirth());
         assertEquals("12 Nguyễn Trãi, Thanh Xuân, Hà Nội", profile.permanentAddress());
-        assertEquals("001234567890", profile.cccdNumber());
+        assertEquals("•••• 7890", profile.cccdNumber());
         assertEquals("2021-08-15", profile.cccdIssueDate());
         assertEquals("Cục Cảnh sát QLHC về TTXH", profile.cccdIssuePlace());
     }

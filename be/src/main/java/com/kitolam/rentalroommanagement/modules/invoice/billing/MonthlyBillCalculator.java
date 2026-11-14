@@ -2,6 +2,8 @@ package com.kitolam.rentalroommanagement.modules.invoice.billing;
 
 import com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService;
 import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractTerminationSettlement;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractTerminationSettlement.ElectricityClosing;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.invoice.document.InvoiceItem;
 import com.kitolam.rentalroommanagement.modules.invoice.enums.InvoiceItemType;
@@ -70,6 +72,11 @@ public class MonthlyBillCalculator {
                 .toList();
         if (covering.isEmpty()) return List.of();
         Map<String, Long> occupants = covering.stream().collect(Collectors.groupingBy(Contract::getRoomId, Collectors.counting()));
+        Map<String, List<ContractTerminationSettlement>> settlementsByRoom = covering.stream()
+                .filter(c -> c.getTerminationSettlement() != null
+                        && YearMonth.from(c.getTerminationSettlement().lastRentalDate()).equals(month))
+                .collect(Collectors.groupingBy(Contract::getRoomId,
+                        Collectors.mapping(Contract::getTerminationSettlement, Collectors.toList())));
 
         List<String> serviceIds = rooms.values().stream()
                 .flatMap(r -> r.getRoomServiceIds() == null ? java.util.stream.Stream.empty() : r.getRoomServiceIds().stream())
@@ -91,8 +98,14 @@ public class MonthlyBillCalculator {
             Room room = rooms.get(contract.getRoomId());
             int people = occupants.get(room.getId()).intValue();
             String slotId = slotIdOf(contract);
+            var settlements = settlementsByRoom.getOrDefault(room.getId(), List.of());
+            var ownSettlement = contract.getTerminationSettlement();
+            var closing = ownSettlement != null && YearMonth.from(ownSettlement.lastRentalDate()).equals(month)
+                    ? ownSettlement.electricity() : null;
+            BigDecimal allocated = settlements.stream().map(s -> s.electricity().amount())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             bills.add(bill(contract, room, slotId, slotId == null ? null : slotCodes.get(slotId), month, people,
-                    roomServicesOf(room, services), readings.get(room.getId())));
+                    roomServicesOf(room, services), readings.get(room.getId()), closing, allocated, settlements.size()));
         }
         bills.sort(Comparator.comparing((SlotBill b) -> b.room().getRoomNumber(), Comparator.nullsLast(String::compareTo))
                 .thenComparing(SlotBill::slotCode, Comparator.nullsLast(String::compareTo)));
@@ -100,7 +113,9 @@ public class MonthlyBillCalculator {
     }
 
     private SlotBill bill(Contract contract, Room room, String slotId, String slotCode, YearMonth month, int people,
-                          List<RoomService> roomServices, RoomMeterReading reading) {
+                          List<RoomService> roomServices, RoomMeterReading reading,
+                          ElectricityClosing closing,
+                          BigDecimal allocatedElectricity, int closedContracts) {
         LocalDate first = month.atDay(1);
         LocalDate afterLast = month.plusMonths(1).atDay(1);
         LocalDate stayFrom = contract.getStartDate().isAfter(first) ? contract.getStartDate() : first;
@@ -133,13 +148,18 @@ public class MonthlyBillCalculator {
 
         // Phí 4: room electricity, split by occupants of the month.
         boolean electricityUnchanged = false;
-        if (reading == null) {
+        if (closing != null) {
+            items.add(item(InvoiceItemType.ELECTRICITY, "Tiền điện chốt khi hủy hợp đồng",
+                    stayFrom, stayUntil.minusDays(1), closing.endReading().subtract(closing.startReading()),
+                    closing.unitPrice(), closing.amount(), null));
+        } else if (reading == null) {
             warnings.add("Phòng chưa có chỉ số điện tháng " + label(month));
             items.add(item(InvoiceItemType.ELECTRICITY, "Tiền điện", first, afterLast.minusDays(1),
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, "Chưa có chỉ số điện tháng này"));
         } else {
             BigDecimal amount = reading.getAmount() == null ? BigDecimal.ZERO : reading.getAmount();
-            BigDecimal share = amount.divide(peopleCount, 0, RoundingMode.HALF_UP);
+            BigDecimal share = amount.subtract(allocatedElectricity).max(BigDecimal.ZERO)
+                    .divide(BigDecimal.valueOf(people - closedContracts), 0, RoundingMode.HALF_UP);
             electricityUnchanged = reading.getStartReading() != null
                     && reading.getStartReading().compareTo(reading.getEndReading()) == 0;
             String warning = electricityUnchanged
@@ -153,7 +173,10 @@ public class MonthlyBillCalculator {
         // Phí 5: every slot-service registration that touched the month counts in full.
         if (contract.getActiveSlotServices() != null) {
             for (ActiveSlotService s : contract.getActiveSlotServices()) {
-                if (!touches(s, first, afterLast)) continue;
+                boolean endsOnClosingDay = closing != null && s.getStartDate() != null
+                        && stayUntil.minusDays(1).equals(s.getEndDate());
+                if (!endsOnClosingDay && !touches(s, first, afterLast)) continue;
+                if (closing != null && !s.getStartDate().isBefore(stayUntil)) continue;
                 int quantity = s.getQuantity() == null ? 1 : s.getQuantity();
                 BigDecimal price = s.getUnitPrice() == null ? BigDecimal.ZERO : s.getUnitPrice();
                 LocalDate from = s.getStartDate().isBefore(first) ? first : s.getStartDate();

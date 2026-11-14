@@ -192,7 +192,11 @@ public class ReportRequestServiceImpl implements ReportRequestService {
             }
         }
 
-        // 5. Lưu lịch sử ReportRecord khởi tạo
+        // 5. Lưu lịch sử ReportRecord khởi tạo (gộp thông tin Quản lý phụ trách nếu có)
+        String initialNote = assignedManagerId != null
+                ? "Khách thuê tạo yêu cầu hỗ trợ mới (Hệ thống tự động gán Quản lý phụ trách)"
+                : "Khách thuê tạo yêu cầu hỗ trợ mới";
+
         createRecord(
                 saved.getId(),
                 principal != null ? principal.userId() : tenant.getId(),
@@ -202,24 +206,9 @@ public class ReportRequestServiceImpl implements ReportRequestService {
                 ReportRecordAction.CREATED,
                 null,
                 ReportRequestStatus.PENDING,
-                "Khách thuê tạo yêu cầu hỗ trợ mới",
+                initialNote,
                 saved.getAttachments()
         );
-
-        if (assignedManagerId != null) {
-            createRecord(
-                    saved.getId(),
-                    "SYSTEM",
-                    "SYSTEM",
-                    "Hệ thống",
-                    assignedManagerId,
-                    ReportRecordAction.ASSIGNED,
-                    ReportRequestStatus.PENDING,
-                    ReportRequestStatus.PENDING,
-                    "Hệ thống tự động gán Quản lý phụ trách theo khu trọ",
-                    List.of()
-            );
-        }
 
         return getById(saved.getId(), principal);
     }

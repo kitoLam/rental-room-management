@@ -6,6 +6,9 @@ import com.kitolam.rentalroommanagement.common.exception.exceptions.NotFoundExce
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
 import com.kitolam.rentalroommanagement.modules.branch.support.StaffAccess;
+import com.kitolam.rentalroommanagement.modules.contract.document.Contract;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractTerminationSettlement.ElectricityClosing;
+import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.meterreading.document.RoomMeterReading;
@@ -44,6 +47,7 @@ public class MeterReadingServiceImpl implements MeterReadingService {
     private final StaffAccess staffAccess;
     private final Clock clock;
     private final RoomOccupancyCalendar occupancy;
+    private final ContractRepository contracts;
 
     private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
 
@@ -100,6 +104,14 @@ public class MeterReadingServiceImpl implements MeterReadingService {
         BigDecimal start = request.startReading() != null ? request.startReading()
                 : reading.getStartReading() != null ? reading.getStartReading()
                 : previousEnd(room.getId(), request.period());
+        ElectricityClosing closing = latestTerminationClosing(room.getId(), request.period());
+        if (closing != null) {
+            if (start != null && start.compareTo(closing.startReading()) != 0)
+                throw new ConflictException("Chỉ số đầu kỳ phải khớp với quyết toán hợp đồng trong tháng.");
+            start = closing.startReading();
+            rate = closing.unitPrice();
+            validateTerminationEnd(request.endReading(), closing);
+        }
         if (start == null) throw new BadRequestException("Tháng đầu tiên của phòng cần nhập chỉ số đầu kỳ");
         BigDecimal usage = request.endReading().subtract(start);
         if (usage.signum() < 0) throw new BadRequestException("Chỉ số cuối kỳ phải lớn hơn hoặc bằng chỉ số đầu kỳ");
@@ -114,6 +126,13 @@ public class MeterReadingServiceImpl implements MeterReadingService {
         RoomMeterReading reading = getEntity(id);
         staffAccess.requireBranch(reading.getBranchId(), principal);
         if (reading.getStatus() == MeterReadingStatus.CONFIRMED) throw new ConflictException("Chỉ số đã được chốt");
+        ElectricityClosing closing = latestTerminationClosing(reading.getRoomId(), reading.getPeriod());
+        if (closing != null) {
+            validateTerminationEnd(reading.getEndReading(), closing);
+            if (reading.getStartReading() == null || reading.getStartReading().compareTo(closing.startReading()) != 0
+                    || reading.getUnitPrice() == null || reading.getUnitPrice().compareTo(closing.unitPrice()) != 0)
+                throw new ConflictException("Vui lòng cập nhật chỉ số tháng cho khớp với quyết toán hợp đồng.");
+        }
         reading.setStatus(MeterReadingStatus.CONFIRMED);
         return toResponse(repository.save(reading));
     }
@@ -134,6 +153,19 @@ public class MeterReadingServiceImpl implements MeterReadingService {
 
     private String currentPeriod() {
         return YearMonth.now(clock.withZone(VIETNAM)).toString();
+    }
+
+    private ElectricityClosing latestTerminationClosing(String roomId, String period) {
+        return contracts.findByRoomIdInAndIsDeletedFalse(List.of(roomId)).stream()
+                .map(Contract::getTerminationSettlement)
+                .filter(settlement -> settlement != null && period.equals(YearMonth.from(settlement.lastRentalDate()).toString()))
+                .map(settlement -> settlement.electricity())
+                .max(Comparator.comparing(ElectricityClosing::endReading)).orElse(null);
+    }
+
+    private void validateTerminationEnd(BigDecimal end, ElectricityClosing closing) {
+        if (end == null || end.compareTo(closing.endReading()) < 0)
+            throw new ConflictException("Chỉ số cuối kỳ không được thấp hơn chỉ số đã chốt khi hủy hợp đồng.");
     }
 
     /** Readings can only be entered / changed for the current month; earlier months are history. */

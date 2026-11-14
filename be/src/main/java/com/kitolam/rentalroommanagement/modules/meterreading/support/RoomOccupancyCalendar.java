@@ -41,7 +41,8 @@ public class RoomOccupancyCalendar {
 
     /** Whether the contract's stay overlaps the month (DRAFT contracts never count). */
     public boolean covers(Contract c, YearMonth month) {
-        if (c.getStatus() == null || c.getStatus() == ContractStatus.DRAFT || c.getStartDate() == null) return false;
+        if (c.getStatus() == null || c.getStatus() == ContractStatus.DRAFT
+                || c.getStatus() == ContractStatus.TEMPLATE || c.getStartDate() == null) return false;
         if (!c.getStartDate().isBefore(month.plusMonths(1).atDay(1))) return false;
         LocalDate end = stayEnd(c);
         // A stay that ends on / before its own start (e.g. terminated before moving in) never counts.
@@ -52,7 +53,9 @@ public class RoomOccupancyCalendar {
     public LocalDate stayEnd(Contract c) {
         LocalDate end = c.getEndDate();
         if (c.getStatus() == ContractStatus.TERMINATED && c.getTerminatedAt() != null) {
-            LocalDate terminated = c.getTerminatedAt().atZone(VIETNAM).toLocalDate();
+            LocalDate terminated = c.getTerminationSettlement() != null
+                    ? c.getTerminationSettlement().lastRentalDate().plusDays(1)
+                    : c.getTerminatedAt().atZone(VIETNAM).toLocalDate();
             if (end == null || terminated.isBefore(end)) end = terminated;
         }
         return end;

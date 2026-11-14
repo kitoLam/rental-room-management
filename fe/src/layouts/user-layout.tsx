@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import {
   ArrowUpRight,
   CalendarDays,
@@ -11,18 +11,21 @@ import {
 import { Container } from '@/components/common/container'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/features/auth/session-store'
-import { dashboardPath } from '@/features/auth/navigation'
+import { accountPath, dashboardPath } from '@/features/auth/navigation'
 import { useManagerSelection } from '@/features/manager/context'
 import { viewingAppointmentsPath } from '@/features/leasing/viewing-navigation'
 import { TenantLayout } from './tenant-layout'
 
 /** Account pages live outside the rental space: they work before any contract is approved. */
 const accountPrefixes = [
-  '/profile',
+  '/tenant/profile',
+  '/tenant/manager-invitations',
+  '/tenant/owner-onboarding',
+  '/tenant/owner-verification',
   '/tenant/appointments',
   '/tenant/bookings',
-  '/user/payments',
-  '/user/contracts',
+  '/tenant/account/payments',
+  '/tenant/account/contracts',
 ]
 const isAccountPage = (pathname: string) =>
   accountPrefixes.some((path) => pathname === path || pathname.startsWith(path + '/'))
@@ -31,34 +34,30 @@ export function UserLayout() {
   const user = useSession((state) => state.user)
   const location = useLocation()
   const navigate = useNavigate()
-  const branchId = useManagerSelection((state) => (user ? state.byUser[user.id] : undefined))
-  if (user?.roles.includes('ADMIN') && location.pathname === '/profile')
-    return (
-      <Navigate
-        to={{ pathname: '/admin/profile', search: location.search, hash: location.hash }}
-        replace
-      />
-    )
+  const selectedBranch = useManagerSelection((state) => (user ? state.byUser[user.id] : undefined))
+  const branchId = new URLSearchParams(location.search).get('branchId') || selectedBranch
   const roles = user?.roles ?? []
   const isTenant = roles.includes('TENANT')
-  if (isTenant && !isAccountPage(location.pathname)) return <TenantLayout />
+  if (location.pathname.startsWith('/tenant/') && !isAccountPage(location.pathname))
+    return <TenantLayout />
   const isStaff = roles.some((r) => r === 'MANAGER' || r === 'OWNER' || r === 'ADMIN')
   const items = [
-    { to: '/profile', label: 'Hồ sơ', icon: UserRound },
+    { to: accountPath(roles, 'profile'), label: 'Hồ sơ', icon: UserRound },
     {
       to: viewingAppointmentsPath(roles, { branchId }),
       label: 'Lịch xem phòng',
       icon: CalendarDays,
     },
-    { to: '/tenant/bookings', label: 'Giữ chỗ', icon: KeyRound },
-    { to: '/user/payments', label: 'Thanh toán', icon: Wallet },
-    { to: '/user/contracts', label: 'Hợp đồng', icon: FileText },
+    { to: accountPath(roles, 'bookings', branchId), label: 'Giữ chỗ', icon: KeyRound },
+    { to: accountPath(roles, 'payments', branchId), label: 'Thanh toán', icon: Wallet },
+    { to: accountPath(roles, 'contracts', branchId), label: 'Hợp đồng', icon: FileText },
   ]
   const current =
     items.find(
       ({ to }) =>
-        location.pathname === to.split('?')[0] || location.pathname.startsWith(to.split('?')[0] + '/'),
-    )?.to ?? '/profile'
+        location.pathname === to.split('?')[0] ||
+        location.pathname.startsWith(to.split('?')[0] + '/'),
+    )?.to ?? accountPath(roles, 'profile')
   const workspace = isTenant
     ? { to: '/tenant/dashboard', label: 'Không gian thuê' }
     : isStaff

@@ -11,6 +11,8 @@ import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   ReceiptText,
+  Wallet,
+  AlertTriangle,
   Plug,
   Zap,
   Wrench,
@@ -32,12 +34,14 @@ import { dashboardPath } from '@/features/auth/navigation'
 const nav = [
   ['/tenant/dashboard', 'Tổng quan', LayoutDashboard],
   ['/tenant/invoices', 'Hóa đơn', ReceiptText],
+  ['/tenant/account/payments', 'Thanh toán', Wallet],
+  ['/tenant/debts', 'Công nợ', AlertTriangle],
   ['/tenant/services', 'Dịch vụ tự chọn', Plug],
   ['/tenant/utilities', 'Tiền điện', Zap],
   ['/tenant/maintenance', 'Yêu cầu hỗ trợ', Wrench],
-  ['/notifications', 'Thông báo', Bell],
+  ['/tenant/notifications', 'Thông báo', Bell],
 ] as const
-const accountPages = ['/tenant/dashboard', '/notifications']
+const accountPages = ['/tenant/dashboard', '/tenant/notifications']
 const needsTenancy = (path: string) =>
   path.startsWith('/tenant/') &&
   !['/tenant/appointments', '/tenant/bookings'].some(
@@ -51,8 +55,6 @@ const isUpcoming = (t: Tenancy) =>
 /** Contract not approved yet (signed copy still being reviewed). */
 const isPending = (t: Tenancy) => t.contractStatus === 'DRAFT'
 const displayDay = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—')
-const tenancyNote = (t: Tenancy) =>
-  isActive(t) ? '' : isUpcoming(t) ? ` · Bắt đầu ${displayDay(t.startDate)}` : isPending(t) ? ' · Chờ duyệt' : ' · Đã kết thúc'
 
 export function TenantLayout() {
   const user = useSession((s) => s.user!)
@@ -69,11 +71,28 @@ export function TenantLayout() {
   })
   const tenancies = list.data || []
   const requested = params.get('tenancyId')
-  const tenancy = requested
+  const requestedTenancy = requested
     ? tenancies.find((t) => t.id === requested || t.contractId === requested)
     : tenancies.find((t) => t.id === selected || t.contractId === selected) ||
       tenancies.find(isActive) ||
       tenancies[0]
+  // Several contracts can refer to the same slot; show the current relationship first.
+  const spaces = new Map<string, { key: string; slotId: string | null; label: string; tenancy: Tenancy; tenancyIds: string[] }>()
+  const ordered = [...tenancies].sort((a, b) => Number(isActive(b)) - Number(isActive(a)))
+  for (const t of ordered) {
+    const ids = t.roomSlotIds?.length ? t.roomSlotIds : t.roomSlotId ? [t.roomSlotId] : [null]
+    ids.forEach((slotId, index) => {
+      const key = `${t.roomId}:${slotId || 'room'}`
+      const existing = spaces.get(key)
+      if (existing) existing.tenancyIds.push(t.id)
+      else spaces.set(key, { key, slotId, label: `${t.roomName}${slotId ? ` · ${t.slotNames?.[index] || t.slotName || 'Slot'}` : ''}`, tenancy: t, tenancyIds: [t.id] })
+    })
+  }
+  const choices = [...spaces.values()]
+  const requestedSlot = params.get('slotId')
+  const space = choices.find((s) => s.slotId === requestedSlot && s.tenancyIds.includes(requestedTenancy?.id || ''))
+    || choices.find((s) => s.tenancyIds.includes(requestedTenancy?.id || '')) || (!requested ? choices[0] : undefined)
+  const tenancy = space?.tenancy
   const unscoped = accountPages.some(
     (path) => location.pathname === path || location.pathname.startsWith(path + '/'),
   )
@@ -81,10 +100,14 @@ export function TenantLayout() {
     nav.find(
       ([path]) => location.pathname === path || location.pathname.startsWith(path + '/'),
     )?.[0] || '/tenant/dashboard'
-  const href = (path: string) => (needsTenancy(path) && tenancy ? tenantLink(path, tenancy) : path)
+  const spaceLink = (path: string, target: Tenancy, slotId: string | null) => {
+    const url = tenantLink(path, target)
+    return slotId ? `${url}&${new URLSearchParams({ slotId })}` : url
+  }
+  const href = (path: string) => (needsTenancy(path) && tenancy ? spaceLink(path, tenancy, space?.slotId || null) : path)
   if (!user.roles.includes('TENANT')) return <Navigate replace to={dashboardPath(user.roles)} />
   // No approved slot yet: show one call-to-action screen instead of an empty rental space.
-  if (list.isSuccess && tenancies.length === 0 && location.pathname !== '/notifications')
+  if (list.isSuccess && tenancies.length === 0 && location.pathname !== '/tenant/notifications')
     return (
       <Container className="py-16 sm:py-24">
         <div className="mx-auto max-w-xl rounded-2xl border border-border bg-surface p-8 text-center shadow-sm sm:p-12">
@@ -100,7 +123,7 @@ export function TenantLayout() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild>
-              <Link to="/user/contracts">
+              <Link to="/tenant/account/contracts">
                 Đến hợp đồng của tôi
                 <ArrowRight size={18} />
               </Link>
@@ -128,19 +151,18 @@ export function TenantLayout() {
                 <select
                   id="active-tenancy"
                   className="input w-full"
-                  value={tenancy?.id || ''}
+                  value={space?.key || ''}
                   onChange={(event) => {
-                    const target = tenancies.find((t) => t.id === event.target.value)!
+                    const choice = choices.find((s) => s.key === event.target.value)!
+                    const target = choice.tenancy
                     select(user.id, target.id)
-                    navigate(needsTenancy(route) ? tenantLink(route, target) : route)
+                    navigate(needsTenancy(route) ? spaceLink(route, target, choice.slotId) : route)
                   }}
                 >
                   {!tenancy && <option value="">Chọn quan hệ thuê</option>}
-                  {tenancies.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.roomName}
-                      {t.slotName ? ` · ${t.slotName}` : ''}
-                      {tenancyNote(t)}
+                  {choices.map((choice) => (
+                    <option key={choice.key} value={choice.key}>
+                      {choice.label}
                     </option>
                   ))}
                 </select>
@@ -215,7 +237,7 @@ export function TenantLayout() {
                   {requested
                     ? 'Không tìm thấy quan hệ thuê thuộc tài khoản trong liên kết này.'
                     : 'Mục này cần hợp đồng thuê đã được duyệt. Nộp bản ký ở mục Hợp đồng; quản lý duyệt xong bạn dùng được mục này.'}{' '}
-                  <Link to="/user/contracts" className="font-semibold underline">
+                  <Link to="/tenant/account/contracts" className="font-semibold underline">
                     Mở hợp đồng
                   </Link>
                 </Notice>

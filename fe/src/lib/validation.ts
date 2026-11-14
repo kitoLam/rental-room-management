@@ -111,7 +111,7 @@ export const profileSchema = z.object({
   path: ['cccdIssueDate'],
   message: 'Ngày cấp CCCD phải sau ngày sinh.',
 })
-export function safeRedirect(value: string | null, fallback = '/user/dashboard') {
+export function safeRedirect(value: string | null, fallback = '/') {
   if (!value || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value))
     return fallback
   const url = new URL(value, 'https://tropro.local')

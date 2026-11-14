@@ -19,7 +19,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class NotificationController {
     private static final Set<String> INBOX_KINDS = Set.of(
-            "TENANT_CONTRACT", "SERVICE_REQUEST_APPROVED", "SERVICE_REQUEST_COMPLETED");
+            "TENANT_CONTRACT", "TENANT_DEBT", "SERVICE_REQUEST_APPROVED", "SERVICE_REQUEST_COMPLETED");
 
     private final NotificationService notifications;
     private final Clock clock;

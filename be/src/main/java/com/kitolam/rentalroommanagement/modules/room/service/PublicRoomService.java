@@ -269,6 +269,10 @@ public class PublicRoomService {
         LocalDate today = RoomSlotAvailabilityRoller.todayVietnam(clock);
         Set<String> occupiedSlotIds = new HashSet<>();
         Map<String, Integer> occupiedSlotCounts = new HashMap<>();
+        slots.stream().filter(RoomSlot::isDepositPaused).forEach(slot -> {
+            occupiedSlotIds.add(slot.getId());
+            occupiedSlotCounts.merge(slot.getRoomId(), 1, Integer::sum);
+        });
         occupancies.forEach(occupancy -> {
             if (occupancy.getEndDate() != null && occupancy.getEndDate().isBefore(today)) return;
             if (occupancy.getStatus() == OccupancyStatus.ACTIVE

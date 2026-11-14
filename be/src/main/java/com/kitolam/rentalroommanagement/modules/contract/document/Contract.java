@@ -41,13 +41,49 @@ public class Contract extends BaseDocument {
     @Field(targetType = FieldType.OBJECT_ID)
     private String tenantId;
 
+    @Field(write = Field.Write.ALWAYS)
     private String landlordName;
+    @Field(write = Field.Write.ALWAYS)
     private String landlordIdNumber;
+    @Field(write = Field.Write.ALWAYS)
     private String landlordAddress;
+    @Field(write = Field.Write.ALWAYS)
+    private String landlordDateOfBirth;
+    @Field(write = Field.Write.ALWAYS)
+    private String landlordIdIssueDate;
+    @Field(write = Field.Write.ALWAYS)
+    private String landlordIdIssuePlace;
+    @Field(write = Field.Write.ALWAYS)
+    private String landlordPhone;
+
     private String tenantName;
+    @Field(write = Field.Write.ALWAYS)
     private String tenantIdNumber;
+    @Field(write = Field.Write.ALWAYS)
     private String tenantAddress;
+    @Field(write = Field.Write.ALWAYS)
+    private String tenantDateOfBirth;
+    @Field(write = Field.Write.ALWAYS)
+    private String tenantIdIssueDate;
+    @Field(write = Field.Write.ALWAYS)
+    private String tenantIdIssuePlace;
+    @Field(write = Field.Write.ALWAYS)
+    private String tenantPhone;
+
     private String roomAddress;
+
+    @Field(write = Field.Write.ALWAYS)
+    private String signingAddress;
+
+    @Field(write = Field.Write.ALWAYS)
+    private String paymentMethod;
+
+    @Field(targetType = FieldType.DECIMAL128, write = Field.Write.ALWAYS)
+    private BigDecimal electricityRate;
+
+    @Field(targetType = FieldType.DECIMAL128, write = Field.Write.ALWAYS)
+    private BigDecimal waterRate;
+
     @Indexed
     @Field(targetType = FieldType.OBJECT_ID)
     private String managerId;
@@ -82,6 +118,7 @@ public class Contract extends BaseDocument {
 
     private Integer termMonths;
 
+    @Field(write = Field.Write.ALWAYS)
     private LocalDate signedDate;
 
     private LocalDate firstBillingStartDate;
@@ -99,6 +136,11 @@ public class Contract extends BaseDocument {
     @Field("contractUrl")
     private String contractUrl;
 
+    private String pdfRevision;
+    private String pdfPublicId;
+    private Instant pdfNextAttemptAt;
+    private boolean pdfProcessing;
+
     /** Hợp đồng gốc đã được gia hạn để tạo ra hợp đồng này (null nếu không phải hợp đồng nối tiếp). */
     @Indexed
     private String renewedFromContractId;
@@ -112,6 +154,8 @@ public class Contract extends BaseDocument {
     private Instant terminatedAt;
 
     private String terminationReason;
+
+    private ContractTerminationSettlement terminationSettlement;
 
     private ContractStatus status = ContractStatus.DRAFT;
 }

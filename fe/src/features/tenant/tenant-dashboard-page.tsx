@@ -34,7 +34,7 @@ export function TenantDashboard() {
     .join(', ')
   const link = (path: string) =>
     lease && path.startsWith('/tenant/')
-      ? `${path}?${new URLSearchParams({ tenancyId: lease.id })}`
+      ? `${path}?${new URLSearchParams({ tenancyId: lease.id, ...(params.get('slotId') ? { slotId: params.get('slotId')! } : {}) })}`
       : path
   const daysRemaining =
     lease?.endDate && data

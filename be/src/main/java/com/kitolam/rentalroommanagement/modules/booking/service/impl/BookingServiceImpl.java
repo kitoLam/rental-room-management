@@ -34,6 +34,7 @@ import com.kitolam.rentalroommanagement.modules.contract.document.ContractServic
 import com.kitolam.rentalroommanagement.modules.contract.enums.ContractStatus;
 import com.kitolam.rentalroommanagement.modules.contract.repository.ContractRepository;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
+import com.kitolam.rentalroommanagement.modules.contract.service.ContractTemplateService;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.repository.BranchRepository;
 import com.kitolam.rentalroommanagement.modules.branch.service.BranchService;
@@ -51,6 +52,7 @@ import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.document.RoomS
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.enums.OccupancyStatus;
 import com.kitolam.rentalroommanagement.modules.roomslotoccupancy.repository.RoomSlotOccupancyRepository;
 import com.kitolam.rentalroommanagement.modules.tenant.document.Tenant;
+import com.kitolam.rentalroommanagement.modules.tenant.enums.TenantStatus;
 import com.kitolam.rentalroommanagement.modules.tenant.repository.TenantRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -62,6 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -78,7 +81,6 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -89,6 +91,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final ContractRepository contractRepository;
     private final ContractService contractService;
+    private final ContractTemplateService contractTemplates;
     private final RoomRepository roomRepository;
     private final RoomSlotRepository roomSlotRepository;
     private final RoomSlotOccupancyRepository roomSlotOccupancyRepository;
@@ -102,9 +105,6 @@ public class BookingServiceImpl implements BookingService {
     private final ApplicationEventPublisher eventPublisher;
     private final BranchService branchAccess;
     private final com.kitolam.rentalroommanagement.modules.branch.support.BranchManagerResolver branchManagers;
-
-    @Value("${contract.template.download-url:https://www.youtube.com/}")
-    private String contractUrl;
 
     @Scheduled(fixedDelayString = "${booking.automation.delay-ms:30000}", initialDelayString = "${booking.automation.initial-delay-ms:10000}")
     @Transactional
@@ -142,8 +142,7 @@ public class BookingServiceImpl implements BookingService {
         if (slots.stream().anyMatch(slot -> !roomId.equals(slot.getRoomId())))
             throw new BadRequestException("Các slot cần thuộc cùng một phòng");
         Room targetRoom = room(roomId);
-        if (tenant.isInactiveInBranch(targetRoom.getBranchId()))
-            throw new ForbiddenException("Tài khoản của bạn hiện đang tạm ngưng hoạt động tại cơ sở này");
+        ensureTenantActiveAtBranch(tenant, targetRoom.getBranchId());
         if (tenant.getBranchIds() == null || !tenant.getBranchIds().contains(targetRoom.getBranchId())) {
             tenant.addBranch(targetRoom.getBranchId());
             tenantRepository.save(tenant);
@@ -220,10 +219,13 @@ public class BookingServiceImpl implements BookingService {
 
     private RoomAvailabilityResponse slotAvailability(RoomSlot slot, LocalDate start, LocalDate end, LocalDate today,
                                                        List<RoomSlotOccupancy> occupancies) {
+        if (slot.isDepositPaused())
+            return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
+                    "Chỗ này đang tạm ngưng đặt cọc.", null);
         if (slot.getStatus() == RoomSlotStatus.MAINTENANCE || slot.getStatus() == RoomSlotStatus.INACTIVE)
             return new RoomAvailabilityResponse(slot.getId(), slot.getSlotCode(), start, end, false,
                     "Chỗ hiện không nhận đặt.", null);
-        LocalDate availableFrom = RoomSlotAvailabilityRoller.rollForward(slot.getAvailableFrom(), today);
+        LocalDate availableFrom = RoomSlotAvailabilityRoller.rollOverdueIntoFuture(slot.getAvailableFrom(), today);
         String reason = null;
         for (RoomSlotOccupancy occupancy : occupancies) {
             LocalDate occupiedUntil = occupancy.getEndDate();
@@ -271,19 +273,12 @@ public class BookingServiceImpl implements BookingService {
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", tenant(principal).getId());
         } else if (isRole(principal, "MANAGER")) {
             String branchId = managerBranch(principal);
-            List<String> roomIds = roomRepository.findByBranchIdAndIsDeletedFalse(branchId).stream().map(Room::getId).toList();
-            List<ObjectId> roomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(roomIds).stream()
-                    .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
-            criteria.add(new Criteria().orOperator(Criteria.where("roomSlotId").in(roomSlotIds), Criteria.where("roomSlotIds").in(roomSlotIds)));
+            criteria.add(bookingSlotsInBranches(List.of(branchId)));
         } else {
             requireRole(principal, "OWNER", "ADMIN");
             if (isRole(principal, "OWNER")) {
                 var branches = branchAccess.ownedBranchIds(principal.userId());
-                var ownedRoomIds = roomRepository.findByBranchIdInAndIsDeletedFalse(branches).stream()
-                        .map(Room::getId).toList();
-                var ownedRoomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(ownedRoomIds).stream()
-                        .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
-                criteria.add(new Criteria().orOperator(Criteria.where("roomSlotId").in(ownedRoomSlotIds), Criteria.where("roomSlotIds").in(ownedRoomSlotIds)));
+                criteria.add(bookingSlotsInBranches(branches));
             }
             MongoQueryHelper.addObjectIdEquals(criteria, "tenantId", filter.tenantId());
         }
@@ -291,7 +286,7 @@ public class BookingServiceImpl implements BookingService {
                 Criteria.where("roomSlotId").is(MongoQueryHelper.toObjectId(filter.roomSlotId())),
                 Criteria.where("roomSlotIds").is(MongoQueryHelper.toObjectId(filter.roomSlotId()))));
         if (filter.roomId() != null) {
-            List<ObjectId> roomSlotIds = roomSlotRepository.findByRoomIdAndIsDeletedFalse(filter.roomId()).stream()
+            List<ObjectId> roomSlotIds = roomSlotRepository.findByRoomIdIn(List.of(filter.roomId())).stream()
                     .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
             criteria.add(new Criteria().orOperator(Criteria.where("roomSlotId").in(roomSlotIds), Criteria.where("roomSlotIds").in(roomSlotIds)));
         }
@@ -304,7 +299,7 @@ public class BookingServiceImpl implements BookingService {
             List<String> matchingRoomIds = mongoTemplate.find(
                     Query.query(Criteria.where("roomNumber").regex(keyword)), Room.class).stream()
                     .map(Room::getId).toList();
-            List<ObjectId> matchingRoomSlotIds = roomSlotRepository.findByRoomIdInAndIsDeletedFalse(matchingRoomIds).stream()
+            List<ObjectId> matchingRoomSlotIds = roomSlotRepository.findByRoomIdIn(matchingRoomIds).stream()
                     .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
             List<ObjectId> matchingSlotCodes = mongoTemplate.find(
                     Query.query(Criteria.where("slotCode").regex(keyword)), RoomSlot.class).stream()
@@ -323,6 +318,13 @@ public class BookingServiceImpl implements BookingService {
         MongoQueryHelper.addEquals(criteria, "status", filter.status());
         MongoQueryHelper.addEquals(criteria, "depositStatus", filter.depositStatus());
         return PagedResponse.from(MongoQueryHelper.page(mongoTemplate, criteria, pageable, Booking.class), this::response);
+    }
+
+    private Criteria bookingSlotsInBranches(Collection<String> branchIds) {
+        List<String> roomIds = roomRepository.findByBranchIdIn(branchIds).stream().map(Room::getId).toList();
+        List<ObjectId> slotIds = roomSlotRepository.findByRoomIdIn(roomIds).stream()
+                .map(RoomSlot::getId).filter(ObjectId::isValid).map(ObjectId::new).toList();
+        return new Criteria().orOperator(Criteria.where("roomSlotId").in(slotIds), Criteria.where("roomSlotIds").in(slotIds));
     }
 
     @Override
@@ -490,6 +492,14 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    public void validateBookingDeposit(String id, AuthPrincipal principal) {
+        requireRole(principal, "TENANT");
+        Booking booking = find(id);
+        ensureTenantOwns(booking, principal);
+        validatePaymentAllowed(booking);
+    }
+
+    @Override
     @Transactional
     public List<BookingPaymentResponse> payments(String id, AuthPrincipal principal) {
         expireOverdueBookings();
@@ -537,7 +547,7 @@ public class BookingServiceImpl implements BookingService {
             }
             return response(bookingRepository.save(booking));
         }
-        claimBookingSlots(booking);
+        List<RoomSlot> claimedSlots = bookingSlotIds(booking).stream().map(this::claimSlot).toList();
         if (!holdValid) {
             booking.setStatus(BookingStatus.EXPIRED);
             booking.setDepositStatus(DepositStatus.PAID);
@@ -546,7 +556,8 @@ public class BookingServiceImpl implements BookingService {
             return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT,
                     "Thanh toán đến sau hạn; booking đã hết hiệu lực và cọc chờ hoàn."));
         }
-        if (hasReservation(booking.getId())) {
+        boolean depositPaused = claimedSlots.stream().anyMatch(RoomSlot::isDepositPaused);
+        if (!depositPaused && hasReservation(booking.getId())) {
             booking.setStatus(BookingStatus.CONFIRMED);
             booking.setDepositStatus(DepositStatus.PAID);
             createSlotContracts(booking);
@@ -558,6 +569,7 @@ public class BookingServiceImpl implements BookingService {
         }
         return response(saveTransition(booking, BookingStatus.AWAITING_PAYMENT,
                 booking.getStatus() == BookingStatus.CONFIRMED ? "Đã xác minh cọc; booking được xác nhận."
+                        : depositPaused ? "Chỗ đang tạm ngưng đặt cọc; khoản tiền đã nhận chờ hoàn."
                         : "Slot đã được giữ; chờ Owner duyệt hoàn cọc."));
     }
 
@@ -599,22 +611,22 @@ public class BookingServiceImpl implements BookingService {
     private void expireOverdueBookings() {
         Instant now = clock.instant();
         List<Booking> overdue = new ArrayList<>(bookingRepository.findByStatusAndHoldExpiresAtLessThanEqualAndIsDeletedFalse(BookingStatus.AWAITING_PAYMENT, now)
-                .stream().filter(b -> b.getRoomSlotId() != null).toList());
+                .stream().filter(b -> !bookingSlotIds(b).isEmpty()).toList());
         bookingRepository.findByStatusAndPaymentDeadlineLessThanEqualAndIsDeletedFalse(BookingStatus.AWAITING_PAYMENT, now)
-                .stream().filter(b -> b.getRoomSlotId() != null)
+                .stream().filter(b -> !bookingSlotIds(b).isEmpty())
                 .forEach(b -> { if (overdue.stream().noneMatch(x -> x.getId().equals(b.getId()))) overdue.add(b); });
         for (Booking booking : overdue) {
             BookingStatus previous = booking.getStatus();
-            claimBookingSlots(booking);
+            claimRemainingSlots(booking);
             expireBooking(booking);
             saveTransition(booking, previous, "Đã hết hạn thanh toán/giữ chỗ.");
             releaseReservation(booking.getId());
         }
         List<Booking> missedCheckIns = bookingRepository.findByStatusAndCheckInDeadlineLessThanEqualAndIsDeletedFalse(
-                BookingStatus.CONFIRMED, now).stream().filter(b -> b.getRoomSlotId() != null).toList();
+                BookingStatus.CONFIRMED, now).stream().filter(b -> !bookingSlotIds(b).isEmpty()).toList();
         for (Booking booking : missedCheckIns) {
             BookingStatus previous = booking.getStatus();
-            claimBookingSlots(booking);
+            claimRemainingSlots(booking);
             booking.setStatus(BookingStatus.EXPIRED);
             if (paymentRepository.findByBookingIdAndIsDeletedFalse(booking.getId()).stream()
                     .anyMatch(payment -> payment.getStatus() == PaymentStatus.SUCCESS))
@@ -629,7 +641,10 @@ public class BookingServiceImpl implements BookingService {
                         contract.setTerminationReason("Đã quá hạn check-in theo điều khoản booking.");
                         contractRepository.save(contract);
                     });
-            refreshRoomStatus(room(roomSlot(saved.getRoomSlotId()).getRoomId()));
+            roomSlotRepository.findByIdAndIsDeletedFalse(bookingSlotIds(saved).getFirst())
+                    .map(RoomSlot::getRoomId)
+                    .flatMap(roomRepository::findByIdAndIsDeletedFalse)
+                    .ifPresent(this::refreshRoomStatus);
         }
     }
 
@@ -652,6 +667,9 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.AWAITING_PAYMENT)
             throw new ConflictException("Booking không còn chờ thanh toán");
         ensureTermsCurrent(booking);
+        for (String slotId : bookingSlotIds(booking)) {
+            if (roomSlot(slotId).isDepositPaused()) throw new ConflictException("Chỗ này đang tạm ngưng đặt cọc.");
+        }
         requireReservation(booking.getId());
     }
 
@@ -668,7 +686,10 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private RoomSlot claimSlot(String roomSlotId) {
-        RoomSlot slot = roomSlot(roomSlotId);
+        return claimSlot(roomSlot(roomSlotId));
+    }
+
+    private RoomSlot claimSlot(RoomSlot slot) {
         try {
             return roomSlotRepository.save(slot);
         } catch (OptimisticLockingFailureException exception) {
@@ -683,6 +704,12 @@ public class BookingServiceImpl implements BookingService {
 
     private void claimBookingSlots(Booking booking) {
         bookingSlotIds(booking).forEach(this::claimSlot);
+    }
+
+    private void claimRemainingSlots(Booking booking) {
+        for (String slotId : bookingSlotIds(booking)) {
+            roomSlotRepository.findByIdAndIsDeletedFalse(slotId).ifPresent(this::claimSlot);
+        }
     }
 
     private List<RoomSlotOccupancy> reservations(Booking booking) {
@@ -725,43 +752,32 @@ public class BookingServiceImpl implements BookingService {
      */
     private void createSlotContracts(Booking booking) {
         List<Contract> existing = contractRepository.findAllByBookingIdAndIsDeletedFalse(booking.getId());
-        if (!existing.isEmpty()) {
-            booking.setContractIds(existing.stream().map(Contract::getId).toList());
-            booking.setContractId(existing.getFirst().getId());
-            return;
-        }
+        Map<String, Contract> existingBySlot = existing.stream()
+                .filter(contract -> contract.getRenewedFromContractId() == null && contract.getRoomSlotId() != null)
+                .collect(Collectors.toMap(Contract::getRoomSlotId, contract -> contract, (first, second) -> first));
         List<RoomSlot> slots = bookingSlotIds(booking).stream().map(this::roomSlot).toList();
         Room room = room(slots.getFirst().getRoomId());
-        Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(booking.getTenantId()).orElse(null);
         String managerAccountId = branchManagers.managerAccountId(room.getBranchId()).orElse(null);
-        BigDecimal rent = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.rent(room);
-        BigDecimal deposit = com.kitolam.rentalroommanagement.modules.room.support.SlotPricing.deposit(room);
         List<String> ids = new ArrayList<>();
         for (int i = 0; i < slots.size(); i++) {
             RoomSlot slot = slots.get(i);
-            Contract contract = new Contract();
-            contract.setRoomId(room.getId());
-            contract.setRoomSlotId(slot.getId());
-            contract.setRoomSlotIds(List.of(slot.getId()));
+            Contract existingContract = existingBySlot.get(slot.getId());
+            if (existingContract != null) {
+                ids.add(existingContract.getId());
+                continue;
+            }
+            Contract contract = contractTemplates.prepare(room, slot);
             contract.setBookingId(booking.getId());
-            if (booking.getSlotMoveInDates() != null)
-                contract.setStartDate(booking.getSlotMoveInDates().get(slot.getId()));
+            LocalDate slotStart = booking.getSlotMoveInDates() == null ? null : booking.getSlotMoveInDates().get(slot.getId());
+            contract.setStartDate(slotStart == null ? booking.getExpectedMoveInDate() : slotStart);
             contract.setTenantId(booking.getTenantId());
             contract.setManagerId(managerAccountId);
             contract.setContractNumber(contractService.nextContractNumber());
-            contract.setTenantName(tenant == null ? null : tenant.getFullName());
-            contract.setTenantIdNumber(tenant == null ? null : tenant.getIdCardNumber());
-            contract.setTenantAddress(tenant == null ? null : tenant.getAddress());
-            contract.setRoomAddress((branch == null ? "" : branch.getAddress() + " · ") + room.getRoomNumber()
-                    + " · Chỗ " + slot.getSlotCode());
-            contract.setRentPrice(rent == null ? BigDecimal.ZERO : rent);
-            contract.setContractDepositAmount(deposit);
-            contract.setMaxOccupants(1);
-            contract.setContractUrl(contractUrl);
+            contractTemplates.fillTenant(contract, tenant);
             contract.setEvidenceDeadline(clock.instant().plusSeconds(72 * 60 * 60));
-            if (i == 0) {
-                contract.setServices(booking.getSelectedServices().stream().map(service -> {
+            if (i == 0 && booking.getSelectedServices() != null) {
+                contract.getServices().addAll(booking.getSelectedServices().stream().map(service -> {
                     ContractServiceSnapshot snapshot = new ContractServiceSnapshot();
                     snapshot.setServiceId(service.getServiceId());
                     snapshot.setName(service.getName());
@@ -775,6 +791,7 @@ public class BookingServiceImpl implements BookingService {
                 }).toList());
             }
             contract.setStatus(ContractStatus.DRAFT);
+            contractTemplates.queuePdf(contract);
             ids.add(contractRepository.save(contract).getId());
         }
         booking.setContractIds(ids);
@@ -865,8 +882,23 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy slot"));
     }
 
-    private Tenant tenant(AuthPrincipal principal) {
-        if (principal.email() == null) throw new ForbiddenException("Tài khoản không có email");
+    /**
+     * Tenant bị tạm ngưng (INACTIVE/LOCKED) hoặc bị chặn tại đúng chi nhánh đó thì không được đặt phòng
+     * ở chi nhánh này. Chặn tại tầng nghiệp vụ để mọi luồng tạo booking đều đi qua một chỗ.
+     */
+    private void ensureTenantActiveAtBranch(Tenant tenant, String branchId) {
+        if (tenant.getStatus() == TenantStatus.INACTIVE) {
+            throw new ForbiddenException("Tài khoản người thuê đang bị tạm ngưng, không thể đặt phòng");
+        }
+        if (tenant.getStatus() == TenantStatus.LOCKED) {
+            throw new ForbiddenException("Tài khoản người thuê đang bị khoá, không thể đặt phòng");
+        }
+        if (tenant.isInactiveInBranch(branchId)) {
+            throw new ForbiddenException("Tài khoản của bạn hiện đang tạm ngưng hoạt động tại cơ sở này");
+        }
+    }
+
+    private Tenant tenant(AuthPrincipal principal) {        if (principal.email() == null) throw new ForbiddenException("Tài khoản không có email");
         return tenantRepository.findByEmailAndIsDeletedFalse(principal.email()).orElseGet(() -> {
             User user = userRepository.findByEmailAndIsDeletedFalse(principal.email())
                     .orElseThrow(() -> new ForbiddenException("Không tìm thấy tài khoản Tenant"));
@@ -893,7 +925,15 @@ public class BookingServiceImpl implements BookingService {
 
     private void ensureCanView(Booking booking, AuthPrincipal principal) {
         if (isRole(principal, "TENANT")) ensureTenantOwns(booking, principal);
-        else ensureCanManage(booking, principal);
+        else if (!isRole(principal, "ADMIN")) {
+            requireRole(principal, "OWNER", "MANAGER");
+            Room room = bookingSlotIds(booking).stream().findFirst()
+                    .flatMap(roomSlotRepository::findById)
+                    .map(RoomSlot::getRoomId)
+                    .flatMap(roomRepository::findById)
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng liên kết với yêu cầu giữ chỗ"));
+            branchAccess.requireManagementAccess(room.getBranchId(), principal);
+        }
     }
 
     private void ensureCanManage(Booking booking, AuthPrincipal principal) {
@@ -918,21 +958,38 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse response(Booking b) {
-        List<RoomSlot> slots = bookingSlotIds(b).stream().map(this::roomSlot).toList();
-        RoomSlot slot = slots.getFirst();
-        Room room = room(slot.getRoomId());
-        Branch branch = branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
+        List<String> slotIds = bookingSlotIds(b);
+        List<RoomSlot> slots = historicalSlots(b);
+        Room room = historicalRoom(slots).orElse(null);
+        Branch branch = room == null || room.getBranchId() == null ? null
+                : branchRepository.findByIdAndIsDeletedFalse(room.getBranchId()).orElse(null);
+        Map<String, String> codesById = new LinkedHashMap<>();
+        slots.forEach(slot -> codesById.put(slot.getId(), slot.getSlotCode()));
+        String primarySlotId = slotIds.isEmpty() ? null : slotIds.getFirst();
+        List<String> slotCodes = slotIds.stream().map(id -> Objects.toString(codesById.get(id), "—")).toList();
         Tenant tenant = tenantRepository.findByIdAndIsDeletedFalse(b.getTenantId()).orElse(null);
         User user = tenant == null ? null : userRepository.findByEmailAndIsDeletedFalse(tenant.getEmail()).orElse(null);
-        return new BookingResponse(b.getId(), b.getTenantId(), b.getRoomSlotId(), slot.getSlotCode(), bookingSlotIds(b), slots.stream().map(RoomSlot::getSlotCode).toList(), b.getExpectedMoveInDate(), b.getSlotMoveInDates(),
+        return new BookingResponse(b.getId(), b.getTenantId(), primarySlotId, codesById.get(primarySlotId), slotIds,
+                slotCodes, b.getExpectedMoveInDate(), b.getSlotMoveInDates(),
                 b.getExpectedMoveOutDate(), b.getHoldingDepositAmount(), b.getPaymentDeadline(), b.getHoldExpiresAt(), b.getCheckInDeadline(), b.getContractId(),
                 b.getContractIds() == null ? List.of() : List.copyOf(b.getContractIds()),
                 b.getCancellationPolicy(), b.getDepositStatus(), b.getRejectReason(), b.getStatus(),
                 b.getTermsAcceptedAt(), b.getCreatedAt(), b.getUpdatedAt(), user == null ? b.getTenantId() : user.getId(),
                 tenant == null ? null : tenant.getFullName(), tenant == null ? null : tenant.getEmail(),
-                tenant == null ? null : tenant.getPhone(), room.getRoomNumber(), room.getBranchId(),
+                tenant == null ? null : tenant.getPhone(), room == null ? null : room.getRoomNumber(),
+                room == null ? null : room.getBranchId(),
                 branch == null ? null : branch.getName(), b.getTimeline() == null ? List.of() : List.copyOf(b.getTimeline()),
                 b.getSelectedServices() == null ? List.of() : List.copyOf(b.getSelectedServices()));
+    }
+
+    private List<RoomSlot> historicalSlots(Booking booking) {
+        return bookingSlotIds(booking).stream().filter(Objects::nonNull)
+                .map(roomSlotRepository::findById).flatMap(Optional::stream).toList();
+    }
+
+    private Optional<Room> historicalRoom(List<RoomSlot> slots) {
+        return slots.stream().map(RoomSlot::getRoomId).filter(Objects::nonNull).distinct()
+                .map(roomRepository::findById).flatMap(Optional::stream).findFirst();
     }
 
     private void refreshRoomStatus(Room room) {

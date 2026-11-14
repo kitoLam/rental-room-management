@@ -321,8 +321,8 @@ export const appointmentService = {
 const backendBookingSchema = z.object({
   id: databaseIdSchema,
   tenantId: databaseIdSchema,
-  roomSlotId: databaseIdSchema,
-  slotCode: z.string(),
+  roomSlotId: databaseIdSchema.nullable(),
+  slotCode: z.string().nullable(),
   roomSlotIds: z.array(databaseIdSchema).optional(),
   slotCodes: z.array(z.string()).optional(),
   selectedServices: z.array(z.object({
@@ -356,7 +356,7 @@ const backendBookingSchema = z.object({
   requesterEmail: z.string().nullable(),
   requesterPhone: z.string().nullable(),
   roomTitle: z.string().nullable(),
-  branchId: databaseIdSchema,
+  branchId: databaseIdSchema.nullable(),
   branchName: z.string().nullable(),
   timeline: z.array(z.object({ status: z.string(), at: z.string(), note: z.string() })),
 })
@@ -397,7 +397,7 @@ const backendContractSchema = z.object({
   roomSlotIds: z.array(databaseIdSchema).optional(),
   bookingId: databaseIdSchema,
   tenantId: databaseIdSchema,
-  managerId: databaseIdSchema,
+  managerId: databaseIdSchema.nullable(),
   contractNumber: z.string(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
@@ -416,6 +416,7 @@ const backendContractSchema = z.object({
   signedFileUrl: z.string().nullable(),
   signedEvidenceUrl: z.string().nullable().optional(),
   termMonths: z.number().nullable().optional(),
+  generatedPdf: z.boolean().optional(),
   signedDate: z.string().nullable().optional(),
   firstBillingStartDate: z.string().nullable().optional(),
   evidenceSubmittedAt: z.string().nullable().optional(),
@@ -448,9 +449,9 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     branchId: b.branchId,
     branchName: b.branchName || '',
     roomSlotId: b.roomSlotId,
-    roomSlotIds: b.roomSlotIds || [b.roomSlotId],
+    roomSlotIds: b.roomSlotIds ?? (b.roomSlotId ? [b.roomSlotId] : []),
     slotLabel: b.slotCode,
-    slotLabels: b.slotCodes || [b.slotCode],
+    slotLabels: b.slotCodes ?? (b.slotCode ? [b.slotCode] : []),
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
     expectedMoveInDate: b.expectedMoveInDate,
     slotMoveInDates: b.slotMoveInDates,
@@ -551,7 +552,7 @@ export const bookingService = {
       endDate: result.endDate,
       available: result.available,
       reason: result.reason,
-      slots: [{ id: result.roomSlotId, label: result.slotCode, available: result.available }],
+      slots: [{ id: result.roomSlotId, label: result.slotCode, available: result.available, reason: result.reason, availableFrom: result.availableFrom ?? null }],
     }
   },
   availabilityForRoom: async (roomId: string, startDate: string, endDate: string) => {
@@ -566,7 +567,8 @@ export const bookingService = {
       id: slot.roomSlotId,
       label: slot.slotCode,
       available: slot.available,
-      // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
+      reason: slot.reason,
+      // Ngày nhận phòng sớm nhất; điều kiện mở đặt cọc được BE kiểm tra riêng.
       availableFrom: slot.availableFrom ?? null,
     }))
     const available = slotAvailability.some((slot) => slot.available)
@@ -616,16 +618,54 @@ export const bookingService = {
 }
 export const contractService = {
   get: (id: string) => request('leasing', `/api/v1/contracts/${id}`, backendContractSchema),
+  chooseTerm: (id: string, termMonths: number) =>
+    request('leasing', `/api/v1/contracts/${id}/term`, backendContractSchema, write('PATCH', { termMonths })),
+  downloadPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
+    request(feature, `/api/v1/contracts/${id}/pdf`, z.url()),
+  retryPdf: (id: string, feature: 'leasing' | 'manager' = 'leasing') =>
+    request(feature, `/api/v1/contracts/${id}/pdf/retry`, z.enum(['READY', 'QUEUED', 'PROCESSING']), write('POST')),
   selectServices: (id: string, selectedServiceIds: string[]) =>
     request('leasing', `/api/v1/contracts/${id}/services`, backendContractSchema, write('PATCH', { selectedServiceIds })),
   completeCheckIn: (id: string, signedFileUrl: string) =>
     request('manager', `/api/v1/contracts/${id}/check-in`, backendContractSchema, write('POST', { signedFileUrl })),
   submitEvidence: (id: string, value: { evidenceUrl: string; termMonths: number }) =>
     request('leasing', `/api/v1/contracts/${id}/evidence`, backendContractSchema, write('POST', value)),
+  downloadSignedEvidence: (id: string) =>
+    request('manager', `/api/v1/contracts/${id}/evidence/download`, z.url()),
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
     request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
+  terminationDetails: (id: string) =>
+    request('manager', `/api/v1/contracts/${id}/termination`, z.object({
+      availableFrom: z.iso.date(),
+      settlement: z.object({
+        reason: z.string(),
+        lastRentalDate: z.iso.date(),
+        agreedDepositAmount: z.coerce.number().nullish(),
+        electricity: z.object({
+          startReading: z.coerce.number(),
+          endReading: z.coerce.number(),
+          amount: z.coerce.number(),
+        }),
+        invoices: z.array(z.object({
+          invoiceId: z.string(),
+          period: z.string(),
+          total: z.coerce.number(),
+          paid: z.coerce.number(),
+          outstanding: z.coerce.number(),
+          overpaid: z.coerce.number(),
+        })),
+      }).nullish(),
+    })),
+  terminate: (id: string, value: {
+    confirmation: string
+    reason: string
+    availableFrom: string
+    electricityStartReading?: string
+    electricityEndReading: string
+  }) =>
+    request('manager', `/api/v1/contracts/${id}/termination`, z.object({ availableFrom: z.iso.date() }), write('POST', value)),
 }
 export const profileService = {
   get: (): Promise<User> =>

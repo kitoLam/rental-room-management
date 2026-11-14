@@ -38,12 +38,12 @@ const roomDto = z.object({
 })
 const backendContractDto = z.object({
   id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), roomSlotIds: z.array(z.string()).optional(), bookingId: z.string().nullable().optional(),
-  tenantId: z.string().nullable().optional(), managerId: z.string().nullish(), contractNumber: z.string(), startDate: z.string().nullable(),
+  tenantId: z.string().nullable().optional(), managerId: z.string().nullish(), contractNumber: z.string().nullable(), startDate: z.string().nullable(),
   endDate: z.string().nullable(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
   termMonths: z.number().nullable().optional(), signedDate: z.string().nullable().optional(), firstBillingStartDate: z.string().nullable().optional(),
-  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(),
+  evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(), generatedPdf: z.boolean().optional(),
   evidenceHistory: z.array(z.object({ action: z.string(), at: z.string(), note: z.string().nullish() })).nullish(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
@@ -59,6 +59,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     RESUBMISSION_REQUESTED: { actor: 'Quản lý', note: 'Yêu cầu nộp lại bản ký.' },
     EXPIRED: { actor: 'Hệ thống', note: 'Đã quá hạn nộp bản ký.' },
     CONTRACT_EXPIRED: { actor: 'Hệ thống', note: 'Hợp đồng đã hết hạn.' },
+    CONTRACT_TERMINATED: { actor: 'Quản lý', note: 'Hợp đồng đã hủy trước hạn.' },
   }
   return contractSchema.parse({
     id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomName ?? undefined,
@@ -72,7 +73,7 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     signedEvidenceUrl: value.signedEvidenceUrl, termMonths: value.termMonths, signedDate: value.signedDate,
     firstBillingStartDate: value.firstBillingStartDate, evidenceSubmittedAt: value.evidenceSubmittedAt,
     evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
-    evidenceNote: value.evidenceNote, contractUrl: value.contractUrl,
+    evidenceNote: value.evidenceNote, contractUrl: value.contractUrl, generatedPdf: value.generatedPdf,
     expiringSoon: value.expiringSoon, renewedFromContractId: value.renewedFromContractId, renewedToContractId: value.renewedToContractId,
     signedFileUrl: value.signedFileUrl,
     rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status,

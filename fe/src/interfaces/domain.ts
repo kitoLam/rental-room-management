@@ -134,6 +134,7 @@ export const availabilitySchema = z.object({
     id: databaseIdSchema,
     label: z.string(),
     available: z.boolean(),
+    reason: z.string().nullable().optional(),
     availableFrom: z.string().nullable().optional(),
   })),
 })
@@ -180,7 +181,7 @@ export const bookingSchema = z.object({
   requesterEmail: z.string().optional(),
   requesterPhone: z.string().nullable().optional(),
   roomTitle: z.string(),
-  branchId: databaseIdSchema,
+  branchId: databaseIdSchema.nullable(),
   branchName: z.string(),
   roomSlotId: databaseIdSchema.nullable(),
   roomSlotIds: z.array(databaseIdSchema).default([]),

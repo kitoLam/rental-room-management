@@ -5,7 +5,7 @@ import { reportInputSchema, type ReportInput } from '@/interfaces/tenant'
 import { tenantApi } from '@/services/tenant'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Upload, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { imageAttachment, MAX_ATTACHMENT_COUNT } from './attachments'
@@ -14,6 +14,8 @@ import { isActive, tenantLink, useTenant, useTenantMutation, useTenantQuery } fr
 
 export function CreateMaintenancePage() {
   const { tenancy: defaultTenancy, tenancies = [] } = useTenant()
+  const activeTenancies = useMemo(() => tenancies.filter(isActive), [tenancies])
+
   const canCreateReport = useSession((s) => {
     const roles = s.user?.roles || []
     if (s.activeRole === 'ADMIN' || s.activeRole === 'MANAGER') return false
@@ -22,9 +24,17 @@ export function CreateMaintenancePage() {
     }
     return roles.includes('TENANT') || roles.includes('OWNER')
   })
-  const [selectedTenancyId, setSelectedTenancyId] = useState(defaultTenancy.id)
+
+  const initialTenancy =
+    activeTenancies.find((item) => item.id === defaultTenancy?.id) ||
+    activeTenancies[0] ||
+    defaultTenancy
+
+  const [selectedTenancyId, setSelectedTenancyId] = useState(initialTenancy?.id || defaultTenancy?.id || '')
   const currentTenancy =
-    tenancies.find((item) => item.id === selectedTenancyId) || defaultTenancy
+    activeTenancies.find((item) => item.id === selectedTenancyId) ||
+    initialTenancy ||
+    defaultTenancy
 
   const room = useTenantQuery('room', () => tenantApi.room(currentTenancy.id), [currentTenancy.id])
   const navigate = useNavigate()
@@ -45,9 +55,11 @@ export function CreateMaintenancePage() {
 
   // Tự động gán thông tin phòng khi đổi phòng ở ô không gian thuê
   useEffect(() => {
-    setSelectedTenancyId(defaultTenancy.id)
+    if (initialTenancy?.id) {
+      setSelectedTenancyId(initialTenancy.id)
+    }
     form.setValue('assetId', '')
-  }, [defaultTenancy.id, form])
+  }, [initialTenancy?.id, form])
   const category = useWatch({ control: form.control, name: 'category' })
   const attachments = useWatch({ control: form.control, name: 'attachments' })
 
@@ -83,6 +95,10 @@ export function CreateMaintenancePage() {
       {!canCreateReport ? (
         <Notice tone="warning">
           Chỉ tài khoản Khách thuê (Tenant) và Chủ trọ (Owner) mới có quyền tạo yêu cầu hỗ trợ.
+        </Notice>
+      ) : activeTenancies.length === 0 ? (
+        <Notice tone="warning">
+          Bạn hiện không có phòng hoặc hợp đồng thuê nào đang hoạt động để gửi yêu cầu hỗ trợ.
         </Notice>
       ) : (
         <QueryState pending={room.isPending} error={room.error} retry={room.refetch}>
@@ -122,31 +138,25 @@ export function CreateMaintenancePage() {
                   </Notice>
                 )}
 
-                {tenancies.length > 1 ? (
-                  <Field id="report-tenancy" label="Chọn phòng cần hỗ trợ">
-                    <select
-                      id="report-tenancy"
-                      className="input"
-                      value={selectedTenancyId}
-                      onChange={(e) => {
-                        setSelectedTenancyId(e.target.value)
-                        form.setValue('assetId', '')
-                      }}
-                    >
-                      {tenancies.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.roomName}
-                          {item.slotName ? ` - ${item.slotName}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : (
-                  <Notice>
-                    {currentTenancy.roomName}
-                    {currentTenancy.slotName ? ` - ${currentTenancy.slotName}` : ''}
-                  </Notice>
-                )}
+                <Field id="report-tenancy" label="Chọn phòng cần hỗ trợ">
+                  <select
+                    id="report-tenancy"
+                    className={`input ${activeTenancies.length <= 1 ? 'cursor-not-allowed bg-muted/20 opacity-80' : ''}`}
+                    disabled={activeTenancies.length <= 1}
+                    value={selectedTenancyId}
+                    onChange={(e) => {
+                      setSelectedTenancyId(e.target.value)
+                      form.setValue('assetId', '')
+                    }}
+                  >
+                    {activeTenancies.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.roomName}
+                        {item.slotName ? ` - ${item.slotName}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field id="report-category" label="Loại yêu cầu">

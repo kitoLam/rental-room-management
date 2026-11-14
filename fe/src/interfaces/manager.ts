@@ -128,6 +128,7 @@ export const contractInputSchema = z.object({
   terms: z.string().trim().min(10).max(4000),
 })
 export const contractSchema = contractInputSchema.extend({
+  code: contractInputSchema.shape.code.nullable(),
   // Draft contracts created after deposit may not have manager-authored terms yet.
   terms: z.string().max(4000),
   // Nháp từ booking chưa có ngày hiệu lực cho tới khi manager duyệt evidence.
@@ -154,6 +155,7 @@ export const contractSchema = contractInputSchema.extend({
   evidenceResubmissionCount: z.number().nullable().optional(),
   evidenceNote: z.string().nullable().optional(),
   contractUrl: z.string().nullable().optional(),
+  generatedPdf: z.boolean().optional(),
   signedFileUrl: z.string().nullable().optional(),
   expiringSoon: z.boolean().optional(),
   renewedFromContractId: z.string().nullable().optional(),

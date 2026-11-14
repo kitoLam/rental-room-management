@@ -46,7 +46,7 @@ export function ManagerContracts() {
             label: 'Hợp đồng',
             render: (c) => (
               <>
-                <ManagerLink to={`/manager/contracts/${c.id}`}>{c.code}</ManagerLink>
+                <ManagerLink to={`/manager/contracts/${c.id}`}>{c.code ?? 'Chưa có mã hợp đồng'}</ManagerLink>
                 {c.roomName && <p className="text-xs text-muted-foreground">{c.roomName}</p>}
               </>
             ),

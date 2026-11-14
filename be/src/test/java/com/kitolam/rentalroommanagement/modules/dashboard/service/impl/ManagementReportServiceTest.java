@@ -167,7 +167,7 @@ class ManagementReportServiceTest {
         MongoTemplate mongo = mock(MongoTemplate.class);
         InvoiceRepository repository = mock(InvoiceRepository.class);
         when(mongo.find(any(Query.class), eq(Invoice.class))).thenReturn(List.of());
-        new InvoiceServiceImpl(mongo, repository, null, null, null).readForReports(List.of("710000000000000000000003"));
+        new InvoiceServiceImpl(mongo, repository, null, null, null, null).readForReports(List.of("710000000000000000000003"));
         var captor = ArgumentCaptor.forClass(Query.class);
         verify(mongo).find(captor.capture(), eq(Invoice.class));
         var criteria = captor.getValue().getQueryObject();

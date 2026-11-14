@@ -8,6 +8,7 @@ import { invalidateActivity } from '@/services/query-client'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { KeyRound } from 'lucide-react'
 import { dateOnly } from '@/lib/activity'
+import { formatVnd } from '@/lib/format'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 
@@ -32,7 +33,11 @@ export function BookingForm({ room }: { room: Room }) {
   const selectedSlots = requestedSlots.filter((id) =>
     available.data?.slots.some((slot) => slot.id === id && slot.available),
   )
-  const roomDetailUrl = `/rooms/${room.id}?${new URLSearchParams({ slots: JSON.stringify(selectedSlots), services: JSON.stringify(serviceSelection) })}`
+  const roomDetailUrl = `/rooms/${room.id}?${new URLSearchParams({ slots: JSON.stringify(selectedSlots) })}`
+  const selectedServices = services.data?.filter((service) =>
+    service.unit.trim().toLocaleLowerCase('vi-VN') !== 'lần'
+    && (service.mandatory || (serviceSelection[service.id] ?? 0) > 0),
+  ) ?? []
   const selectedSlotsAvailable = selectedSlots.length > 0 && selectedSlots.every((id) =>
     available.data?.slots.some((slot) => slot.id === id && slot.available),
   )
@@ -61,7 +66,7 @@ export function BookingForm({ room }: { room: Room }) {
   return (
     <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
       <Panel>
-        <h2 className="font-bold">Chọn slot và dịch vụ</h2>
+        <h2 className="font-bold">Chọn chỗ muốn thuê</h2>
         <p className="mt-2 text-sm text-muted-foreground">{room.title} · {room.branchName}</p>
         <form className="mt-6 grid gap-6" onSubmit={submit} noValidate>
           <Field id="booking-slots" label="Slot muốn thuê">
@@ -90,27 +95,44 @@ export function BookingForm({ room }: { room: Room }) {
             </div>
           </Field>
           {!available.data && (available.isFetching ? <Notice>Đang tải inventory slot…</Notice> : <InlineError error={available.error} />)}
-          {services.data && <section className="grid gap-3">
-            <h3 className="font-semibold">Dịch vụ đã chọn</h3>
-            {services.data.filter((service) => service.unit.trim().toLocaleLowerCase('vi-VN') !== 'lần'
-              && (service.mandatory || (serviceSelection[service.id] ?? 0) > 0)).length ? (
-              <ul className="divide-y divide-border">
-                {services.data.filter((service) => service.unit.trim().toLocaleLowerCase('vi-VN') !== 'lần'
-                  && (service.mandatory || (serviceSelection[service.id] ?? 0) > 0)).map((service) => {
-                  const quantity = service.quantityRule === 'METERED' ? null
-                    : service.quantityRule === 'PER_SLOT' ? selectedSlots.length
-                      : service.quantityRule === 'USER_INPUT' ? serviceSelection[service.id] ?? 0 : 1
-                  return <li key={service.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                    <span>{service.name}{service.mandatory ? ' · Bắt buộc' : ''}</span>
-                    <span className="text-right text-muted-foreground">
-                      {quantity == null ? 'Tính theo chỉ số thực tế' : `${quantity} ${service.unit}`}
-                      {' · '}{service.price.toLocaleString('vi-VN')} ₫ / {service.unit}
-                    </span>
-                  </li>
-                })}
-              </ul>
-            ) : <p className="text-sm text-muted-foreground">Chưa chọn dịch vụ tùy chọn.</p>}
-            <p className="text-xs text-muted-foreground">Các dịch vụ đã chọn chỉ hiển thị ở bước xác nhận. Muốn thay đổi, hãy quay lại trang chi tiết phòng.</p>
+          {services.data && <section aria-labelledby="booking-services-title" className="grid gap-3">
+            <h3 id="booking-services-title" className="font-semibold">Dịch vụ đã chọn</h3>
+            {selectedServices.length > 0 ? (
+              <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
+                <table aria-labelledby="booking-services-title" className="w-full text-xs sm:text-sm">
+                  <thead className="border-b border-border bg-muted/50 text-muted-foreground">
+                    <tr>
+                      <th scope="col" className="px-2 py-3 text-left font-semibold sm:px-4">Dịch vụ</th>
+                      <th scope="col" className="px-1.5 py-3 text-right font-semibold sm:px-3">Số lượng</th>
+                      <th scope="col" className="px-1.5 py-3 text-right font-semibold sm:px-3">Đơn giá</th>
+                      <th scope="col" className="px-2 py-3 text-left font-semibold sm:px-4">Đơn vị</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {selectedServices.map((service) => {
+                      const metered = service.quantityRule === 'METERED' || service.calculationType === 'METERED'
+                      const quantity = service.quantityRule === 'PER_SLOT' ? selectedSlots.length
+                        : service.quantityRule === 'USER_INPUT' ? serviceSelection[service.id] ?? 0 : 1
+                      return (
+                        <tr key={service.id}>
+                          <th scope="row" className="px-2 py-3 text-left font-medium sm:px-4">
+                            {service.name}
+                            {service.mandatory && <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Bắt buộc</span>}
+                          </th>
+                          <td className="px-1.5 py-3 text-right tabular-nums text-muted-foreground sm:px-3">
+                            {metered ? 'Theo chỉ số' : quantity}
+                          </td>
+                          <td className="px-1.5 py-3 text-right font-semibold whitespace-nowrap tabular-nums sm:px-3">
+                            {formatVnd(service.price)}
+                          </td>
+                          <td className="px-2 py-3 text-muted-foreground sm:px-4">{service.unit}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="text-sm text-muted-foreground">Phòng chưa có dịch vụ áp dụng cho yêu cầu này.</p>}
           </section>}
           {services.error && <InlineError error={services.error} />}
           <Notice>Giữ chỗ có hiệu lực 24 giờ sau khi xác nhận. Hệ thống tính tiền cọc theo số slot; thanh toán xong sẽ tạo hợp đồng tạm để bạn nộp bằng chứng chữ ký.</Notice>
