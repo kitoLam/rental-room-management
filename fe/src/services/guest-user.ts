@@ -106,7 +106,6 @@ export const authService = {
 const publicServiceSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
-  unit: z.string(),
   unitPrice: z.coerce.number(),
   description: z.string().nullish(),
 })
@@ -135,9 +134,7 @@ const publicRoomSchema = z.object({
       z.object({
         id: databaseIdSchema,
         name: z.string(),
-        unit: z.string(),
         unitPrice: z.coerce.number(),
-        calculationType: z.string().nullish(),
       }),
     )
     .nullish(),
@@ -264,11 +261,12 @@ export const catalogService = {
     const included = (room.roomServices || []).map((s) => ({
       id: s.id,
       name: s.name,
-      unit: s.unit,
+      // Room services are one price per room, shared by the occupants.
+      unit: 'phòng/tháng',
       price: s.unitPrice,
       mandatory: true,
-      calculationType: s.calculationType === 'PER_PERSON' ? 'PER_PERSON' : 'FIXED',
-      quantityRule: s.calculationType === 'PER_PERSON' ? ('PER_SLOT' as const) : ('FIXED_ONE' as const),
+      calculationType: 'FIXED',
+      quantityRule: 'FIXED_ONE' as const,
     }))
     const items = await request(
       'catalog',
@@ -280,7 +278,7 @@ export const catalogService = {
       ...items.map((s) => ({
         id: s.id,
         name: s.name,
-        unit: s.unit,
+        unit: 'tháng',
         price: s.unitPrice,
         mandatory: false,
         calculationType: 'FIXED',
@@ -328,7 +326,7 @@ const backendBookingSchema = z.object({
   selectedServices: z.array(z.object({
     serviceId: databaseIdSchema,
     name: z.string(),
-    unit: z.string(),
+    unit: z.string().nullish().transform((v) => v ?? ''),
     unitPrice: z.number(),
     quantity: z.number().nullable(),
     calculationType: z.string().nullable().optional(),
@@ -430,7 +428,7 @@ const backendContractSchema = z.object({
   contractUrl: z.string().nullable().optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   services: z.array(z.object({
-    serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(),
+    serviceId: z.string(), name: z.string(), unit: z.string().nullish().transform((v) => v ?? ''), unitPrice: z.number(),
     calculationType: z.string().nullable().optional(), quantity: z.number().nullable().optional(),
     mandatory: z.boolean(), selected: z.boolean(),
   })).default([]),

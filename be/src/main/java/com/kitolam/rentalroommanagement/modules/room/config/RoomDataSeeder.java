@@ -4,6 +4,8 @@ import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
 import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
+import com.kitolam.rentalroommanagement.modules.furniture.document.Furniture;
+import com.kitolam.rentalroommanagement.modules.furniture.enums.FurnitureCondition;
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.dto.request.RoomCreateRequest;
 import com.kitolam.rentalroommanagement.modules.room.service.RoomService;
@@ -23,12 +25,14 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 10 demo rooms (with their slots) in one branch. Opt-in via ROOM_SEED_ENABLED, and only creates
+ * 10 demo rooms (with their slots, available from today, and basic furniture) in one branch. Opt-in via ROOM_SEED_ENABLED, and only creates
  * room numbers that do not exist in that branch yet, so it is safe to leave on.
  * Target branch: ROOM_SEED_BRANCH_ID, or the oldest ACTIVE branch.
  */
 @Slf4j
 @Component
+// After ServiceCatalogSeeder so new rooms get the branch's room services.
+@org.springframework.core.annotation.Order(20)
 @ConditionalOnProperty(name = "app.seed.rooms.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class RoomDataSeeder implements CommandLineRunner {
@@ -91,13 +95,37 @@ public class RoomDataSeeder implements CommandLineRunner {
                 attachServices(target, sample.number(), roomServiceIds);
                 continue;
             }
-            roomService.create(new RoomCreateRequest(target, sample.title(), sample.number(), sample.floor(),
+            var room = roomService.create(new RoomCreateRequest(target, sample.title(), sample.number(), sample.floor(),
                     BigDecimal.valueOf(sample.area()), sample.occupants(), BigDecimal.valueOf(sample.price()),
                     BigDecimal.valueOf(sample.price()), sample.amenities(), sample.images(), roomServiceIds,
                     "Giữ yên lặng sau 22h. Không hút thuốc trong phòng. Khách ở lại qua đêm cần báo quản lý."), SYSTEM);
+            seedFurniture(room.id(), sample.occupants());
             created++;
         }
         log.info("Room seed: created {} rooms in branch {}", created, target);
+    }
+
+    /** Basic furniture of a new sample room; per-person items scale with the capacity. */
+    private void seedFurniture(String roomId, int occupants) {
+        record Item(String name, int quantity, FurnitureCondition condition) {
+        }
+        List<Item> items = List.of(
+                new Item("Giường", occupants, FurnitureCondition.GOOD),
+                new Item("Nệm", occupants, FurnitureCondition.NEW),
+                new Item("Tủ quần áo", occupants, FurnitureCondition.GOOD),
+                new Item("Bàn học", Math.max(1, occupants / 2), FurnitureCondition.GOOD),
+                new Item("Ghế", occupants, FurnitureCondition.GOOD),
+                new Item("Máy lạnh", 1, FurnitureCondition.GOOD),
+                new Item("Quạt trần", 1, FurnitureCondition.WORN),
+                new Item("Đèn LED", 2, FurnitureCondition.NEW));
+        for (Item item : items) {
+            Furniture furniture = new Furniture();
+            furniture.setRoomId(roomId);
+            furniture.setName(item.name());
+            furniture.setQuantity(item.quantity());
+            furniture.setCondition(item.condition());
+            mongoTemplate.save(furniture);
+        }
     }
 
     /** Existing sample rooms without room services get every active service of the branch. */

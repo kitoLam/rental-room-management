@@ -24,7 +24,6 @@ type Target = { label: string; contractIds?: string[]; count: number; amount: nu
 const FEES: { key: keyof SlotEstimate; label: string; types: string[] }[] = [
   { key: 'rentAmount', label: 'Tiền phòng', types: ['ROOM_RENT'] },
   { key: 'roomServiceAmount', label: 'Dịch vụ phòng', types: ['ROOM_SERVICE'] },
-  { key: 'personalServiceAmount', label: 'Dịch vụ cá nhân', types: ['PERSONAL_SERVICE'] },
   { key: 'electricityAmount', label: 'Tiền điện', types: ['ELECTRICITY'] },
   { key: 'slotServiceAmount', label: 'Dịch vụ tự chọn', types: ['SLOT_SERVICE'] },
 ]

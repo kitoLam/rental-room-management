@@ -13,7 +13,6 @@ import com.kitolam.rentalroommanagement.modules.meterreading.support.RoomOccupan
 import com.kitolam.rentalroommanagement.modules.room.document.Room;
 import com.kitolam.rentalroommanagement.modules.room.repository.RoomRepository;
 import com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService;
-import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceCalculationType;
 import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceStatus;
 import com.kitolam.rentalroommanagement.modules.roomservice.repository.RoomServiceRepository;
 import com.kitolam.rentalroommanagement.modules.roomslot.document.RoomSlot;
@@ -37,12 +36,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Computes the monthly bill of every contract (= slot) of a branch from 5 fees:
+ * Computes the monthly bill of every contract (= slot) of a branch from 4 fees:
  * <ol>
  *   <li>rent, prorated by the days actually lived in the month;</li>
- *   <li>room services (per room), room price split by the number of occupants of the month;</li>
- *   <li>personal services (per person), the unit price for each occupant;</li>
- *   <li>room electricity (meter reading), split by the number of occupants;</li>
+ *   <li>room services, the room's monthly price split by the number of occupants of the month;</li>
+ *   <li>room electricity (meter reading), split the same way;</li>
  *   <li>slot services: every registration that touched the month counts in full.</li>
  * </ol>
  * "Occupants of the month" = contracts of the room whose stay overlaps the month, even partially.
@@ -135,18 +133,15 @@ public class MonthlyBillCalculator {
                 days >= monthDays ? "Tiền phòng" : "Tiền phòng " + days + " ngày",
                 stayFrom, stayUntil.minusDays(1), BigDecimal.valueOf(days), rentPrice, rent, null));
 
-        // Phí 2: room services (PER_ROOM), room price split by occupants of the month.
-        // Phí 3: personal services (PER_PERSON), each occupant pays the unit price.
+        // Phí 2: room services, the room's monthly price split by the occupants of the month.
         BigDecimal peopleCount = BigDecimal.valueOf(people);
         for (RoomService s : roomServices) {
             BigDecimal price = s.getUnitPrice() == null ? BigDecimal.ZERO : s.getUnitPrice();
-            boolean perPerson = s.getCalculationType() == RoomServiceCalculationType.PER_PERSON;
-            BigDecimal share = perPerson ? price : price.divide(peopleCount, 0, RoundingMode.HALF_UP);
-            items.add(item(perPerson ? InvoiceItemType.PERSONAL_SERVICE : InvoiceItemType.ROOM_SERVICE, s.getName(),
-                    first, afterLast.minusDays(1), perPerson ? BigDecimal.ONE : peopleCount, price, share, null));
+            items.add(item(InvoiceItemType.ROOM_SERVICE, s.getName(), first, afterLast.minusDays(1), peopleCount, price,
+                    price.divide(peopleCount, 0, RoundingMode.HALF_UP), null));
         }
 
-        // Phí 4: room electricity, split by occupants of the month.
+        // Phí 3: room electricity, split by occupants of the month.
         boolean electricityUnchanged = false;
         if (closing != null) {
             items.add(item(InvoiceItemType.ELECTRICITY, "Tiền điện chốt khi hủy hợp đồng",
@@ -170,7 +165,7 @@ public class MonthlyBillCalculator {
                     first, afterLast.minusDays(1), reading.getUsage(), reading.getUnitPrice(), share, warning));
         }
 
-        // Phí 5: every slot-service registration that touched the month counts in full.
+        // Phí 4: every slot-service registration that touched the month counts in full.
         if (contract.getActiveSlotServices() != null) {
             for (ActiveSlotService s : contract.getActiveSlotServices()) {
                 boolean endsOnClosingDay = closing != null && s.getStartDate() != null

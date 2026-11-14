@@ -41,9 +41,7 @@ public class RoomServiceCatalogServiceImpl implements RoomServiceCatalogService 
         RoomService item = new RoomService();
         item.setBranchId(request.branchId());
         item.setName(request.name().trim());
-        item.setUnit(request.unit().trim());
         item.setUnitPrice(request.unitPrice());
-        if (request.calculationType() != null) item.setCalculationType(request.calculationType());
         item.setDescription(request.description());
         ensureUniqueName(item);
         return toResponse(repository.save(item));
@@ -72,9 +70,7 @@ public class RoomServiceCatalogServiceImpl implements RoomServiceCatalogService 
         RoomService item = getEntity(id);
         staffAccess.requireBranch(item.getBranchId(), principal);
         if (request.name() != null) item.setName(request.name().trim());
-        if (request.unit() != null) item.setUnit(request.unit().trim());
         if (request.unitPrice() != null) item.setUnitPrice(request.unitPrice());
-        if (request.calculationType() != null) item.setCalculationType(request.calculationType());
         if (request.description() != null) item.setDescription(request.description());
         if (request.status() != null) item.setStatus(request.status());
         ensureUniqueName(item);
@@ -112,8 +108,8 @@ public class RoomServiceCatalogServiceImpl implements RoomServiceCatalogService 
 
     @Override
     public RoomServiceResponse toResponse(RoomService item) {
-        return new RoomServiceResponse(item.getId(), item.getBranchId(), item.getName(), item.getUnit(), item.getUnitPrice(),
-                item.getCalculationType(), item.getDescription(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
+        return new RoomServiceResponse(item.getId(), item.getBranchId(), item.getName(), item.getUnitPrice(),
+                item.getDescription(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
     }
 
     private void ensureUniqueName(RoomService item) {

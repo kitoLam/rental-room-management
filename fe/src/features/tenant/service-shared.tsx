@@ -49,7 +49,7 @@ export function RegisterService({
       <Facts
         items={[
           ['Dịch vụ', s.name],
-          ['Đơn giá hiện tại', `${formatVnd(s.unitPrice)} / ${s.unit}`],
+          ['Đơn giá hiện tại', `${formatVnd(s.unitPrice)}${s.unit ? ` / ${s.unit}` : ''}`],
         ]}
       />
       <Field

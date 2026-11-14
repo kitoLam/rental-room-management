@@ -19,7 +19,7 @@ export function RoomServiceList({
               {s.quantityRule === 'PER_SLOT' && <span className="text-xs text-muted-foreground">{slotCount > 0 ? `${slotCount} slot` : 'theo slot'}</span>}
               {metered && <span className="text-xs text-muted-foreground">Tính theo chỉ số thực tế</span>}
               <span className="text-muted-foreground">
-                {formatVnd(s.price)} / {s.unit}
+                {formatVnd(s.price)}{s.unit ? ` / ${s.unit}` : ''}
               </span>
             </div>
           </li>

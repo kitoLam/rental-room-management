@@ -11,7 +11,6 @@ import java.math.BigDecimal;
 public record SlotServiceCreateRequest(
         @NotBlank @ValidObjectId String branchId,
         @NotBlank @Size(max = 100) String name,
-        @NotBlank @Size(max = 30) String unit,
         @NotNull @PositiveOrZero BigDecimal unitPrice,
         @Size(max = 500) String description
 ) {

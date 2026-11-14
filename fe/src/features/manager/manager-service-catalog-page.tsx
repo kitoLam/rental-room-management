@@ -20,8 +20,6 @@ const descriptions: Record<CatalogKind, string> = {
   slot: 'Dịch vụ người thuê tự chọn thêm (gửi xe, giặt sấy...). Người thuê gửi yêu cầu đăng ký / huỷ trong không gian thuê.',
 }
 
-const calcLabel = { PER_ROOM: 'Theo phòng', PER_PERSON: 'Theo người' } as const
-
 function CatalogPage({ kind }: { kind: CatalogKind }) {
   const { branch } = useManager()
   const queryClient = useQueryClient()
@@ -70,7 +68,6 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-3 font-bold">Dịch vụ</th>
                   <th className="px-3 py-3 font-bold">Đơn giá</th>
-                  {kind === 'room' && <th className="px-3 py-3 font-bold">Cách tính</th>}
                   <th className="px-3 py-3 font-bold">Trạng thái</th>
                   <th className="px-5 py-3 text-right font-bold">Thao tác</th>
                 </tr>
@@ -83,11 +80,9 @@ function CatalogPage({ kind }: { kind: CatalogKind }) {
                       {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
-                      {formatVnd(item.unitPrice)} <span className="text-muted-foreground">/ {item.unit}</span>
+                      {formatVnd(item.unitPrice)}{' '}
+                      <span className="text-muted-foreground">/ {kind === 'room' ? 'phòng' : 'người'} / tháng</span>
                     </td>
-                    {kind === 'room' && (
-                      <td className="px-3 py-4">{item.calculationType ? calcLabel[item.calculationType] : '—'}</td>
-                    )}
                     <td className="px-3 py-4">
                       <StatusBadge tone={item.status === 'ACTIVE' ? 'success' : 'neutral'}>
                         {item.status === 'ACTIVE' ? 'Đang áp dụng' : 'Ngừng'}
@@ -183,10 +178,8 @@ function CatalogForm({
     const form = new FormData(event.currentTarget)
     save.mutate({
       name: String(form.get('name') || '').trim(),
-      unit: String(form.get('unit') || '').trim(),
       unitPrice: Number(form.get('unitPrice') || 0),
       description: String(form.get('description') || '').trim(),
-      ...(kind === 'room' ? { calculationType: form.get('calculationType') as 'PER_ROOM' | 'PER_PERSON' } : {}),
       ...(item ? { status: form.get('status') as 'ACTIVE' | 'INACTIVE' } : {}),
     })
   }
@@ -196,29 +189,12 @@ function CatalogForm({
         <Field label="Tên dịch vụ">
           <input name="name" required maxLength={100} defaultValue={item?.name} className="input" />
         </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Đơn giá (VND)">
-            <input name="unitPrice" type="number" min={0} step={1000} required defaultValue={item?.unitPrice ?? 0} className="input" />
-          </Field>
-          <Field label="Đơn vị tính">
-            <input
-              name="unit"
-              required
-              maxLength={30}
-              placeholder={kind === 'room' ? 'phòng/tháng' : 'xe/tháng'}
-              defaultValue={item?.unit}
-              className="input"
-            />
-          </Field>
-        </div>
-        {kind === 'room' && (
-          <Field label="Cách tính">
-            <select name="calculationType" defaultValue={item?.calculationType || 'PER_ROOM'} className="input">
-              <option value="PER_ROOM">Theo phòng (chia đều cho người ở)</option>
-              <option value="PER_PERSON">Theo người</option>
-            </select>
-          </Field>
-        )}
+        <Field label={kind === 'room' ? 'Giá / phòng / tháng (VND)' : 'Giá / người / tháng (VND)'}>
+          <input name="unitPrice" type="number" min={0} step={1000} required defaultValue={item?.unitPrice ?? 0} className="input" />
+          {kind === 'room' && (
+            <span className="text-xs text-muted-foreground">Chia đều cho số người ở trong phòng của tháng đó.</span>
+          )}
+        </Field>
         {item && (
           <Field label="Trạng thái">
             <select name="status" defaultValue={item.status} className="input">

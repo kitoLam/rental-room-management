@@ -28,7 +28,7 @@ export const tenantContractSchema = z.object({
   services: z.array(z.object({
     serviceId: z.string(),
     name: z.string(),
-    unit: z.string(),
+    unit: z.string().nullish().transform((v) => v ?? ''),
     unitPrice: z.number(),
     quantity: z.number().nullable().optional(),
     mandatory: z.boolean(),
@@ -160,7 +160,7 @@ export const serviceSchema = z.object({
   id,
   name: z.string(),
   mandatory: z.boolean(),
-  unit: z.string(),
+  unit: z.string().nullish().transform((v) => v ?? ''),
   unitPrice: money,
   subscriptionId: id.nullable(),
   // AVAILABLE / ACTIVE / STOP_PENDING đến từ API thật (/api/v1/service-requests/catalog); các giá trị cũ dùng cho mock.
@@ -204,7 +204,7 @@ export const chargeSchema = z.object({
       previousReading: z.number().nullable(),
       currentReading: z.number().nullable(),
       quantity: z.number(),
-      unit: z.string(),
+      unit: z.string().nullish().transform((v) => v ?? ''),
       unitPrice: money,
       amount: money,
       reason: z.string(),

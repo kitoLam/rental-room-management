@@ -92,7 +92,6 @@ const slotEstimateSchema = z.object({
   stayTo: z.string(),
   rentAmount: money,
   roomServiceAmount: money,
-  personalServiceAmount: money,
   electricityAmount: money,
   slotServiceAmount: money,
   totalAmount: money,

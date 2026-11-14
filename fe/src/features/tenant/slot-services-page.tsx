@@ -88,7 +88,7 @@ export function SlotServicesPage() {
                 <div>
                   <p className="font-bold">{s.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {s.quantity} × {formatVnd(s.unitPrice ?? 0)} / {s.unit}
+                    {s.quantity} × {formatVnd(s.unitPrice ?? 0)} / tháng
                   </p>
                 </div>
                 {pendingIds.has(s.slotServiceId) ? (
@@ -120,7 +120,7 @@ export function SlotServicesPage() {
                     <div>
                       <p className="font-bold">{item.name}</p>
                       <p className="text-sm">
-                        {formatVnd(item.unitPrice)} <span className="text-muted-foreground">/ {item.unit}</span>
+                        {formatVnd(item.unitPrice)} <span className="text-muted-foreground">/ tháng</span>
                       </p>
                       {item.description && <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>}
                     </div>
@@ -239,7 +239,7 @@ function AddModal({
     onSuccess: onDone,
   })
   return (
-    <Modal title={`Đăng ký ${item.name}`} description={`${formatVnd(item.unitPrice)} / ${item.unit}`} open onOpenChange={(o) => !o && onClose()}>
+    <Modal title={`Đăng ký ${item.name}`} description={`${formatVnd(item.unitPrice)} / tháng`} open onOpenChange={(o) => !o && onClose()}>
       <div className="grid gap-4">
         <label className="grid gap-1 text-sm">
           <span className="font-medium">Số lượng</span>

@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 /** PATCH semantics: null fields are left unchanged. */
 public record SlotServiceUpdateRequest(
         @Pattern(regexp = ".*\\S.*", message = "không được để trống") @Size(max = 100) String name,
-        @Pattern(regexp = ".*\\S.*", message = "không được để trống") @Size(max = 30) String unit,
         @PositiveOrZero BigDecimal unitPrice,
         @Size(max = 500) String description,
         SlotServiceStatus status

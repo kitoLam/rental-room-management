@@ -18,7 +18,6 @@ public record SlotServiceRequestResponse(
         String roomSlotId,
         String slotServiceId,
         String serviceName,
-        String unit,
         BigDecimal unitPrice,
         Integer quantity,
         SlotServiceRequestAction action,

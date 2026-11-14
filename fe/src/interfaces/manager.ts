@@ -93,7 +93,7 @@ export const contractTenantSchema = z.object({
   bookingId: databaseIdSchema.nullable(),
   roomSlotIds: z.array(databaseIdSchema).optional(),
   services: z.array(z.object({
-    serviceId: databaseIdSchema, name: z.string(), unit: z.string(), unitPrice: z.number(),
+    serviceId: databaseIdSchema, name: z.string(), unit: z.string().nullish().transform((v) => v ?? ''), unitPrice: z.number(),
     mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(),
     calculationType: z.string().nullable().optional(),
   })).optional(),
@@ -160,7 +160,7 @@ export const contractSchema = contractInputSchema.extend({
   expiringSoon: z.boolean().optional(),
   renewedFromContractId: z.string().nullable().optional(),
   renewedToContractId: z.string().nullable().optional(),
-  services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string(), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
+  services: z.array(z.object({ serviceId: z.string(), name: z.string(), unit: z.string().nullish().transform((v) => v ?? ''), unitPrice: z.number(), mandatory: z.boolean(), selected: z.boolean(), quantity: z.number().nullable().optional(), calculationType: z.string().nullable().optional() })).optional(),
   roomName: z.string().optional(),
   id: databaseIdSchema,
   branchId: databaseIdSchema,

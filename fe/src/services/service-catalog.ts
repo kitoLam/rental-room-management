@@ -19,9 +19,7 @@ export const catalogItemSchema = z.object({
   id: z.string(),
   branchId: z.string(),
   name: z.string(),
-  unit: z.string(),
   unitPrice: money,
-  calculationType: z.enum(['PER_ROOM', 'PER_PERSON']).nullish(),
   description: z.string().nullish(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
 })
@@ -30,9 +28,7 @@ export type CatalogItem = z.infer<typeof catalogItemSchema>
 export type CatalogInput = {
   branchId?: string
   name: string
-  unit: string
   unitPrice: number
-  calculationType?: 'PER_ROOM' | 'PER_PERSON'
   description?: string
   status?: 'ACTIVE' | 'INACTIVE'
 }
@@ -48,7 +44,6 @@ export const slotServiceRequestSchema = z.object({
   branchId: z.string().nullish(),
   slotServiceId: z.string(),
   serviceName: z.string().nullish(),
-  unit: z.string().nullish(),
   unitPrice: money.nullish(),
   quantity: z.number().nullish(),
   action: z.enum(['ADD', 'CANCEL']),
@@ -63,7 +58,6 @@ export type SlotServiceRequest = z.infer<typeof slotServiceRequestSchema>
 export const activeSlotServiceSchema = z.object({
   slotServiceId: z.string(),
   name: z.string().nullish(),
-  unit: z.string().nullish(),
   unitPrice: money.nullish(),
   quantity: z.number().nullish(),
   startDate: z.string().nullish(),

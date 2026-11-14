@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
  * <ol>
  *   <li>drops room_service_charges / slot_service_charges (invoices are computed from catalogs + meter readings);</li>
  *   <li>removes the per-contract rates / initial readings (rates live on the branch, readings in room_meter_readings);</li>
+ *   <li>service catalogs, slot service requests and contract slot services: removes unit / calculationType;</li>
  *   <li>invoices: backfills contractId from contractTenantId, then removes contractTenantId, previousDebt and the
  *       charge references on items.</li>
  * </ol>
@@ -45,6 +46,15 @@ public class LegacySchemaCleanup implements ApplicationRunner {
                         .unset("electricityRate").unset("waterRate").unset("parkingRate"),
                 "contracts").getModifiedCount();
         if (contracts > 0) log.info("Removed legacy rate / reading fields from {} contracts", contracts);
+
+        // Service catalogs no longer have unit / calculationType (room services are always split per occupant).
+        long catalogs = mongoTemplate.updateMulti(new Query(new Criteria().orOperator(exists("unit"), exists("calculationType"))),
+                new Update().unset("unit").unset("calculationType"), "room_services").getModifiedCount()
+                + mongoTemplate.updateMulti(new Query(exists("unit")), new Update().unset("unit"), "slot_services").getModifiedCount()
+                + mongoTemplate.updateMulti(new Query(exists("unit")), new Update().unset("unit"), "slot_service_requests").getModifiedCount()
+                + mongoTemplate.updateMulti(new Query(exists("activeSlotServices.unit")),
+                new Update().unset("activeSlotServices.$[].unit"), "contracts").getModifiedCount();
+        if (catalogs > 0) log.info("Removed unit / calculationType from {} service documents", catalogs);
 
         backfillInvoiceContractIds();
         long invoices = mongoTemplate.updateMulti(
