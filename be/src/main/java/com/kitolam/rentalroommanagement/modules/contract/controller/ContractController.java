@@ -10,6 +10,8 @@ import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractChe
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractRenewRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractTerminationRequest;
+import com.kitolam.rentalroommanagement.modules.contract.document.ContractTerminationSettlement;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractTermRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.response.ContractResponse;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
@@ -127,6 +129,20 @@ public class ContractController {
     @PreAuthorize("hasAnyRole('TENANT', 'OWNER', 'MANAGER', 'ADMIN')")
     public StandardResponse<ContractResponse> getById(@PathVariable String id, @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success(contractService.getById(id, principal));
+    }
+
+    @GetMapping("/{id}/termination")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
+    public StandardResponse<ContractService.TerminationDetails> terminationDetails(@PathVariable String id,
+            @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success(contractService.terminationDetails(id, principal));
+    }
+
+    @PostMapping("/{id}/termination")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
+    public StandardResponse<ContractTerminationSettlement> terminate(@PathVariable String id,
+            @Valid @RequestBody ContractTerminationRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Đã hủy hợp đồng", contractService.terminate(id, request, principal));
     }
 
     @GetMapping

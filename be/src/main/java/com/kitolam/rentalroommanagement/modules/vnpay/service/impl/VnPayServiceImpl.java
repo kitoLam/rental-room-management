@@ -484,7 +484,9 @@ public class VnPayServiceImpl implements VnPayService {
 
                 BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
                 BigDecimal remaining = total.subtract(newPaid);
-                if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+                if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+                    invoice.setRemainingAmount(BigDecimal.ZERO);
+                } else if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
                     invoice.setRemainingAmount(BigDecimal.ZERO);
                     invoice.setStatus(InvoiceStatus.PAID);
                 } else {

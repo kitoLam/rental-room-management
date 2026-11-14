@@ -155,5 +155,7 @@ public class Contract extends BaseDocument {
 
     private String terminationReason;
 
+    private ContractTerminationSettlement terminationSettlement;
+
     private ContractStatus status = ContractStatus.DRAFT;
 }
