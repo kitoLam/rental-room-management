@@ -25,9 +25,6 @@ public class SlotService extends BaseDocument {
 
     private String name;
 
-    /** e.g. "phòng/tháng", "xe/tháng". */
-    private String unit;
-
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal unitPrice;
 

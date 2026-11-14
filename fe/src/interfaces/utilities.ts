@@ -191,9 +191,9 @@ export const tenantServiceOverviewSchema = z.object({
   serviceId: objectId,
   code: z.string(),
   name: z.string(),
-  unit: z.string(),
+  unit: z.string().nullish().transform((v) => v ?? ''),
   unitPrice: z.coerce.number(),
-  calculationType: z.string(),
+  calculationType: z.string().nullish().transform((v) => v ?? ''),
   scope: serviceScopeEnum,
   subscription: z
     .object({

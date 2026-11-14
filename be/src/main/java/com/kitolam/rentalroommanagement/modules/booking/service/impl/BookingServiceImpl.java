@@ -734,7 +734,6 @@ public class BookingServiceImpl implements BookingService {
             SelectedServiceSnapshot snapshot = new SelectedServiceSnapshot();
             snapshot.setServiceId(service.getId());
             snapshot.setName(service.getName());
-            snapshot.setUnit(service.getUnit());
             snapshot.setUnitPrice(service.getUnitPrice());
             snapshot.setCalculationType("FIXED");
             snapshot.setQuantityRule("USER_INPUT");

@@ -23,8 +23,6 @@ public class ActiveSlotService {
 
     private String name;
 
-    private String unit;
-
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal unitPrice;
 

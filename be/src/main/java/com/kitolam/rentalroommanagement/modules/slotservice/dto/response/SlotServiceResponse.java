@@ -9,7 +9,6 @@ public record SlotServiceResponse(
         String id,
         String branchId,
         String name,
-        String unit,
         BigDecimal unitPrice,
         String description,
         SlotServiceStatus status,

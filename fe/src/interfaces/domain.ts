@@ -56,7 +56,7 @@ export const roomSchema = z.object({
       z.object({
         id: z.string(),
         name: z.string(),
-        unit: z.string(),
+        unit: z.string().nullish().transform((v) => v ?? ''),
         unitPrice: z.number(),
         calculationType: z.string().nullish(),
       }),
@@ -74,7 +74,7 @@ export const roomSchema = z.object({
     z.object({
       name: z.string(),
       price: z.number(),
-      unit: z.string(),
+      unit: z.string().nullish().transform((v) => v ?? ''),
       mandatory: z.boolean().optional(),
       calculationType: z.string().optional(),
     }),
@@ -213,7 +213,7 @@ export const bookingSchema = z.object({
   selectedServices: z.array(z.object({
     serviceId: databaseIdSchema,
     name: z.string(),
-    unit: z.string(),
+    unit: z.string().nullish().transform((v) => v ?? ''),
     unitPrice: z.number(),
     quantity: z.number().nullable(),
   })).default([]),

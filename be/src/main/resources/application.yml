@@ -55,6 +55,9 @@ app:
   seed:
     auth:
       enabled: ${AUTH_SEED_ENABLED:false}
+    # Extra tenant account tenant2@tropro.com (password = AUTH_SEED_PASSWORD), created only when missing.
+    demo-tenant:
+      enabled: ${DEMO_TENANT_SEED_ENABLED:false}
     services:
       enabled: ${SERVICE_SEED_ENABLED:false}
     # Wipes and rebuilds all electricity meter readings (last 6 months). Turn off after one run.

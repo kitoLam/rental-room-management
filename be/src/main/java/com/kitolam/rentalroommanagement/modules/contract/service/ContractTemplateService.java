@@ -108,9 +108,7 @@ public class ContractTemplateService {
         ContractServiceSnapshot snapshot = new ContractServiceSnapshot();
         snapshot.setServiceId(service.getId());
         snapshot.setName(service.getName());
-        snapshot.setUnit(service.getUnit());
         snapshot.setUnitPrice(service.getUnitPrice());
-        snapshot.setCalculationType(service.getCalculationType() == null ? null : service.getCalculationType().name());
         snapshot.setMandatory(true);
         snapshot.setSelected(true);
         return snapshot;

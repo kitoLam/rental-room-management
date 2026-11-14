@@ -287,7 +287,7 @@ export const tenantApi = {
           id: s.slotServiceId,
           name: s.name || 'Dịch vụ',
           mandatory: false,
-          unit: s.unit || '',
+          unit: '',
           unitPrice: s.unitPrice ?? 0,
           subscriptionId: null,
           requestId: null,

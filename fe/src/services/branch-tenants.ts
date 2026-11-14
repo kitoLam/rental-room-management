@@ -67,7 +67,7 @@ export type CreateTenantAccountInput = z.infer<typeof createTenantAccountSchema>
 export const tenantDebtServiceItemSchema = z.object({
   serviceId: z.string().nullable().optional(),
   name: z.string(),
-  unit: z.string(),
+  unit: z.string().nullish().transform((v) => v ?? ''),
   unitPrice: z.coerce.number(),
   quantity: z.number(),
   amount: z.coerce.number(),

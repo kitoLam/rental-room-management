@@ -76,7 +76,7 @@ export function ManagerSlotServiceRequests() {
                         {r.action === 'ADD' ? 'Đăng ký' : 'Huỷ'} · {r.serviceName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {r.quantity} × {formatVnd(r.unitPrice ?? 0)} / {r.unit}
+                        {r.quantity} × {formatVnd(r.unitPrice ?? 0)} / tháng
                       </p>
                       {r.note && <p className="mt-1 text-xs">“{r.note}”</p>}
                       {r.rejectReason && <p className="mt-1 text-xs text-danger">Lý do: {r.rejectReason}</p>}

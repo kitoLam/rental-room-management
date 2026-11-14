@@ -103,7 +103,6 @@ public class SlotServiceRequestServiceImpl implements SlotServiceRequestService 
         item.setRoomSlotId(contract.getRoomSlotId());
         item.setSlotServiceId(service.getId());
         item.setServiceName(service.getName());
-        item.setUnit(service.getUnit());
         item.setUnitPrice(service.getUnitPrice());
         item.setQuantity(request.action() == SlotServiceRequestAction.ADD
                 ? (request.quantity() == null ? 1 : request.quantity())
@@ -165,7 +164,6 @@ public class SlotServiceRequestServiceImpl implements SlotServiceRequestService 
             ActiveSlotService added = new ActiveSlotService();
             added.setSlotServiceId(item.getSlotServiceId());
             added.setName(item.getServiceName());
-            added.setUnit(item.getUnit());
             added.setUnitPrice(item.getUnitPrice());
             added.setQuantity(item.getQuantity());
             added.setStartDate(effective);
@@ -267,7 +265,7 @@ public class SlotServiceRequestServiceImpl implements SlotServiceRequestService 
 
     private SlotServiceRequestResponse toResponse(SlotServiceRequest r) {
         return new SlotServiceRequestResponse(r.getId(), r.getContractId(), r.getContractNumber(), r.getTenantId(), r.getTenantName(),
-                r.getBranchId(), r.getRoomId(), r.getRoomSlotId(), r.getSlotServiceId(), r.getServiceName(), r.getUnit(),
+                r.getBranchId(), r.getRoomId(), r.getRoomSlotId(), r.getSlotServiceId(), r.getServiceName(),
                 r.getUnitPrice(), r.getQuantity(), r.getAction(), r.getStatus(), r.getNote(), r.getRejectReason(),
                 r.getEffectiveDate(), r.getProcessedAt(), r.getCreatedAt());
     }

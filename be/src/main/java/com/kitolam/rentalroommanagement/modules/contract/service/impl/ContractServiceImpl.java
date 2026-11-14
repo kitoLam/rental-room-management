@@ -656,7 +656,6 @@ public class ContractServiceImpl implements ContractService {
                     var active = new com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService();
                     active.setSlotServiceId(service.getServiceId());
                     active.setName(service.getName());
-                    active.setUnit(service.getUnit());
                     active.setUnitPrice(service.getUnitPrice());
                     active.setQuantity(service.getQuantity() == null ? 1 : service.getQuantity());
                     active.setStartDate(startDate);

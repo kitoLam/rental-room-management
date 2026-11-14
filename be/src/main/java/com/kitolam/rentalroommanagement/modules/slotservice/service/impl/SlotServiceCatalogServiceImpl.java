@@ -46,7 +46,6 @@ public class SlotServiceCatalogServiceImpl implements SlotServiceCatalogService 
         SlotService item = new SlotService();
         item.setBranchId(request.branchId());
         item.setName(request.name().trim());
-        item.setUnit(request.unit().trim());
         item.setUnitPrice(request.unitPrice());
         item.setDescription(request.description());
         ensureUniqueName(item);
@@ -76,7 +75,6 @@ public class SlotServiceCatalogServiceImpl implements SlotServiceCatalogService 
         SlotService item = getEntity(id);
         staffAccess.requireBranch(item.getBranchId(), principal);
         if (request.name() != null) item.setName(request.name().trim());
-        if (request.unit() != null) item.setUnit(request.unit().trim());
         if (request.unitPrice() != null) item.setUnitPrice(request.unitPrice());
         if (request.description() != null) item.setDescription(request.description());
         if (request.status() != null) item.setStatus(request.status());
@@ -127,7 +125,7 @@ public class SlotServiceCatalogServiceImpl implements SlotServiceCatalogService 
 
     @Override
     public SlotServiceResponse toResponse(SlotService item) {
-        return new SlotServiceResponse(item.getId(), item.getBranchId(), item.getName(), item.getUnit(), item.getUnitPrice(),
+        return new SlotServiceResponse(item.getId(), item.getBranchId(), item.getName(), item.getUnitPrice(),
                 item.getDescription(), item.getStatus(), item.getCreatedAt(), item.getUpdatedAt());
     }
 

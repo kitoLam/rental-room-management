@@ -47,8 +47,6 @@ public class SlotServiceRequest extends BaseDocument {
 
     private String serviceName;
 
-    private String unit;
-
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal unitPrice;
 

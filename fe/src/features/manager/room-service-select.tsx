@@ -54,7 +54,7 @@ export function RoomServiceSelect({
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{s.name}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {formatVnd(s.unitPrice)} / {s.unit}
+                  {formatVnd(s.unitPrice)} / phòng / tháng
                   {s.status !== 'ACTIVE' && ' · đã ngừng'}
                 </span>
               </span>
@@ -81,7 +81,7 @@ export function RoomServiceList({ branchId, ids }: { branchId: string; ids: stri
         <li key={s.id} className="flex justify-between gap-4 border-t border-border/60 py-2">
           <span>{s.name}</span>
           <span className="text-muted-foreground">
-            {formatVnd(s.unitPrice)} / {s.unit}
+            {formatVnd(s.unitPrice)} / phòng / tháng
           </span>
         </li>
       ))}

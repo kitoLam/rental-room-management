@@ -4,7 +4,6 @@ import com.kitolam.rentalroommanagement.common.util.MongoQueryHelper;
 import com.kitolam.rentalroommanagement.modules.branch.document.Branch;
 import com.kitolam.rentalroommanagement.modules.branch.enums.BranchStatus;
 import com.kitolam.rentalroommanagement.modules.roomservice.document.RoomService;
-import com.kitolam.rentalroommanagement.modules.roomservice.enums.RoomServiceCalculationType;
 import com.kitolam.rentalroommanagement.modules.slotservice.document.SlotService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,28 +23,29 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@org.springframework.core.annotation.Order(10)
 @ConditionalOnProperty(name = "app.seed.services.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class ServiceCatalogSeeder implements CommandLineRunner {
 
-    private record RoomItem(String name, String unit, int price, RoomServiceCalculationType type, String description) {
+    private record RoomItem(String name, int price, String description) {
     }
 
-    private record SlotItem(String name, String unit, int price, String description) {
+    private record SlotItem(String name, int price, String description) {
     }
 
     private static final List<RoomItem> ROOM_ITEMS = List.of(
-            new RoomItem("Wi-Fi", "phòng/tháng", 100_000, RoomServiceCalculationType.PER_ROOM, "Internet cáp quang dùng chung trong phòng"),
-            new RoomItem("Vệ sinh / rác", "người/tháng", 30_000, RoomServiceCalculationType.PER_PERSON, "Thu gom rác hằng ngày"),
-            new RoomItem("Thang máy", "người/tháng", 20_000, RoomServiceCalculationType.PER_PERSON, "Bảo trì và vận hành thang máy"),
-            new RoomItem("Nước sinh hoạt", "người/tháng", 100_000, RoomServiceCalculationType.PER_PERSON, "Khoán theo đầu người")
+            new RoomItem("Wi-Fi", 100_000, "Internet cáp quang dùng chung trong phòng"),
+            new RoomItem("Vệ sinh / rác", 30_000, "Thu gom rác hằng ngày"),
+            new RoomItem("Thang máy", 20_000, "Bảo trì và vận hành thang máy"),
+            new RoomItem("Nước sinh hoạt", 100_000, "Khoán theo đầu người")
     );
 
     private static final List<SlotItem> SLOT_ITEMS = List.of(
-            new SlotItem("Gửi xe máy", "xe/tháng", 100_000, "Chỗ để xe trong hầm, có bảo vệ"),
-            new SlotItem("Giặt sấy", "gói/tháng", 80_000, "Giặt sấy không giới hạn tại phòng giặt chung"),
-            new SlotItem("Tủ đồ cá nhân", "tủ/tháng", 50_000, "Tủ có khoá riêng"),
-            new SlotItem("Dọn phòng định kỳ", "gói/tháng", 120_000, "Dọn phần chỗ ở của bạn mỗi tuần một lần")
+            new SlotItem("Gửi xe máy", 100_000, "Chỗ để xe trong hầm, có bảo vệ"),
+            new SlotItem("Giặt sấy", 80_000, "Giặt sấy không giới hạn tại phòng giặt chung"),
+            new SlotItem("Tủ đồ cá nhân", 50_000, "Tủ có khoá riêng"),
+            new SlotItem("Dọn phòng định kỳ", 120_000, "Dọn phần chỗ ở của bạn mỗi tuần một lần")
     );
 
     private final MongoTemplate mongoTemplate;
@@ -61,9 +61,7 @@ public class ServiceCatalogSeeder implements CommandLineRunner {
                 RoomService service = new RoomService();
                 service.setBranchId(branch.getId());
                 service.setName(item.name());
-                service.setUnit(item.unit());
                 service.setUnitPrice(BigDecimal.valueOf(item.price()));
-                service.setCalculationType(item.type());
                 service.setDescription(item.description());
                 mongoTemplate.save(service);
                 created++;
@@ -73,7 +71,6 @@ public class ServiceCatalogSeeder implements CommandLineRunner {
                 SlotService service = new SlotService();
                 service.setBranchId(branch.getId());
                 service.setName(item.name());
-                service.setUnit(item.unit());
                 service.setUnitPrice(BigDecimal.valueOf(item.price()));
                 service.setDescription(item.description());
                 mongoTemplate.save(service);

@@ -5,7 +5,7 @@ public enum InvoiceItemType {
     ROOM_RENT,
     /** Phí 2: room services (per room), split by the number of occupants in the month. */
     ROOM_SERVICE,
-    /** Phí 3: personal services (per person): each occupant pays the unit price. */
+    /** Legacy (per-person room services no longer exist); kept so old invoices still load. */
     PERSONAL_SERVICE,
     /** Phí 4: room electricity (meter reading), split by the number of occupants in the month. */
     ELECTRICITY,
