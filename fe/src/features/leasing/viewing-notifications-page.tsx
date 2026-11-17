@@ -50,9 +50,9 @@ export default function ViewingNotificationsPage() {
   }
   return (
     <Page
-      title="Thông báo lịch xem phòng"
+      title="Thông báo"
       eyebrow="CẬP NHẬT VÀ NHẮC LỊCH"
-      description="Mở thông báo để xem chi tiết lịch. Đọc thông báo không đổi trạng thái hoặc gia hạn lịch."
+      description="Theo dõi thông báo lịch xem, hợp đồng sắp hết hạn và các cập nhật dành cho bạn."
       actions={
         <Button asChild variant="outline">
           <Link
@@ -140,7 +140,7 @@ export default function ViewingNotificationsPage() {
                             disabled={mark.isPending || all.isPending}
                             onClick={() => open(notification)}
                           >
-                            Mở lịch xem
+                            {notification.detailPath.includes('/contracts') ? 'Mở hợp đồng' : 'Mở lịch xem'}
                           </Button>
                           {!notification.readAt && (
                             <Button

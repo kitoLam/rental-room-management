@@ -53,6 +53,8 @@ public record ContractResponse(
         String terminationReason,
         ContractStatus status,
         List<com.kitolam.rentalroommanagement.modules.contract.document.ActiveSlotService> activeSlotServices,
+        /** Hợp đồng đang hiệu lực và còn ≤ 60 ngày tới hạn (dùng cho cảnh báo "Sắp hết hạn"). */
+        boolean expiringSoon,
         Instant createdAt,
         Instant updatedAt
 ) {

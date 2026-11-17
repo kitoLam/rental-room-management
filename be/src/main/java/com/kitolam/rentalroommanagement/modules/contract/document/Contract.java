@@ -114,6 +114,16 @@ public class Contract extends BaseDocument {
     @Field("contractUrl")
     private String contractUrl;
 
+    /** Hợp đồng gốc đã được gia hạn để tạo ra hợp đồng này (null nếu không phải hợp đồng nối tiếp). */
+    @Indexed
+    private String renewedFromContractId;
+
+    /** Hợp đồng nối tiếp được tạo từ hợp đồng này (null nếu chưa gia hạn); dùng để chặn gia hạn hai lần. */
+    private String renewedToContractId;
+
+    /** Các mốc (số ngày còn lại: 45/30/21/14) đã gửi thông báo sắp hết hạn cho tenant — tránh gửi trùng. */
+    private List<Integer> expiryNotifiedMilestones = new ArrayList<>();
+
     private Instant terminatedAt;
 
     private String terminationReason;

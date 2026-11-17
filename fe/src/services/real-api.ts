@@ -139,7 +139,6 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches(`/api/v1/bookings/${id}/refund/approve`) && verb === 'POST') ||
       (matches('/api/v1/contracts') && verb === 'GET') ||
       (matches(`/api/v1/contracts/${id}`) && verb === 'GET') ||
-      (matches(`/api/v1/contracts/from-booking/${id}`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/check-in`) && verb === 'POST') ||
       (matches(`/api/v1/contracts/${id}/evidence/review`) && verb === 'POST') ||
       (matches('/api/v1/contract-tenants') && ['GET', 'POST'].includes(verb)) ||
@@ -154,6 +153,13 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
     ((pathname === '/api/v1/meter-readings/board' && verb === 'GET') ||
       (pathname === '/api/v1/meter-readings' && verb === 'PUT') ||
       (matches(`/api/v1/meter-readings/${id}/(confirm|reopen)`) && verb === 'POST'))
+  )
+    return null
+  // Cơ sở vật chất (BE module furniture): nhóm theo tên trong chi nhánh, mỗi phòng một bản ghi.
+  if (
+    feature === 'manager' &&
+    ((pathname === '/api/v1/furnitures' && verb === 'POST') ||
+      (pathname === '/api/v1/furnitures/groups' && ['GET', 'PATCH', 'DELETE'].includes(verb)))
   )
     return null
   // Danh mục dịch vụ theo phòng / tự chọn + yêu cầu dịch vụ tự chọn.
@@ -256,6 +262,12 @@ export function realApiIssue(feature: Feature, path: string, method = 'GET'): st
       (matches('/api/v1/report-records') && ['GET', 'POST'].includes(verb)) ||
       (matches(`/api/v1/report-records/${id}`) && ['GET', 'DELETE'].includes(verb)) ||
       (matches(`/api/v1/report-records/by-report/${id}`) && verb === 'GET'))
+  )
+    return null
+
+  if (
+    matches('/api/v1/public/upload(/multiple)?') &&
+    ['POST', 'DELETE'].includes(verb)
   )
     return null
 

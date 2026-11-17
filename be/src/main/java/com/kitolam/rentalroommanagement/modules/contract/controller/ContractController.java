@@ -5,11 +5,11 @@ import com.kitolam.rentalroommanagement.common.base.StandardResponse;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCreateRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractFilterRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractUpdateRequest;
-import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractDraftRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractServiceSelectionRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractCheckInRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractEvidenceReviewRequest;
+import com.kitolam.rentalroommanagement.modules.contract.dto.request.ContractRenewRequest;
 import com.kitolam.rentalroommanagement.modules.contract.dto.response.ContractResponse;
 import com.kitolam.rentalroommanagement.modules.contract.service.ContractService;
 import com.kitolam.rentalroommanagement.common.security.AuthPrincipal;
@@ -50,15 +50,6 @@ public class ContractController {
         return StandardResponse.success("Tạo hợp đồng thành công", contractService.create(request));
     }
 
-    @PostMapping("/from-booking/{bookingId}")
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Tạo hợp đồng nháp từ booking đã nộp cọc")
-    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER', 'ADMIN')")
-    public StandardResponse<ContractResponse> createDraftFromBooking(@PathVariable String bookingId,
-            @Valid @RequestBody ContractDraftRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
-        return StandardResponse.success("Đã tạo hợp đồng nháp", contractService.createDraftFromBooking(bookingId, request, principal));
-    }
-
     @PatchMapping("/{id}/services")
     @Operation(summary = "Tenant chọn dịch vụ tùy chọn trong hợp đồng nháp")
     @PreAuthorize("hasRole('TENANT')")
@@ -89,6 +80,14 @@ public class ContractController {
     public StandardResponse<ContractResponse> reviewEvidence(@PathVariable String id,
             @Valid @RequestBody ContractEvidenceReviewRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
         return StandardResponse.success(contractService.reviewEvidence(id, request, principal));
+    }
+
+    @PostMapping("/{id}/renew")
+    @Operation(summary = "Gia hạn hợp đồng, tạo hợp đồng nối tiếp cho cùng chỗ ở")
+    @PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
+    public StandardResponse<ContractResponse> renew(@PathVariable String id,
+            @Valid @RequestBody ContractRenewRequest request, @AuthenticationPrincipal AuthPrincipal principal) {
+        return StandardResponse.success("Đã gia hạn hợp đồng", contractService.renew(id, request, principal));
     }
 
     @GetMapping("/{id}")

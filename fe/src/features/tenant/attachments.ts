@@ -1,4 +1,6 @@
 import type { Attachment } from '@/interfaces/tenant'
+import { uploadToCloudinary } from '@/services/upload'
+import { provider } from '@/services/config'
 
 export const MAX_ATTACHMENT_COUNT = 5
 export const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
@@ -20,12 +22,23 @@ export async function imageAttachment(file: File): Promise<Attachment> {
         : String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
           String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
   if (!valid) throw new Error('Nội dung ảnh không đúng định dạng đã chọn.')
-  const url = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('Không đọc được ảnh. Hãy chọn lại.'))
-    reader.readAsDataURL(file)
-  })
+
+  let url: string
+  try {
+    url = await uploadToCloudinary(file)
+  } catch (error) {
+    if (provider('tenant') === 'mock') {
+      url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('Không đọc được ảnh. Hãy chọn lại.'))
+        reader.readAsDataURL(file)
+      })
+    } else {
+      throw error
+    }
+  }
+
   return {
     id: crypto.randomUUID(),
     name: file.name.slice(0, 120),

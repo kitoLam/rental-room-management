@@ -1,4 +1,4 @@
-import { Notice, Panel, QueryState } from '@/components/common/page'
+import { Panel, QueryState } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { Facts } from '@/features/tenant/components'
 import { dateTime } from '@/lib/activity'
@@ -76,11 +76,7 @@ export function ManagerPaymentDetail() {
                 )}
               </div>
             </Panel>
-            <Notice>
-              {query.data.environment === 'SANDBOX'
-                ? 'Giao dịch mô phỏng do bộ xử lý sandbox xác minh; không cộng vào dòng tiền thực nhận.'
-                : 'Chỉ xác minh sau khi đối chiếu đủ tham chiếu, số tiền, bằng chứng và mã giao dịch duy nhất. Dữ liệu demo là giả lập.'}
-            </Notice>
+
             {query.data.evidence.length > 0 && (
               <Panel>
                 <h2 className="mb-4 font-bold">Bằng chứng nhận tiền</h2>
@@ -96,20 +92,6 @@ export function ManagerPaymentDetail() {
                 </div>
               </Panel>
             )}
-            <Panel>
-              <h2 className="mb-5 font-bold">Lịch sử đối soát</h2>
-              {query.data.history.length ? (
-                query.data.history.map((h, n) => (
-                  <p key={n} className="border-t border-border py-3 text-sm leading-6">
-                    {dateTime(h.at)} · {h.actor}
-                    <br />
-                    {h.note}
-                  </p>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Chưa có thao tác đối soát thủ công.</p>
-              )}
-            </Panel>
           </>
         )}
       </QueryState>

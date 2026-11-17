@@ -93,7 +93,7 @@ const managementRoutes: RouteObject[] = [
     }),
   },
   {
-    path: 'furnitures/:furnitureId',
+    path: 'furnitures/:furnitureName',
     lazy: async () => ({
       Component: (await import('@/features/manager/manager-furniture-detail-page'))
         .ManagerFurnitureDetail,
