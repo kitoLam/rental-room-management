@@ -96,7 +96,7 @@ public class PublicRoomService {
 
         List<Criteria> roomFilters = new ArrayList<>();
         roomFilters.add(MongoQueryHelper.notDeleted());
-        roomFilters.add(Criteria.where("status").is(RoomStatus.AVAILABLE.name()));
+        roomFilters.add(Criteria.where("status").in(RoomStatus.AVAILABLE.name(), RoomStatus.OCCUPIED.name()));
         roomFilters.add(Criteria.where("branchId")
                 .in(activeBranches.stream().map(b -> new ObjectId(b.getId())).toList()));
 
@@ -204,7 +204,7 @@ public class PublicRoomService {
 
     public PublicRoomResponse getById(String id) {
         Room room = rooms.findByIdAndIsDeletedFalse(id)
-                .filter(value -> value.getStatus() == RoomStatus.AVAILABLE)
+                .filter(value -> value.getStatus() == RoomStatus.AVAILABLE || value.getStatus() == RoomStatus.OCCUPIED)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy phòng công khai"));
         Branch branch = branches.findByIdAndIsDeletedFalse(room.getBranchId())
                 .filter(value -> value.getStatus() == BranchStatus.ACTIVE)
@@ -270,7 +270,9 @@ public class PublicRoomService {
         Set<String> occupiedSlotIds = new HashSet<>();
         Map<String, Integer> occupiedSlotCounts = new HashMap<>();
         occupancies.forEach(occupancy -> {
-            if (RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), today)) return;
+            if (occupancy.getEndDate() != null && occupancy.getEndDate().isBefore(today)) return;
+            if (occupancy.getStatus() == OccupancyStatus.ACTIVE
+                    && RoomSlotAvailabilityRoller.releasesBefore(occupancy.getEndDate(), today)) return;
             String roomId = roomBySlotId.get(occupancy.getRoomSlotId());
             if (roomId != null && occupiedSlotIds.add(occupancy.getRoomSlotId())) {
                 occupiedSlotCounts.merge(roomId, 1, Integer::sum);

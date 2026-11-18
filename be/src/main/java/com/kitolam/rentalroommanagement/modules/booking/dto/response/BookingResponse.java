@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 public record BookingResponse(
         String id,
@@ -17,6 +18,7 @@ public record BookingResponse(
         List<String> roomSlotIds,
         List<String> slotCodes,
         LocalDate expectedMoveInDate,
+        Map<String, LocalDate> slotMoveInDates,
         LocalDate expectedMoveOutDate,
         BigDecimal holdingDepositAmount,
         Instant paymentDeadline,

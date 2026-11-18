@@ -18,7 +18,6 @@ export function ContractEvidencePanel({
   onChanged,
   index,
   moveInDate,
-  rentalStartDate,
 }: {
   contractId: string
   canManage: boolean
@@ -27,7 +26,6 @@ export function ContractEvidencePanel({
   /** Booking move-in date; first billing month is not before it. */
   moveInDate?: string | null
   /** Booking rental start, for the "expected term" preview while choosing the term. */
-  rentalStartDate?: string | null
 }) {
   const [evidenceUrl, setEvidenceUrl] = useState('')
   const [termMonths, setTermMonths] = useState('3')
@@ -50,7 +48,7 @@ export function ContractEvidencePanel({
   const data = contractQuery.data
   // Billing starts on the 1st of the month after the contract takes effect (field is read-only).
   const billingDateMinimum = data?.evidenceSubmittedAt
-    ? suggestedFirstBillingStartDate(data.evidenceSubmittedAt, undefined, moveInDate)
+    ? suggestedFirstBillingStartDate(data.evidenceSubmittedAt, undefined, data.startDate || moveInDate)
     : ''
   const firstBillingStartDate = billingDateMinimum
   const validFirstBillingStartDate = Boolean(firstBillingStartDate && firstBillingStartDate.endsWith('-01'))
@@ -65,6 +63,7 @@ export function ContractEvidencePanel({
   })
   const stage = data ? contractStage(data) : null
   // Expected contract term: from the rental start date for the chosen number of months.
+  const rentalStartDate = data?.startDate || moveInDate
   const termPreview = rentalStartDate
     ? `${dateOnly(rentalStartDate)} → ${dateOnly(addMonths(rentalStartDate, Number(termMonths)))}`
     : null
@@ -162,7 +161,7 @@ export function ContractEvidencePanel({
                 <dt className="font-semibold">Tiền cọc</dt>
                 <dd>{formatVnd(data.contractDepositAmount)}</dd>
               </div>
-              {data.startDate && (
+              {data.startDate && data.endDate && (
                 <div>
                   <dt className="font-semibold">Hiệu lực</dt>
                   <dd>

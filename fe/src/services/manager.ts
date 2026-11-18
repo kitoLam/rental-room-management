@@ -38,7 +38,7 @@ const roomDto = z.object({
 })
 const backendContractDto = z.object({
   id: z.string(), roomId: z.string(), roomSlotId: z.string().nullable().optional(), roomSlotIds: z.array(z.string()).optional(), bookingId: z.string().nullable().optional(),
-  tenantId: z.string().nullable().optional(), managerId: z.string(), contractNumber: z.string(), startDate: z.string().nullable(),
+  tenantId: z.string().nullable().optional(), managerId: z.string().nullish(), contractNumber: z.string(), startDate: z.string().nullable(),
   endDate: z.string().nullable(), rentPrice: z.number().nullable().optional(), contractDepositAmount: z.number().nullable().optional(), paymentDueDay: z.number().nullable().optional(),
   terms: z.string().nullable(), status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED']),
   tenantName: z.string().nullable(), signedFileUrl: z.string().nullable(), signedEvidenceUrl: z.string().nullable().optional(),
@@ -46,6 +46,7 @@ const backendContractDto = z.object({
   evidenceSubmittedAt: z.string().nullable().optional(), evidenceDeadline: z.string().nullable().optional(), evidenceResubmissionCount: z.number().nullable().optional(), evidenceNote: z.string().nullable().optional(), contractUrl: z.string().nullable().optional(),
   landlordName: z.string().nullable().optional(), landlordIdNumber: z.string().nullable().optional(), landlordAddress: z.string().nullable().optional(),
   tenantIdNumber: z.string().nullable().optional(), tenantAddress: z.string().nullable().optional(), roomAddress: z.string().nullable().optional(),
+  roomName: z.string().nullish(),
   electricityInitialReading: z.number().nullable().optional(), waterInitialReading: z.number().nullable().optional(),
   electricityRate: z.number().nullable().optional(), waterRate: z.number().nullable().optional(), parkingRate: z.number().nullable().optional(),
   maxOccupants: z.number().nullable().optional(),
@@ -54,7 +55,7 @@ const backendContractDto = z.object({
 }).passthrough()
 function managerContract(value: z.infer<typeof backendContractDto>, branchId: string) {
   return contractSchema.parse({
-    id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomId,
+    id: value.id, branchId, code: value.contractNumber, roomId: value.roomId, roomName: value.roomName ?? undefined,
     // Nháp chưa duyệt evidence không có ngày hiệu lực; giữ null để trang tự lấy ngày bắt đầu thuê từ booking gốc.
     startDate: value.startDate || null, endDate: value.endDate || null, terms: value.terms || '',
     landlordName: value.landlordName, landlordIdNumber: value.landlordIdNumber, landlordAddress: value.landlordAddress,
@@ -69,7 +70,8 @@ function managerContract(value: z.infer<typeof backendContractDto>, branchId: st
     evidenceDeadline: value.evidenceDeadline, evidenceResubmissionCount: value.evidenceResubmissionCount,
     evidenceNote: value.evidenceNote, contractUrl: value.contractUrl,
     expiringSoon: value.expiringSoon, renewedFromContractId: value.renewedFromContractId, renewedToContractId: value.renewedToContractId,
-    rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status === 'EXPIRED' ? 'ENDED' : value.status,
+    signedFileUrl: value.signedFileUrl,
+    rentalMode: 'SLOT', status: value.status === 'TERMINATED' ? 'CANCELLED' : value.status,
     sourceBookingId: value.bookingId || null, representativeName: value.tenantName, tenantCount: value.tenantId ? 1 : 0, history: [],
   })
 }
@@ -274,7 +276,13 @@ export const managerApi = {
       return result as unknown as Page<ManagerRecord<K>>
     }
     if (resource === 'contracts' && provider('manager') === 'real') {
-      const query = new URLSearchParams({ page: filters.page || '0', size: filters.size || '8' })
+      const query = new URLSearchParams({
+        page: String(Number(filters.page || '0') + 1),
+        size: filters.size || '8',
+      })
+      if (!filters.status) query.append('sort', 'status,asc')
+      query.append('sort', 'createdAt,desc')
+      query.append('sort', 'id,desc')
       if (filters.status) query.set('status', filters.status === 'ENDED' ? 'EXPIRED' : filters.status === 'CANCELLED' ? 'TERMINATED' : filters.status)
       if (filters.q) query.set('keyword', filters.q)
       const page = await request('manager', `/api/v1/contracts?${query}`, pageSchema(backendContractDto))

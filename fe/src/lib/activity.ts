@@ -61,28 +61,9 @@ export const dayAfterVietnamDate = (instant: string) => {
   next.setUTCDate(next.getUTCDate() + 1)
   return next.toISOString().slice(0, 10)
 }
-export const firstBillingStartDate = (evidenceSubmittedAt: string, now = new Date(), moveInDate?: string | null) => {
-  const vietnamDate = (value: Date) => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(value)
-    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || ''
-    return `${part('year')}-${part('month')}-${part('day')}`
-  }
-  // Ngày bắt đầu thuê = ngày dọn vào đã chốt của booking; booking cũ chưa có thì hôm sau ngày nộp bằng chứng.
+export const firstBillingStartDate = (evidenceSubmittedAt: string, _now?: Date, moveInDate?: string | null) => {
   const startDate = moveInDate || dayAfterVietnamDate(evidenceSubmittedAt)
-  const [year, month] = startDate.split('-').map(Number)
-  // Kỳ tính tiền đầu tiên luôn là mùng 1 của tháng kế tiếp tháng bắt đầu thuê:
-  // 01/12 → 01/01, 15/12 → 01/01, 30/12 → 01/01, 01/01 → 01/02.
-  // Date.UTC nhận tháng 0-based nên month (1-based) chính là tháng kế tiếp, tự quấn qua năm.
-  let candidate = new Date(Date.UTC(year, month, 1))
-  // Booking cũ có ngày bắt đầu đã qua: đẩy tiếp từng tháng để kỳ đầu không rơi vào quá khứ.
-  const today = new Date(`${vietnamDate(now)}T00:00:00Z`)
-  while (candidate < today) candidate = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth() + 1, 1))
-  return candidate.toISOString().slice(0, 10)
+  return addMonths(`${startDate.slice(0, 7)}-01`, 1)
 }
 export function referenceLink(type: string | null, id: string | null, tenancyId?: string, branchId?:string) {
   if(type==='ADMIN_VERIFICATION'&&id)return `/admin/owner-verifications/${encodeURIComponent(id)}`

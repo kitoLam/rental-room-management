@@ -168,7 +168,7 @@ export const contractSchema = contractInputSchema.extend({
   id: databaseIdSchema,
   branchId: databaseIdSchema,
   rentalMode: z.enum(['ROOM', 'SLOT']),
-  status: z.enum(['DRAFT', 'ACTIVE', 'ENDED', 'CANCELLED']),
+  status: z.enum(['DRAFT', 'ACTIVE', 'EXPIRED', 'ENDED', 'CANCELLED']),
   sourceBookingId: databaseIdSchema.nullable(),
   representativeName: z.string().nullable(),
   tenantCount: z.number().int(),

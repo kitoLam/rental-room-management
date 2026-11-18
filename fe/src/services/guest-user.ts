@@ -336,6 +336,7 @@ const backendBookingSchema = z.object({
     mandatory: z.boolean().optional(),
   })).optional(),
   expectedMoveInDate: z.string().nullable(),
+  slotMoveInDates: z.record(z.string(), z.iso.date()).nullish(),
   expectedMoveOutDate: z.string().nullable(),
   holdingDepositAmount: z.number().nullable(),
   paymentDeadline: z.string().nullable(),
@@ -457,6 +458,7 @@ function adaptBooking(b: z.infer<typeof backendBookingSchema>) {
     slotLabels: b.slotCodes || [b.slotCode],
     hasRentalDates: Boolean(b.expectedMoveInDate && b.expectedMoveOutDate),
     expectedMoveInDate: b.expectedMoveInDate,
+    slotMoveInDates: b.slotMoveInDates,
     rentalMode: 'SLOT',
     startDate: b.expectedMoveInDate || createdAt.slice(0, 10),
     endDate: b.expectedMoveOutDate || b.expectedMoveInDate || createdAt.slice(0, 10),
@@ -526,6 +528,7 @@ export const bookingService = {
       if (!('roomSlotIds' in input) || input.roomSlotIds.length === 0) throw new ApiError('Chọn ít nhất một slot trước khi giữ chỗ.', 400)
       return adaptBooking(await request('leasing', '/api/v1/bookings', backendBookingSchema, write('POST', {
         roomSlotIds: input.roomSlotIds,
+        slotMoveInDates: "slotMoveInDates" in input ? input.slotMoveInDates : undefined,
         selectedServices: input.selectedServices,
       })))
     }
@@ -564,13 +567,12 @@ export const bookingService = {
     const checked = slots.content.length
       ? await request('leasing', `/api/v1/bookings/availability/batch?${params}`, z.array(backendSlotAvailabilitySchema))
       : []
-    const availableFromById = new Map(slots.content.map((slot) => [slot.id, slot.availableFrom]))
     const slotAvailability = checked.map((slot) => ({
       id: slot.roomSlotId,
       label: slot.slotCode,
       available: slot.available,
       // Slot đang có người thuê nhưng sắp hết hạn: backend trả ngày được nhả (endDate - 14 ngày).
-      availableFrom: slot.availableFrom ?? availableFromById.get(slot.roomSlotId) ?? null,
+      availableFrom: slot.availableFrom ?? null,
     }))
     const available = slotAvailability.some((slot) => slot.available)
     return {
@@ -628,7 +630,7 @@ export const contractService = {
   reviewEvidence: (id: string, value: { approved: boolean; note?: string; firstBillingStartDate?: string }) =>
     request('manager', `/api/v1/contracts/${id}/evidence/review`, backendContractSchema, write('POST', value)),
   renewContract: (id: string, value: { termMonths: number }) =>
-    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema, write('POST', value)),
+    request('manager', `/api/v1/contracts/${id}/renew`, backendContractSchema.pick({ id: true }), write('POST', value)),
 }
 export const profileService = {
   get: async (): Promise<User> => {

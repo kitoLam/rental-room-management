@@ -1,7 +1,7 @@
 import { RecordStatus } from '@/components/common/page'
 import { Button } from '@/components/ui/button'
 import { type Appointment, type Booking } from '@/interfaces/domain'
-import { dateOnly, dateTime } from '@/lib/activity'
+import { bookingMoveInDate, dateOnly, dateTime } from '@/lib/activity'
 import { ArrowUpRight, CalendarDays, Clock3, KeyRound } from 'lucide-react'
 import { Link } from 'react-router'
 
@@ -33,9 +33,14 @@ export function ActivityRow({
           )}
           {'startAt' in record
             ? dateTime(record.startAt)
-            : record.hasRentalDates
+            : record.slotMoveInDates
+              ? record.roomSlotIds.map((id, index) => {
+                  const date = record.slotMoveInDates?.[id]
+                  return `${record.slotLabels[index]} · ${date ? dateOnly(date) : "Chưa có thông tin"}`
+                }).join(" / ")
+              : record.hasRentalDates
               ? `${dateOnly(record.startDate)} → ${dateOnly(record.endDate)}`
-              : `Từ ${dateOnly(record.startDate)}`}
+              : bookingMoveInDate(record) ? `Từ ${dateOnly(bookingMoveInDate(record)!)}` : "Chưa có thông tin ngày nhận phòng"}
         </p>
         {'paymentDueAt' in record && record.status === 'AWAITING_PAYMENT' && (
           <p className="mt-2 flex items-center gap-2 text-xs text-warning">

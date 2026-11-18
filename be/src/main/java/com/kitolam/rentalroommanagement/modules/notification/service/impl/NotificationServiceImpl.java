@@ -69,8 +69,11 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     private Criteria scope(NotificationScope scope) {
+        Criteria criteria = Criteria.where("recipientAccountId").is(scope.accountId());
+        if (!scope.kinds().isEmpty())
+            return criteria.and("appointmentId").is(null).and("kind").in(scope.kinds());
         var branches = scope.manageableBranchIds().stream().map(MongoQueryHelper::toObjectId).toList();
-        return new Criteria().andOperator(Criteria.where("recipientAccountId").is(scope.accountId()),
+        return new Criteria().andOperator(criteria,
                 new Criteria().orOperator(Criteria.where("requesterAccountId").is(scope.accountId()), Criteria.where("branchId").in(branches)));
     }
 
